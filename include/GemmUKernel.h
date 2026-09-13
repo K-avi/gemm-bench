@@ -1283,7 +1283,7 @@ public:
     //
     // Main 3-row kernel
     //
-    for (size_t i = 0; i < Mful l; i += MR) {
+    for (size_t i = 0; i < Mfull; i += MR) {
       const auto *a0_ptr = reinterpret_cast<const ABlock4 *>(A[i + 0]);
       const auto *a1_ptr = reinterpret_cast<const ABlock4 *>(A[i + 1]);
       const auto *a2_ptr = reinterpret_cast<const ABlock4 *>(A[i + 2]);

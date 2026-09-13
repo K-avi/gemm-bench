@@ -32,3 +32,6 @@ test_plots/
 *.swo
 *~
 .DS_Store
+# Local external dependencies
+libs/
+third_party/
