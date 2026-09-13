@@ -1,0 +1,34 @@
+# Build directories and binaries
+build*/
+build/
+bin/
+
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+Testing/
+DartConfiguration.tcl
+
+# Python cache & virtual environments
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+
+# Active benchmark outputs (preserve reference datasets)
+results/*.csv
+!results/reference/*.csv
+plots/
+test_plots/
+
+# IDE and Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
