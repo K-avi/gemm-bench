@@ -1,14 +1,13 @@
 # GEMM Benchmark Suite for SpacemiT RISC-V & MIPPv2
 
 > [!WARNING]
-> **Work in Progress (WIP)**: This repository is actively under development. Microkernels, benchmark and anything else to be honest might change any time.
+> **Work in Progress (WIP)**: This repository is under development. Microkernels, benchmark (and anything else to be honest) might change any time.
 
-This repostitory is an high-performance General Matrix Multiply (DGEMM) microbenchmark suite, built on top of [MIPPv2](https://github.com/aff3ct/MIPP/tree/develop) (MyIntrinsics++ v2).
+This repostitory contains a high-performance General Matrix Multiply (DGEMM) microbenchmark suite, built on top of [MIPPv2](https://github.com/aff3ct/MIPP/tree/develop) (MyIntrinsics++ v2).
 It currently contains microbenchmarks tuned for Intel Skylake (AVX2 + FMA) and SpacemiT X100 (RVV 1.0).
 
 > [!NOTE]
-> **Origins & Context**: This benchmark was originally written as part of a research internship at **LIP6** (Sorbonne Université), focusing on the design, implementation, and benchmarking of **RISC-V Vector 1.0 (RVV)** support for **MIPPv2**.
->
+> **Origins & Context**: Developed during a research internship at **LIP6** (Sorbonne Université), this benchmark evaluates MIPPv2 as a zero-overhead abstraction layer for compute-bound microkernels (DGEMM). Key objectives included assessing cross-platform efficiency across different microarchitectures (Intel Skylake vs. SpacemiT X100) and determining whether MIPPv2 features (such as emulated LMUL on fixed-width SIMD) simplify microkernel design space exploration.
 > **Repurposing & Roadmap**: This microkernel benchmark is being repurposed and actively expanded into a standalone **GEMM benchmark** and optimized kernel suite mainly targetting SpacemiT RISC-V architectures.
 > - **SpacemiT K3 X100**
 > - **SpacemiT K1 X60**
@@ -19,7 +18,7 @@ It currently contains microbenchmarks tuned for Intel Skylake (AVX2 + FMA) and S
 
 ## Performance Overview
 
-The highest measured throughput on the SpacemiT K3 X100 reaches **16.43 GFLOP/s**, exceeding **93% of the theoretical peak performance** (17.6 GFLOP/s at target clock) on a single core using the `mippv2_x100_register_blocked_apack4` microkernel. Achieving >93% hardware utilization is notable given that the X100 core was released only a few months ago and that the microkernel is written in C++ and uses an SIMD abstraction library (MIPPv2) rather than hand-crafted assembly.
+The highest measured throughput on the SpacemiT K3 X100 reaches **16.43 GFLOP/s**, reaching **93% of the theoretical peak performance** (17.6 GFLOP/s at target clock) on a single core using the `mippv2_x100_register_blocked_apack4` microkernel. Achieving >93% hardware utilization is notable given that the X100 core was released only a few months ago and that the microkernel is written in C++ and uses an SIMD abstraction library (MIPPv2) rather than hand-crafted assembly.
 
 > [!NOTE]
 > **Scope & Experimental Caveats**:
@@ -27,7 +26,6 @@ The highest measured throughput on the SpacemiT K3 X100 reaches **16.43 GFLOP/s*
 > - **Synthetic constraints:** Matrices are strictly square, power-of-two dimensions ($32 \le M,N,K \le 512$) with 64-byte SIMD/cache-line aligned allocations.
 > - **No fringe/tail handling:** Dimensions are exact multiples of the vector register tiles ($M_R, N_R$), avoiding peeling or masking overheads.
 > - **Absence of multi-level cache hierarchy:** Without full BLIS/GotoBLAS-style cache tiling ($M_C, K_C, N_C$ packing across L1/L2/LLC), throughput naturally drops as matrix dimensions exceed local cache capacity.
->
 > Bridging this gap—transitioning from isolated microarchitectural microkernels to an arbitrary-dimension, cache-blocked GEMM engine—is the primary motivation for this standalone repository.
 
 ### Architecture Comparison: Skylake vs. SpacemiT X100
