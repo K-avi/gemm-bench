@@ -119,6 +119,7 @@ static void testGemmSuite()
         checkMatrixEqual(C_ref, C_test);                                \
     }
 
+#ifdef GEMMBENCH_ENABLE_EXPLO
     TEST_KERNEL(
         "IKJ scalar GEMM",
         gemm.gemm_ikj(A, B, C_test));
@@ -134,11 +135,13 @@ static void testGemmSuite()
     TEST_KERNEL(
         "Blocked scalar GEMM unroll4",
         gemm.gemm_blocked_unroll4(A, B, C_test));
+#endif
 
     TEST_KERNEL(
         "Blocked register blocked scalar GEMM",
         gemm.gemm_blocked_register_blocked(A, B, C_test));
 
+#ifdef GEMMBENCH_ENABLE_EXPLO
     TEST_KERNEL(
         "MIPPv2 GEMM",
         gemm.gemm_mippv2(A, B, C_test));
@@ -182,14 +185,17 @@ static void testGemmSuite()
     TEST_KERNEL(
         "Blocked MIPPv2 GEMM unroll jam4",
         gemm.gemm_mippv2_blocked_unroll_jam4(A, B, C_test));
+#endif
 
     TEST_KERNEL(
         "MIPPv2 Skylake register blocked",
         gemm.gemm_mippv2_skylake_register_blocked(A, B, C_test));
 
+#ifdef GEMMBENCH_ENABLE_EXPLO
     TEST_KERNEL(
         "MIPPv2 blocked register blocked",
         gemm.gemm_mippv2_blocked_register_blocked(A, B, C_test));
+#endif
 
     // TEST_KERNEL(
     //     "MIPPv2 register blocked HOH",
@@ -207,8 +213,6 @@ static void testGemmSuite()
         "MIPPv2 Skylake LMUL4 register blocked",
         gemm.template gemm_mippv2_skylake_lmul_register_blocked<4>(A, B, C_test));
 
-
-
     // test x100 register blocked kernels
     TEST_KERNEL(
         "MIPPv2 x100 register blocked LMUL1",
@@ -219,9 +223,12 @@ static void testGemmSuite()
     TEST_KERNEL(
         "MIPPv2 x100 register blocked LMUL4",
         gemm.template gemm_mippv2_x100_register_blocked<4>(A, B, C_test));
+
+#ifdef GEMMBENCH_ENABLE_EXPLO
     TEST_KERNEL(
         "MIPPv2 x100 register blocked LMUL8",
         gemm.template gemm_mippv2_x100_register_blocked<8>(A, B, C_test));
+#endif
     
     TEST_KERNEL(
         "MIPPv2 x100 register blocked apack4",
@@ -310,9 +317,11 @@ static void testGemmSuiteCRR()
         "MIPPv2 Skylake panel LMUL4",
         gemm.template gemm_mippv2_skylake_panel_lmul<4>(A, B, C_test));
 
+#ifdef GEMMBENCH_ENABLE_EXPLO
     TEST_KERNEL(
         "MIPPv2 Skylake panel LMUL8",
         gemm.template gemm_mippv2_skylake_panel_lmul<8>(A, B, C_test));
+#endif
 
 #undef TEST_KERNEL
 

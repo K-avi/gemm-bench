@@ -15,12 +15,17 @@ static constexpr UKernelType kernel_tilesize66[] = {
     UKernelType::mippv2_x100_register_blocked_lmul1,
     UKernelType::mippv2_x100_register_blocked_lmul2,
     UKernelType::mippv2_x100_register_blocked_lmul4,
+#ifdef GEMMBENCH_ENABLE_EXPLO
     UKernelType::mippv2_x100_register_blocked_lmul8,
+#endif
     UKernelType::mippv2_x100_register_blocked_apack4,
     UKernelType::mippv2_panel_x100_lmul1,
     UKernelType::mippv2_panel_x100_lmul2,
     UKernelType::mippv2_panel_x100_lmul4,
-    UKernelType::mippv2_panel_x100_lmul8};
+#ifdef GEMMBENCH_ENABLE_EXPLO
+    UKernelType::mippv2_panel_x100_lmul8
+#endif
+};
 
 static inline bool isKernelTileSize66(UKernelType kernel) {
   for (const auto &k : kernel_tilesize66) {
@@ -34,9 +39,55 @@ bool csv_mode = false;
 char name_buff[256] = {0};
 
 static UKernelType parseKernel(const std::string &name) {
+  // Production / Optimized kernels
   if (name == "ijk")
     return UKernelType::IJK;
 
+  if (name == "blocked_register_blocked")
+    return UKernelType::blocked_register_blocked;
+
+  if (name == "mippv2_skylake_register_blocked")
+    return UKernelType::mippv2_skylake_register_blocked;
+
+  if (name == "mippv2_skylake_lmul_register_blocked")
+    return UKernelType::mippv2_skylake_lmul_register_blocked;
+
+  if (name == "mippv2_skylake_lmul2_register_blocked")
+    return UKernelType::mippv2_skylake_lmul2_register_blocked;
+
+  if (name == "mippv2_skylake_lmul4_register_blocked")
+    return UKernelType::mippv2_skylake_lmul4_register_blocked;
+
+  if (name == "mippv2_skylake_panel")
+    return UKernelType::mippv2_skylake_panel;
+
+  if (name == "mippv2_skylake_panel_lmul")
+    return UKernelType::mippv2_skylake_panel_lmul;
+
+  if (name == "mippv2_skylake_panel_lmul2")
+    return UKernelType::mippv2_skylake_panel_lmul2;
+
+  if (name == "mippv2_skylake_panel_lmul4")
+    return UKernelType::mippv2_skylake_panel_lmul4;
+
+  if (name == "mippv2_x100_register_blocked_lmul1")
+    return UKernelType::mippv2_x100_register_blocked_lmul1;
+  if (name == "mippv2_x100_register_blocked_lmul2")
+    return UKernelType::mippv2_x100_register_blocked_lmul2;
+  if (name == "mippv2_x100_register_blocked_lmul4")
+    return UKernelType::mippv2_x100_register_blocked_lmul4;
+
+  if (name == "mippv2_x100_register_blocked_apack4")
+    return UKernelType::mippv2_x100_register_blocked_apack4;
+
+  if (name == "mippv2_panel_x100_lmul1")
+    return UKernelType::mippv2_panel_x100_lmul1;
+  if (name == "mippv2_panel_x100_lmul2")
+    return UKernelType::mippv2_panel_x100_lmul2;
+  if (name == "mippv2_panel_x100_lmul4")
+    return UKernelType::mippv2_panel_x100_lmul4;
+
+#ifdef GEMMBENCH_ENABLE_EXPLO
   if (name == "ikj")
     return UKernelType::IKJ;
 
@@ -82,40 +133,11 @@ static UKernelType parseKernel(const std::string &name) {
   if (name == "mippv2_blocked_unroll_jam4")
     return UKernelType::mippv2_blocked_unroll_jam4;
 
-  if (name == "mippv2_skylake_register_blocked")
-    return UKernelType::mippv2_skylake_register_blocked;
-
-  if (name == "blocked_register_blocked")
-    return UKernelType::blocked_register_blocked;
-
   if (name == "mippv2_blocked_register_blocked")
     return UKernelType::mippv2_blocked_register_blocked;
 
-  if (name == "mippv2_skylake_lmul_register_blocked")
-    return UKernelType::mippv2_skylake_lmul_register_blocked;
-
-  if (name == "mippv2_skylake_lmul2_register_blocked")
-    return UKernelType::mippv2_skylake_lmul2_register_blocked;
-
-  if (name == "mippv2_skylake_lmul4_register_blocked")
-    return UKernelType::mippv2_skylake_lmul4_register_blocked;
   if (name == "mippv2_skylake_lmul8_register_blocked")
     return UKernelType::mippv2_skylake_lmul8_register_blocked;
-
-  // if(name == "mippv2_register_blocked_hoh")
-  //     return UKernelType::mippv2_register_blocked_hoh;
-
-  if (name == "mippv2_skylake_panel")
-    return UKernelType::mippv2_skylake_panel;
-
-  if (name == "mippv2_skylake_panel_lmul")
-    return UKernelType::mippv2_skylake_panel_lmul;
-
-  if (name == "mippv2_skylake_panel_lmul2")
-    return UKernelType::mippv2_skylake_panel_lmul2;
-
-  if (name == "mippv2_skylake_panel_lmul4")
-    return UKernelType::mippv2_skylake_panel_lmul4;
 
   if (name == "mippv2_skylake_panel_lmul8")
     return UKernelType::mippv2_skylake_panel_lmul8;
@@ -131,26 +153,12 @@ static UKernelType parseKernel(const std::string &name) {
   if (name == "mippv2_x100_lmul8")
     return UKernelType::mippv2_x100_lmul8;
 
-  if (name == "mippv2_x100_register_blocked_lmul1")
-    return UKernelType::mippv2_x100_register_blocked_lmul1;
-  if (name == "mippv2_x100_register_blocked_lmul2")
-    return UKernelType::mippv2_x100_register_blocked_lmul2;
-  if (name == "mippv2_x100_register_blocked_lmul4")
-    return UKernelType::mippv2_x100_register_blocked_lmul4;
   if (name == "mippv2_x100_register_blocked_lmul8")
     return UKernelType::mippv2_x100_register_blocked_lmul8;
 
-  if (name == "mippv2_x100_register_blocked_apack4")
-    return UKernelType::mippv2_x100_register_blocked_apack4;
-
-  if (name == "mippv2_panel_x100_lmul1")
-    return UKernelType::mippv2_panel_x100_lmul1;
-  if (name == "mippv2_panel_x100_lmul2")
-    return UKernelType::mippv2_panel_x100_lmul2;
-  if (name == "mippv2_panel_x100_lmul4")
-    return UKernelType::mippv2_panel_x100_lmul4;
   if (name == "mippv2_panel_x100_lmul8")
     return UKernelType::mippv2_panel_x100_lmul8;
+#endif
 
   throw std::runtime_error("Unknown GEMM kernel: " + name);
 }
@@ -225,17 +233,42 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
                      const PackedRowMajor<T> &A, const PackedRowMajor<T> &B,
                      PackedRowMajor<T> &C) {
   switch (cfg.kernel) {
+  // Production / Optimized kernels
   case UKernelType::IJK:
     BENCH_KERNEL(gemm.gemm_ijk(A, B, C));
 
+  case UKernelType::blocked_register_blocked:
+    BENCH_KERNEL(gemm.gemm_blocked_register_blocked(A, B, C));
+
+  case UKernelType::mippv2_skylake_register_blocked:
+    BENCH_KERNEL(gemm.gemm_mippv2_skylake_register_blocked(A, B, C));
+
+  case UKernelType::mippv2_skylake_lmul_register_blocked:
+    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul_register_blocked<1>(A, B, C));
+
+  case UKernelType::mippv2_skylake_lmul2_register_blocked:
+    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul_register_blocked<2>(A, B, C));
+
+  case UKernelType::mippv2_skylake_lmul4_register_blocked:
+    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul_register_blocked<4>(A, B, C));
+
+  case UKernelType::mippv2_x100_register_blocked_lmul1:
+    BENCH_KERNEL(gemm.template gemm_mippv2_x100_register_blocked<1>(A, B, C));
+
+  case UKernelType::mippv2_x100_register_blocked_lmul2:
+    BENCH_KERNEL(gemm.template gemm_mippv2_x100_register_blocked<2>(A, B, C));
+  case UKernelType::mippv2_x100_register_blocked_lmul4:
+    BENCH_KERNEL(gemm.template gemm_mippv2_x100_register_blocked<4>(A, B, C));
+
+  case UKernelType::mippv2_x100_register_blocked_apack4:
+    BENCH_KERNEL(gemm.gemm_mippv2_x100_register_blocked_apack4(A, B, C));
+
+#ifdef GEMMBENCH_ENABLE_EXPLO
   case UKernelType::IKJ:
     BENCH_KERNEL(gemm.gemm_ikj(A, B, C));
 
   case UKernelType::blocked:
     BENCH_KERNEL(gemm.gemm_blocked(A, B, C));
-
-  case UKernelType::blocked_register_blocked:
-    BENCH_KERNEL(gemm.gemm_blocked_register_blocked(A, B, C));
 
   case UKernelType::blocked_unroll2:
     BENCH_KERNEL(gemm.gemm_blocked_unroll2(A, B, C));
@@ -276,20 +309,11 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
   case UKernelType::mippv2_blocked_unroll_jam4:
     BENCH_KERNEL(gemm.gemm_mippv2_blocked_unroll_jam4(A, B, C));
 
-  case UKernelType::mippv2_skylake_register_blocked:
-    BENCH_KERNEL(gemm.gemm_mippv2_skylake_register_blocked(A, B, C));
-
   case UKernelType::mippv2_blocked_register_blocked:
     BENCH_KERNEL(gemm.gemm_mippv2_blocked_register_blocked(A, B, C));
 
-  case UKernelType::mippv2_skylake_lmul_register_blocked:
-    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul_register_blocked<1>(A, B, C));
-
-  case UKernelType::mippv2_skylake_lmul2_register_blocked:
-    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul_register_blocked<2>(A, B, C));
-
-  case UKernelType::mippv2_skylake_lmul4_register_blocked:
-    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul_register_blocked<4>(A, B, C));
+  case UKernelType::mippv2_skylake_lmul8_register_blocked:
+    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul_register_blocked<8>(A, B, C));
 
   case UKernelType::mippv2_x100_lmul1:
     BENCH_KERNEL(gemm.template gemm_mippv2_x100<1>(A, B, C));
@@ -302,19 +326,9 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
   case UKernelType::mippv2_x100_lmul8:
     BENCH_KERNEL(gemm.template gemm_mippv2_x100<8>(A, B, C));
 
-  case UKernelType::mippv2_x100_register_blocked_lmul1:
-    BENCH_KERNEL(gemm.template gemm_mippv2_x100_register_blocked<1>(A, B, C));
-
-  case UKernelType::mippv2_x100_register_blocked_lmul2:
-    BENCH_KERNEL(gemm.template gemm_mippv2_x100_register_blocked<2>(A, B, C));
-  case UKernelType::mippv2_x100_register_blocked_lmul4:
-    BENCH_KERNEL(gemm.template gemm_mippv2_x100_register_blocked<4>(A, B, C));
-
   case UKernelType::mippv2_x100_register_blocked_lmul8:
     BENCH_KERNEL(gemm.template gemm_mippv2_x100_register_blocked<8>(A, B, C));
-
-  case UKernelType::mippv2_x100_register_blocked_apack4:
-    BENCH_KERNEL(gemm.gemm_mippv2_x100_register_blocked_apack4(A, B, C));
+#endif
 
   default:
     throw std::runtime_error("Kernel incompatible with RRR packing");
@@ -326,6 +340,7 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
                      const PackedRowMajor<T> &A, const PackedColMajor<T> &B,
                      PackedRowMajor<T> &C) {
   switch (cfg.kernel) {
+#ifdef GEMMBENCH_ENABLE_EXPLO
   case UKernelType::IJK_RC:
     BENCH_KERNEL(gemm.gemm_ijk_rc(A, B, C));
 
@@ -334,6 +349,7 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
 
   case UKernelType::mippv2_dot:
     BENCH_KERNEL(gemm.gemm_mippv2_dot(A, B, C));
+#endif
 
   default:
     throw std::runtime_error("Kernel incompatible with RCR packing");
@@ -345,6 +361,7 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
                      const PackedColMajor<T> &A, const PackedRowMajor<T> &B,
                      PackedRowMajor<T> &C) {
   switch (cfg.kernel) {
+  // Production / Optimized kernels
   case UKernelType::mippv2_skylake_panel:
     BENCH_KERNEL(gemm.gemm_mippv2_skylake_panel(A, B, C));
 
@@ -356,17 +373,20 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
   case UKernelType::mippv2_skylake_panel_lmul4:
     BENCH_KERNEL(gemm.template gemm_mippv2_skylake_panel_lmul<4>(A, B, C));
 
-  case UKernelType::mippv2_skylake_panel_lmul8:
-    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_panel_lmul<8>(A, B, C));
-
   case UKernelType::mippv2_panel_x100_lmul1:
     BENCH_KERNEL(gemm.template gemm_mippv2_panel_x100<1>(A, B, C));
   case UKernelType::mippv2_panel_x100_lmul2:
     BENCH_KERNEL(gemm.template gemm_mippv2_panel_x100<2>(A, B, C));
   case UKernelType::mippv2_panel_x100_lmul4:
     BENCH_KERNEL(gemm.template gemm_mippv2_panel_x100<4>(A, B, C));
+
+#ifdef GEMMBENCH_ENABLE_EXPLO
+  case UKernelType::mippv2_skylake_panel_lmul8:
+    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_panel_lmul<8>(A, B, C));
+
   case UKernelType::mippv2_panel_x100_lmul8:
     BENCH_KERNEL(gemm.template gemm_mippv2_panel_x100<8>(A, B, C));
+#endif
 
   default:
     throw std::runtime_error("Kernel incompatible with CRR packing");

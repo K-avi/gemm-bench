@@ -246,7 +246,13 @@ do
     # Build
     for VERSION in "${VERSIONS[@]}"
     do
-        BUILD_DIR="build_${COMPILER_TAG}_${VERSION}"
+        if [[ "$RUN_ALL" == "true" ]]; then
+            BUILD_DIR="build_${COMPILER_TAG}_${VERSION}_all"
+            EXPLO_FLAG="-DGEMMBENCH_ENABLE_EXPLO=ON"
+        else
+            BUILD_DIR="build_${COMPILER_TAG}_${VERSION}"
+            EXPLO_FLAG="-DGEMMBENCH_ENABLE_EXPLO=OFF"
+        fi
         BIN="${BUILD_DIR}/GemmBench"
 
         if [[ -f "$BIN" && "$FORCE_REBUILD" != "true" ]]; then
@@ -278,7 +284,8 @@ do
             -B "$BUILD_DIR" \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_CXX_FLAGS="$COMPILE_FLAGS" \
-            -DCMAKE_CXX_COMPILER="$COMPILER"
+            -DCMAKE_CXX_COMPILER="$COMPILER" \
+            "$EXPLO_FLAG"
 
         cmake --build "$BUILD_DIR" -j
     done
@@ -286,7 +293,12 @@ do
     # Run benchmarks
     for VERSION in "${VERSIONS[@]}"
     do
-        BIN="build_${COMPILER_TAG}_${VERSION}/GemmBench"
+        if [[ "$RUN_ALL" == "true" ]]; then
+            BUILD_DIR="build_${COMPILER_TAG}_${VERSION}_all"
+        else
+            BUILD_DIR="build_${COMPILER_TAG}_${VERSION}"
+        fi
+        BIN="${BUILD_DIR}/GemmBench"
 
         echo
         echo "======================================="

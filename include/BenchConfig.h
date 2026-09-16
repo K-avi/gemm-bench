@@ -26,7 +26,7 @@ struct BenchConfig
 
     uint32_t seed = 12;
 
-    UKernelType kernel = UKernelType::mippv2_blocked;
+    UKernelType kernel = UKernelType::IJK;
     PLayout storage_order = PLayout::Row;
 };
 

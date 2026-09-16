@@ -62,6 +62,11 @@ target_include_directories(gemmbench
         ${MIPPV2_INCLUDE_DIR}
 )
 
+option(GEMMBENCH_ENABLE_EXPLO "Build and enable exploratory GEMM kernels" OFF)
+if(GEMMBENCH_ENABLE_EXPLO)
+    target_compile_definitions(gemmbench INTERFACE GEMMBENCH_ENABLE_EXPLO)
+endif()
+
 # -----------------------------------------------------------------------------
 # Benchmarks
 # -----------------------------------------------------------------------------
