@@ -286,7 +286,7 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
     BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul_register_blocked<1>(A, B, C));
 
   case UKernelType::mippv2_skylake_lmul2_register_blocked:
-    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul2_register_blocked<2>(A, B, C));
+    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul_register_blocked<2>(A, B, C));
 
   case UKernelType::mippv2_skylake_lmul4_register_blocked:
     BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul_register_blocked<4>(A, B, C));
