@@ -18,11 +18,25 @@ unset CXXFLAGS || true
 ################################################################################
 # Compilers
 ################################################################################
+# Compilers & Options
+################################################################################
+
+RUN_ALL=false
+FORCE_REBUILD=false
+REQUESTED_COMPILERS=()
+
+for arg in "$@"; do
+    if [[ "$arg" == "--run-all" ]]; then
+        RUN_ALL=true
+    elif [[ "$arg" == "--rebuild" ]]; then
+        FORCE_REBUILD=true
+    else
+        REQUESTED_COMPILERS+=("$arg")
+    fi
+done
 
 # Default to running both g++ and clang++, or accept specific compiler(s) as args
-if [[ $# -ge 1 ]]; then
-    REQUESTED_COMPILERS=("$@")
-else
+if [[ ${#REQUESTED_COMPILERS[@]} -eq 0 ]]; then
     REQUESTED_COMPILERS=("g++" "clang++")
 fi
 
@@ -74,19 +88,34 @@ ARCH_FLAGS[native]="
 
 
 ################################################################################
-# Build versions (lightweight: scalar and native AVX2+FMA)
+# Build versions (lightweight by default: native only, scalar if --run-all)
 ################################################################################
 
-VERSIONS=(
-    scalar
-    native
-)
+if [[ "$RUN_ALL" == "true" ]]; then
+    VERSIONS=(
+        scalar
+        native
+    )
+else
+    VERSIONS=(
+        native
+    )
+fi
 
 
 
 ################################################################################
 # Kernels
 ################################################################################
+
+DEFAULT_KERNELS=(
+    ijk
+    blocked_register_blocked
+    mippv2_skylake_register_blocked
+    mippv2_skylake_lmul4_register_blocked
+    mippv2_x100_register_blocked_lmul2
+    mippv2_x100_register_blocked_apack4
+)
 
 SCALAR_KERNELS=(
     ijk
@@ -159,13 +188,20 @@ ALL_KERNELS=(
 #
 # M ITERATIONS WARMUP
 #
-SIZES=(
-    "32 100000 10000"
-    "64 10000 1000"
-    "128 100 100"
-    "256 10 10"
-    "512 10 10"
-)
+if [[ "$RUN_ALL" == "true" ]]; then
+    SIZES=(
+        "32 100000 10000"
+        "64 10000 1000"
+        "128 100 100"
+        "256 10 10"
+        "512 10 10"
+    )
+else
+    SIZES=(
+        "32 100000 10000"
+        "64 10000 1000"
+    )
+fi
 
 
 
@@ -206,6 +242,15 @@ do
     for VERSION in "${VERSIONS[@]}"
     do
         BUILD_DIR="build_${COMPILER_TAG}_${VERSION}"
+        BIN="${BUILD_DIR}/GemmBench"
+
+        if [[ -f "$BIN" && "$FORCE_REBUILD" != "true" ]]; then
+            echo
+            echo "======================================="
+            echo "Binary ${BIN} already exists, skipping build (use --rebuild to force)."
+            echo "======================================="
+            continue
+        fi
 
         echo
         echo "======================================="
@@ -243,15 +288,14 @@ do
         echo "Benchmarking ${VERSION} (${COMPILER})"
         echo "======================================="
 
-        if [[ "$VERSION" == "scalar" ]]
-        then
-            KERNEL_LIST=(
-                "${SCALAR_KERNELS[@]}"
-            )
+        if [[ "$RUN_ALL" == "true" ]]; then
+            if [[ "$VERSION" == "scalar" ]]; then
+                KERNEL_LIST=("${SCALAR_KERNELS[@]}")
+            else
+                KERNEL_LIST=("${ALL_KERNELS[@]}")
+            fi
         else
-            KERNEL_LIST=(
-                "${ALL_KERNELS[@]}"
-            )
+            KERNEL_LIST=("${DEFAULT_KERNELS[@]}")
         fi
 
         for KERNEL in "${KERNEL_LIST[@]}"
