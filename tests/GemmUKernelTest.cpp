@@ -188,6 +188,10 @@ static void testGemmSuite()
         gemm.gemm_mippv2_register_blocked(A, B, C_test));
 
     TEST_KERNEL(
+        "MIPPv2 Skylake register blocked",
+        gemm.gemm_mippv2_skylake_register_blocked(A, B, C_test));
+
+    TEST_KERNEL(
         "MIPPv2 blocked register blocked",
         gemm.gemm_mippv2_blocked_register_blocked(A, B, C_test));
 
@@ -200,12 +204,24 @@ static void testGemmSuite()
         gemm.template gemm_mippv2_lmul_register_blocked<1>(A, B, C_test));
     
     TEST_KERNEL(
+        "MIPPv2 Skylake LMUL register blocked",
+        gemm.template gemm_mippv2_skylake_lmul_register_blocked<1>(A, B, C_test));
+
+    TEST_KERNEL(
         "MIPPv2 LMUL2 register blocked",
         gemm.template gemm_mippv2_lmul_register_blocked<2>(A, B, C_test));
     
     TEST_KERNEL(
+        "MIPPv2 Skylake LMUL2 register blocked",
+        gemm.template gemm_mippv2_skylake_lmul_register_blocked<2>(A, B, C_test));
+
+    TEST_KERNEL(
         "MIPPv2 LMUL4 register blocked",
         gemm.template gemm_mippv2_lmul_register_blocked<4>(A, B, C_test));
+
+    TEST_KERNEL(
+        "MIPPv2 Skylake LMUL4 register blocked",
+        gemm.template gemm_mippv2_skylake_lmul_register_blocked<4>(A, B, C_test));
 
 
 
@@ -297,6 +313,10 @@ static void testGemmSuiteCRR()
     TEST_KERNEL(
         "MIPPv2 panel",
         gemm.gemm_mippv2_panel(A, B, C_test));
+
+    TEST_KERNEL(
+        "MIPPv2 Skylake panel",
+        gemm.gemm_mippv2_skylake_panel(A, B, C_test));
 
     TEST_KERNEL(
         "MIPPv2 panel LMUL1",

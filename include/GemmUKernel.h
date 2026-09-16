@@ -69,6 +69,19 @@ enum class UKernelType {
   mippv2_panel_x100_lmul2,
   mippv2_panel_x100_lmul4,
   mippv2_panel_x100_lmul8,
+
+  // Skylake explicit aliases
+  mippv2_skylake_register_blocked,
+  mippv2_skylake_lmul_register_blocked,
+  mippv2_skylake_lmul2_register_blocked,
+  mippv2_skylake_lmul4_register_blocked,
+  mippv2_skylake_lmul8_register_blocked,
+
+  mippv2_skylake_panel,
+  mippv2_skylake_panel_lmul,
+  mippv2_skylake_panel_lmul2,
+  mippv2_skylake_panel_lmul4,
+  mippv2_skylake_panel_lmul8,
 };
 
 struct KernelDescriptor {
@@ -135,9 +148,12 @@ inline constexpr KernelDescriptor kernelTable[] = {
     {UKernelType::mippv2_blocked_unroll_jam4, "mippv2_blocked_unroll_jam4",
      RRR},
 
-    // MIPPv2 register blocked
+    // MIPPv2 register blocked (legacy & skylake names)
 
     {UKernelType::mippv2_register_blocked, "mippv2_register_blocked", RRR},
+
+    {UKernelType::mippv2_skylake_register_blocked,
+     "mippv2_skylake_register_blocked", RRR},
 
     {UKernelType::mippv2_blocked_register_blocked,
      "mippv2_blocked_register_blocked", RRR},
@@ -145,29 +161,51 @@ inline constexpr KernelDescriptor kernelTable[] = {
     {UKernelType::mippv2_register_blocked_hoh, "mippv2_register_blocked_hoh",
      RRR},
 
-    // LMUL register blocked
+    // LMUL register blocked (legacy & skylake names)
 
     {UKernelType::mippv2_lmul_register_blocked, "mippv2_lmul_register_blocked",
      RRR},
 
+    {UKernelType::mippv2_skylake_lmul_register_blocked,
+     "mippv2_skylake_lmul_register_blocked", RRR},
+
     {UKernelType::mippv2_lmul2_register_blocked,
      "mippv2_lmul2_register_blocked", RRR},
+
+    {UKernelType::mippv2_skylake_lmul2_register_blocked,
+     "mippv2_skylake_lmul2_register_blocked", RRR},
 
     {UKernelType::mippv2_lmul4_register_blocked,
      "mippv2_lmul4_register_blocked", RRR},
 
+    {UKernelType::mippv2_skylake_lmul4_register_blocked,
+     "mippv2_skylake_lmul4_register_blocked", RRR},
+
     {UKernelType::mippv2_lmul8_register_blocked,
      "mippv2_lmul8_register_blocked", RRR},
 
+    {UKernelType::mippv2_skylake_lmul8_register_blocked,
+     "mippv2_skylake_lmul8_register_blocked", RRR},
+
+    // Panel kernels (legacy & skylake names)
+
     {UKernelType::mippv2_panel, "mippv2_panel", CRR},
+
+    {UKernelType::mippv2_skylake_panel, "mippv2_skylake_panel", CRR},
 
     {UKernelType::mippv2_panel_lmul, "mippv2_panel_lmul", CRR},
 
+    {UKernelType::mippv2_skylake_panel_lmul, "mippv2_skylake_panel_lmul", CRR},
+
     {UKernelType::mippv2_panel_lmul2, "mippv2_panel_lmul2", CRR},
 
+    {UKernelType::mippv2_skylake_panel_lmul2, "mippv2_skylake_panel_lmul2", CRR},
+
     {UKernelType::mippv2_panel_lmul4, "mippv2_panel_lmul4", CRR},
+    {UKernelType::mippv2_skylake_panel_lmul4, "mippv2_skylake_panel_lmul4", CRR},
 
     {UKernelType::mippv2_panel_lmul8, "mippv2_panel_lmul8", CRR},
+    {UKernelType::mippv2_skylake_panel_lmul8, "mippv2_skylake_panel_lmul8", CRR},
 
     {UKernelType::mippv2_dot, "mippv2_dot", RCR},
 
@@ -834,9 +872,9 @@ public:
 
   template <int lmul = 1>
   static inline void
-  gemm_mippv2_register_blocked(const PackedRowMajor<T> &__restrict A,
-                               const PackedRowMajor<T> &__restrict B,
-                               PackedRowMajor<T> &__restrict C) {
+  gemm_mippv2_skylake_register_blocked(const PackedRowMajor<T> &__restrict A,
+                                       const PackedRowMajor<T> &__restrict B,
+                                       PackedRowMajor<T> &__restrict C) {
     using namespace mipp;
 
     constexpr size_t VL = N<T, lmul>();
@@ -916,9 +954,9 @@ public:
 
   template <int lmul = 4>
   static inline void
-  gemm_mippv2_lmul_register_blocked(const PackedRowMajor<T> &__restrict A,
-                                    const PackedRowMajor<T> &__restrict B,
-                                    PackedRowMajor<T> &__restrict C) {
+  gemm_mippv2_skylake_lmul_register_blocked(const PackedRowMajor<T> &__restrict A,
+                                            const PackedRowMajor<T> &__restrict B,
+                                            PackedRowMajor<T> &__restrict C) {
     using namespace mipp;
 
     // constexpr int lmul = 4;
@@ -960,9 +998,9 @@ public:
     }
   }
 
-  static inline void gemm_mippv2_panel(const PackedColMajor<T> &A,
-                                       const PackedRowMajor<T> &B,
-                                       PackedRowMajor<T> &C) {
+  static inline void gemm_mippv2_skylake_panel(const PackedColMajor<T> &A,
+                                                const PackedRowMajor<T> &B,
+                                                PackedRowMajor<T> &C) {
     using namespace mipp;
 
     constexpr size_t MR = 4;
@@ -1021,9 +1059,9 @@ public:
   }
 
   template <int lmul = 1, int MR = 4, int NR_PACKETS = 1>
-  static inline void gemm_mippv2_panel_lmul(const PackedColMajor<T> &A,
-                                            const PackedRowMajor<T> &B,
-                                            PackedRowMajor<T> &C) {
+  static inline void gemm_mippv2_skylake_panel_lmul(const PackedColMajor<T> &A,
+                                                     const PackedRowMajor<T> &B,
+                                                     PackedRowMajor<T> &C) {
     using namespace mipp;
 
     using VType = decltype(set0<T, lmul>());
@@ -1154,6 +1192,38 @@ public:
         C(i + 3, j + 1) = hadd(c31);
       }
     }
+  }
+
+  // ===========================================================================
+  // Backward compatibility aliases for Skylake kernels
+  // ===========================================================================
+  template <int lmul = 1>
+  static inline void
+  gemm_mippv2_register_blocked(const PackedRowMajor<T> &__restrict A,
+                               const PackedRowMajor<T> &__restrict B,
+                               PackedRowMajor<T> &__restrict C) {
+    gemm_mippv2_skylake_register_blocked<lmul>(A, B, C);
+  }
+
+  template <int lmul = 4>
+  static inline void
+  gemm_mippv2_lmul_register_blocked(const PackedRowMajor<T> &__restrict A,
+                                    const PackedRowMajor<T> &__restrict B,
+                                    PackedRowMajor<T> &__restrict C) {
+    gemm_mippv2_skylake_lmul_register_blocked<lmul>(A, B, C);
+  }
+
+  static inline void gemm_mippv2_panel(const PackedColMajor<T> &A,
+                                       const PackedRowMajor<T> &B,
+                                       PackedRowMajor<T> &C) {
+    gemm_mippv2_skylake_panel(A, B, C);
+  }
+
+  template <int lmul = 1, int MR = 4, int NR_PACKETS = 1>
+  static inline void gemm_mippv2_panel_lmul(const PackedColMajor<T> &A,
+                                            const PackedRowMajor<T> &B,
+                                            PackedRowMajor<T> &C) {
+    gemm_mippv2_skylake_panel_lmul<lmul, MR, NR_PACKETS>(A, B, C);
   }
 
   template <int lmul = 1>
