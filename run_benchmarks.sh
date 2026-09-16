@@ -16,11 +16,15 @@ unset CFLAGS || true
 unset CXXFLAGS || true
 
 ################################################################################
-# Compiler
+# Compilers
 ################################################################################
 
-#COMPILER=g++
-COMPILER=clang++
+# Default to running both g++ and clang++, or accept specific compiler(s) as args
+if [[ $# -ge 1 ]]; then
+    REQUESTED_COMPILERS=("$@")
+else
+    REQUESTED_COMPILERS=("g++" "clang++")
+fi
 
 
 ################################################################################
@@ -59,49 +63,22 @@ ARCH_FLAGS[scalar]="
 
 
 #
-# SSE4.2
-#
-ARCH_FLAGS[sse]="
--msse4.2
--mno-avx
--mno-avx2
--mno-fma
--mno-avx512f
--mno-avx512dq
--mno-avx512bw
--mno-avx512vl
-"
-
-
-
-#
-# AVX2 + FMA
-#
-ARCH_FLAGS[avx]="
--mavx2
--mfma
--mno-avx512f
-"
-
-
-
-#
-# Native
+# Native AVX2 + FMA
 #
 ARCH_FLAGS[native]="
 -march=native
+-mavx2
+-mfma
 "
 
 
 
 ################################################################################
-# Build versions
+# Build versions (lightweight: scalar and native AVX2+FMA)
 ################################################################################
 
 VERSIONS=(
     scalar
-    sse
-    avx
     native
 )
 
@@ -118,6 +95,7 @@ SCALAR_KERNELS=(
     blocked
     blocked_register_blocked
 )
+
 
 
 MIPP_KERNELS=(
@@ -192,133 +170,120 @@ SIZES=(
 
 
 ################################################################################
-# Output
+# Output directory
 ################################################################################
 
 mkdir -p results
 
-CSV=results/gemm_results.csv
-
-echo "Build,Kernel,M,N,K,Time_s,GFLOPS,PaddingA" > "$CSV"
-
 
 
 ################################################################################
-# Build
+# Benchmark Loop across compilers
 ################################################################################
 
-for VERSION in "${VERSIONS[@]}"
+for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"
 do
-
-    BUILD_DIR="build_${VERSION}"
-
-    echo
-    echo "======================================="
-    echo "Building ${VERSION}"
-    echo "======================================="
-
-
-    rm -rf "$BUILD_DIR"
-
-
-
-    #
-    # Merge flags and remove newlines
-    #
-    COMPILE_FLAGS=$(
-        printf "%s\n%s\n" \
-            "${COMMON_FLAGS}" \
-            "${ARCH_FLAGS[$VERSION]}" |
-        tr '\n' ' '
-    )
-
-
-    echo "Flags:"
-    echo "$COMPILE_FLAGS"
-
-
-
-    cmake \
-        -S . \
-        -B "$BUILD_DIR" \
-        -DCMAKE_BUILD_TYPE=Release \
-        -DCMAKE_CXX_FLAGS="$COMPILE_FLAGS" \
-        -DCMAKE_CXX_COMPILER="$COMPILER"
-
-
-
-    cmake --build "$BUILD_DIR" -j
-
-done
-
-
-
-################################################################################
-# Run benchmarks
-################################################################################
-
-for VERSION in "${VERSIONS[@]}"
-do
-
-    BIN="build_${VERSION}/GemmBench"
-
-
-    echo
-    echo "======================================="
-    echo "Benchmarking ${VERSION}"
-    echo "======================================="
-
-
-
-    if [[ "$VERSION" == "scalar" ]]
-    then
-        KERNEL_LIST=(
-            "${SCALAR_KERNELS[@]}"
-        )
+    if [[ "$COMPILER_REQ" == "gcc" || "$COMPILER_REQ" == "g++" ]]; then
+        COMPILER="g++"
+        COMPILER_TAG="gcc"
+    elif [[ "$COMPILER_REQ" == "clang" || "$COMPILER_REQ" == "clang++" ]]; then
+        COMPILER="clang++"
+        COMPILER_TAG="clang"
     else
-        KERNEL_LIST=(
-            "${ALL_KERNELS[@]}"
-        )
+        COMPILER="$COMPILER_REQ"
+        COMPILER_TAG="$COMPILER_REQ"
     fi
 
+    echo
+    echo "################################################################################"
+    echo "# Benchmarking with ${COMPILER} (${COMPILER_TAG})"
+    echo "################################################################################"
 
+    CSV="results/gemm_results_${COMPILER_TAG}.csv"
+    echo "Build,Kernel,M,N,K,Time_s,GFLOPS,PaddingA" > "$CSV"
 
-    for KERNEL in "${KERNEL_LIST[@]}"
+    # Build
+    for VERSION in "${VERSIONS[@]}"
     do
+        BUILD_DIR="build_${COMPILER_TAG}_${VERSION}"
 
-        for ENTRY in "${SIZES[@]}"
-        do
+        echo
+        echo "======================================="
+        echo "Building ${VERSION} (${COMPILER}) in ${BUILD_DIR}"
+        echo "======================================="
 
-            read M ITER WARM <<< "$ENTRY"
+        rm -rf "$BUILD_DIR"
 
+        COMPILE_FLAGS=$(
+            printf "%s\n%s\n" \
+                "${COMMON_FLAGS}" \
+                "${ARCH_FLAGS[$VERSION]}" |
+            tr '\n' ' '
+        )
 
+        echo "Flags: $COMPILE_FLAGS"
 
-            LINE=$(
-                "$BIN" \
-                    --kernel "$KERNEL" \
-                    --m "$M" \
-                    --n "$M" \
-                    --k "$M" \
-                    --iterations "$ITER" \
-                    --warmup "$WARM" \
-                    --csv
-            )
+        cmake \
+            -S . \
+            -B "$BUILD_DIR" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_FLAGS="$COMPILE_FLAGS" \
+            -DCMAKE_CXX_COMPILER="$COMPILER"
 
-
-
-            echo "${VERSION},${LINE}" >> "$CSV"
-
-
-            echo "${VERSION} ${KERNEL} ${M}x${M}"
-
-        done
-
+        cmake --build "$BUILD_DIR" -j
     done
 
+    # Run benchmarks
+    for VERSION in "${VERSIONS[@]}"
+    do
+        BIN="build_${COMPILER_TAG}_${VERSION}/GemmBench"
+
+        echo
+        echo "======================================="
+        echo "Benchmarking ${VERSION} (${COMPILER})"
+        echo "======================================="
+
+        if [[ "$VERSION" == "scalar" ]]
+        then
+            KERNEL_LIST=(
+                "${SCALAR_KERNELS[@]}"
+            )
+        else
+            KERNEL_LIST=(
+                "${ALL_KERNELS[@]}"
+            )
+        fi
+
+        for KERNEL in "${KERNEL_LIST[@]}"
+        do
+            for ENTRY in "${SIZES[@]}"
+            do
+                read M ITER WARM <<< "$ENTRY"
+
+                LINE=$(
+                    "$BIN" \
+                        --kernel "$KERNEL" \
+                        --m "$M" \
+                        --n "$M" \
+                        --k "$M" \
+                        --iterations "$ITER" \
+                        --warmup "$WARM" \
+                        --csv
+                )
+
+                echo "${VERSION},${LINE}" >> "$CSV"
+                echo "[${COMPILER_TAG}] ${VERSION} ${KERNEL} ${M}x${M}"
+            done
+        done
+    done
+
+    # Maintain backward compatibility for scripts expecting gemm_results.csv (preserve gcc as canonical)
+    if [[ "$COMPILER_TAG" == "gcc" || ! -f "results/gemm_results.csv" ]]; then
+        cp "$CSV" results/gemm_results.csv
+    fi
+
+    echo
+    echo "Results for ${COMPILER} written to:"
+    echo "  $CSV"
+
 done
-
-
-
-echo
-echo "Results written to:"
-echo "  $CSV"
