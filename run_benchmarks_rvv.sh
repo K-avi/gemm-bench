@@ -117,18 +117,18 @@ MIPP_KERNELS=(
     mippv2_blocked_unroll4
     mippv2_blocked_unroll_jam4
 
-    mippv2_register_blocked
+    mippv2_skylake_register_blocked
 
-    mippv2_lmul_register_blocked
-    mippv2_lmul2_register_blocked
-    mippv2_lmul4_register_blocked
-    mippv2_lmul8_register_blocked
+    mippv2_skylake_lmul_register_blocked
+    mippv2_skylake_lmul2_register_blocked
+    mippv2_skylake_lmul4_register_blocked
+    mippv2_skylake_lmul8_register_blocked
 
-    mippv2_panel
-    mippv2_panel_lmul
-    mippv2_panel_lmul2
-    mippv2_panel_lmul4
-    mippv2_panel_lmul8
+    mippv2_skylake_panel
+    mippv2_skylake_panel_lmul
+    mippv2_skylake_panel_lmul2
+    mippv2_skylake_panel_lmul4
+    mippv2_skylake_panel_lmul8
 
     mippv2_dot
 

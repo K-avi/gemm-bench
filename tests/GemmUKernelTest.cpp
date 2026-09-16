@@ -184,10 +184,6 @@ static void testGemmSuite()
         gemm.gemm_mippv2_blocked_unroll_jam4(A, B, C_test));
 
     TEST_KERNEL(
-        "MIPPv2 register blocked",
-        gemm.gemm_mippv2_register_blocked(A, B, C_test));
-
-    TEST_KERNEL(
         "MIPPv2 Skylake register blocked",
         gemm.gemm_mippv2_skylake_register_blocked(A, B, C_test));
 
@@ -200,24 +196,12 @@ static void testGemmSuite()
     //     gemm.gemm_mippv2_register_blocked_hoh(A, B, C_test));
     
     TEST_KERNEL(
-        "MIPPv2 LMUL register blocked",
-        gemm.template gemm_mippv2_lmul_register_blocked<1>(A, B, C_test));
-    
-    TEST_KERNEL(
         "MIPPv2 Skylake LMUL register blocked",
         gemm.template gemm_mippv2_skylake_lmul_register_blocked<1>(A, B, C_test));
 
     TEST_KERNEL(
-        "MIPPv2 LMUL2 register blocked",
-        gemm.template gemm_mippv2_lmul_register_blocked<2>(A, B, C_test));
-    
-    TEST_KERNEL(
         "MIPPv2 Skylake LMUL2 register blocked",
         gemm.template gemm_mippv2_skylake_lmul_register_blocked<2>(A, B, C_test));
-
-    TEST_KERNEL(
-        "MIPPv2 LMUL4 register blocked",
-        gemm.template gemm_mippv2_lmul_register_blocked<4>(A, B, C_test));
 
     TEST_KERNEL(
         "MIPPv2 Skylake LMUL4 register blocked",
@@ -311,28 +295,24 @@ static void testGemmSuiteCRR()
     }
 
     TEST_KERNEL(
-        "MIPPv2 panel",
-        gemm.gemm_mippv2_panel(A, B, C_test));
-
-    TEST_KERNEL(
         "MIPPv2 Skylake panel",
         gemm.gemm_mippv2_skylake_panel(A, B, C_test));
 
     TEST_KERNEL(
-        "MIPPv2 panel LMUL1",
-        gemm.template gemm_mippv2_panel_lmul<1>(A, B, C_test));
+        "MIPPv2 Skylake panel LMUL1",
+        gemm.template gemm_mippv2_skylake_panel_lmul<1>(A, B, C_test));
 
     TEST_KERNEL(
-        "MIPPv2 panel LMUL2",
-        gemm.template gemm_mippv2_panel_lmul<2>(A, B, C_test));
+        "MIPPv2 Skylake panel LMUL2",
+        gemm.template gemm_mippv2_skylake_panel_lmul<2>(A, B, C_test));
 
     TEST_KERNEL(
-        "MIPPv2 panel LMUL4",
-        gemm.template gemm_mippv2_panel_lmul<4>(A, B, C_test));
+        "MIPPv2 Skylake panel LMUL4",
+        gemm.template gemm_mippv2_skylake_panel_lmul<4>(A, B, C_test));
 
     TEST_KERNEL(
-        "MIPPv2 panel LMUL8",
-        gemm.template gemm_mippv2_panel_lmul<8>(A, B, C_test));
+        "MIPPv2 Skylake panel LMUL8",
+        gemm.template gemm_mippv2_skylake_panel_lmul<8>(A, B, C_test));
 
 #undef TEST_KERNEL
 

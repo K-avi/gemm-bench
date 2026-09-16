@@ -82,8 +82,6 @@ static UKernelType parseKernel(const std::string &name) {
   if (name == "mippv2_blocked_unroll_jam4")
     return UKernelType::mippv2_blocked_unroll_jam4;
 
-  if (name == "mippv2_register_blocked")
-    return UKernelType::mippv2_register_blocked;
   if (name == "mippv2_skylake_register_blocked")
     return UKernelType::mippv2_skylake_register_blocked;
 
@@ -93,51 +91,32 @@ static UKernelType parseKernel(const std::string &name) {
   if (name == "mippv2_blocked_register_blocked")
     return UKernelType::mippv2_blocked_register_blocked;
 
-  if (name == "mippv2_lmul_register_blocked")
-    return UKernelType::mippv2_lmul_register_blocked;
   if (name == "mippv2_skylake_lmul_register_blocked")
     return UKernelType::mippv2_skylake_lmul_register_blocked;
 
-  if (name == "mippv2_lmul2_register_blocked")
-    return UKernelType::mippv2_lmul2_register_blocked;
   if (name == "mippv2_skylake_lmul2_register_blocked")
     return UKernelType::mippv2_skylake_lmul2_register_blocked;
 
-  if (name == "mippv2_lmul4_register_blocked")
-    return UKernelType::mippv2_lmul4_register_blocked;
   if (name == "mippv2_skylake_lmul4_register_blocked")
     return UKernelType::mippv2_skylake_lmul4_register_blocked;
-
-  if (name == "mippv2_lmul8_register_blocked")
-    return UKernelType::mippv2_lmul8_register_blocked;
   if (name == "mippv2_skylake_lmul8_register_blocked")
     return UKernelType::mippv2_skylake_lmul8_register_blocked;
 
   // if(name == "mippv2_register_blocked_hoh")
   //     return UKernelType::mippv2_register_blocked_hoh;
 
-  if (name == "mippv2_panel")
-    return UKernelType::mippv2_panel;
   if (name == "mippv2_skylake_panel")
     return UKernelType::mippv2_skylake_panel;
 
-  if (name == "mippv2_panel_lmul")
-    return UKernelType::mippv2_panel_lmul;
   if (name == "mippv2_skylake_panel_lmul")
     return UKernelType::mippv2_skylake_panel_lmul;
 
-  if (name == "mippv2_panel_lmul2")
-    return UKernelType::mippv2_panel_lmul2;
   if (name == "mippv2_skylake_panel_lmul2")
     return UKernelType::mippv2_skylake_panel_lmul2;
 
-  if (name == "mippv2_panel_lmul4")
-    return UKernelType::mippv2_panel_lmul4;
   if (name == "mippv2_skylake_panel_lmul4")
     return UKernelType::mippv2_skylake_panel_lmul4;
 
-  if (name == "mippv2_panel_lmul8")
-    return UKernelType::mippv2_panel_lmul8;
   if (name == "mippv2_skylake_panel_lmul8")
     return UKernelType::mippv2_skylake_panel_lmul8;
 
@@ -297,28 +276,20 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
   case UKernelType::mippv2_blocked_unroll_jam4:
     BENCH_KERNEL(gemm.gemm_mippv2_blocked_unroll_jam4(A, B, C));
 
-  case UKernelType::mippv2_register_blocked:
   case UKernelType::mippv2_skylake_register_blocked:
     BENCH_KERNEL(gemm.gemm_mippv2_skylake_register_blocked(A, B, C));
 
   case UKernelType::mippv2_blocked_register_blocked:
     BENCH_KERNEL(gemm.gemm_mippv2_blocked_register_blocked(A, B, C));
 
-  case UKernelType::mippv2_lmul_register_blocked:
   case UKernelType::mippv2_skylake_lmul_register_blocked:
     BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul_register_blocked<1>(A, B, C));
 
-  case UKernelType::mippv2_lmul2_register_blocked:
   case UKernelType::mippv2_skylake_lmul2_register_blocked:
-    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul_register_blocked<2>(A, B, C));
+    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul2_register_blocked<2>(A, B, C));
 
-  case UKernelType::mippv2_lmul4_register_blocked:
   case UKernelType::mippv2_skylake_lmul4_register_blocked:
     BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul_register_blocked<4>(A, B, C));
-
-  case UKernelType::mippv2_lmul8_register_blocked:
-  case UKernelType::mippv2_skylake_lmul8_register_blocked:
-    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul_register_blocked<8>(A, B, C));
 
   case UKernelType::mippv2_x100_lmul1:
     BENCH_KERNEL(gemm.template gemm_mippv2_x100<1>(A, B, C));
@@ -374,22 +345,17 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
                      const PackedColMajor<T> &A, const PackedRowMajor<T> &B,
                      PackedRowMajor<T> &C) {
   switch (cfg.kernel) {
-  case UKernelType::mippv2_panel:
   case UKernelType::mippv2_skylake_panel:
     BENCH_KERNEL(gemm.gemm_mippv2_skylake_panel(A, B, C));
 
-  case UKernelType::mippv2_panel_lmul:
   case UKernelType::mippv2_skylake_panel_lmul:
     BENCH_KERNEL(gemm.template gemm_mippv2_skylake_panel_lmul<1>(A, B, C));
-  case UKernelType::mippv2_panel_lmul2:
   case UKernelType::mippv2_skylake_panel_lmul2:
     BENCH_KERNEL(gemm.template gemm_mippv2_skylake_panel_lmul<2>(A, B, C));
 
-  case UKernelType::mippv2_panel_lmul4:
   case UKernelType::mippv2_skylake_panel_lmul4:
     BENCH_KERNEL(gemm.template gemm_mippv2_skylake_panel_lmul<4>(A, B, C));
 
-  case UKernelType::mippv2_panel_lmul8:
   case UKernelType::mippv2_skylake_panel_lmul8:
     BENCH_KERNEL(gemm.template gemm_mippv2_skylake_panel_lmul<8>(A, B, C));
 
