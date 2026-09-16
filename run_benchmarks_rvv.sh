@@ -51,6 +51,8 @@ COMMON_FLAGS="
 -finline-functions
 -funroll-loops
 -fno-semantic-interposition
+-falign-functions=64
+-falign-loops=32
 "
 
 
