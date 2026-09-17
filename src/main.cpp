@@ -73,6 +73,11 @@ static UKernelType parseKernel(const std::string &name) {
   if (name == "mippv2_meteorlake_mr4_nr3")
     return UKernelType::mippv2_meteorlake_mr4_nr3;
 
+  if (name == "mippv2_zen4_mr4_nr4")
+    return UKernelType::mippv2_zen4_mr4_nr4;
+  if (name == "mippv2_zen4_mr4_nr4_fmaddi")
+    return UKernelType::mippv2_zen4_mr4_nr4_fmaddi;
+
   if (name == "mippv2_x100_register_blocked_lmul1")
     return UKernelType::mippv2_x100_register_blocked_lmul1;
   if (name == "mippv2_x100_register_blocked_lmul2")
@@ -271,6 +276,20 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
       BENCH_KERNEL(gemm.gemm_mippv2_meteorlake_mr4_nr3(A, B, C));
     } else {
       BENCH_KERNEL(gemm.gemm_mippv2_meteorlake_mr4_nr3(A, B, C, cfg.alpha, cfg.beta));
+    }
+
+  case UKernelType::mippv2_zen4_mr4_nr4:
+    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
+      BENCH_KERNEL(gemm.gemm_mippv2_zen4_mr4_nr4(A, B, C));
+    } else {
+      BENCH_KERNEL(gemm.gemm_mippv2_zen4_mr4_nr4(A, B, C, cfg.alpha, cfg.beta));
+    }
+
+  case UKernelType::mippv2_zen4_mr4_nr4_fmaddi:
+    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
+      BENCH_KERNEL(gemm.gemm_mippv2_zen4_mr4_nr4_fmaddi(A, B, C));
+    } else {
+      BENCH_KERNEL(gemm.gemm_mippv2_zen4_mr4_nr4_fmaddi(A, B, C, cfg.alpha, cfg.beta));
     }
 
   case UKernelType::mippv2_x100_register_blocked_lmul1:

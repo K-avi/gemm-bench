@@ -31,6 +31,10 @@ enum class UKernelType {
   // Meteor Lake kernels
   mippv2_meteorlake_mr4_nr3,
 
+  // Zen 4 AVX-512 kernels
+  mippv2_zen4_mr4_nr4,
+  mippv2_zen4_mr4_nr4_fmaddi,
+
   // X100 RVV kernels
   mippv2_x100_register_blocked_lmul1,
   mippv2_x100_register_blocked_lmul2,
@@ -112,6 +116,10 @@ inline constexpr KernelDescriptor kernelTable[] = {
 
     // Meteor Lake kernels
     {UKernelType::mippv2_meteorlake_mr4_nr3, "mippv2_meteorlake_mr4_nr3", RRR},
+
+    // Zen 4 AVX-512 kernels
+    {UKernelType::mippv2_zen4_mr4_nr4, "mippv2_zen4_mr4_nr4", RRR},
+    {UKernelType::mippv2_zen4_mr4_nr4_fmaddi, "mippv2_zen4_mr4_nr4_fmaddi", RRR},
 
     // X100 RVV register blocked
     {UKernelType::mippv2_x100_register_blocked_lmul1, "mippv2_x100_register_blocked_lmul1", RRR},
