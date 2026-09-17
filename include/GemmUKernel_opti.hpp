@@ -1,5 +1,5 @@
   static void gemm_ijk(const PackedRowMajor<T> &A, const PackedRowMajor<T> &B,
-                       PackedRowMajor<T> &C) {
+                       PackedRowMajor<T> &C, T alpha = T{1}, T beta = T{0}) {
     for (size_t i = 0; i < A.rows; ++i) {
       for (size_t j = 0; j < B.cols; ++j) {
         T sum = T{};
@@ -8,7 +8,7 @@
           sum += A[i][k] * B[k][j];
         }
 
-        C[i][j] = sum;
+        Epilogue::store(&C[i][j], sum, alpha, beta);
       }
     }
   }
@@ -16,7 +16,8 @@
   static inline void
   gemm_blocked_register_blocked(const PackedRowMajor<T> &__restrict A,
                                 const PackedRowMajor<T> &__restrict B,
-                                PackedRowMajor<T> &__restrict C) {
+                                PackedRowMajor<T> &__restrict C,
+                                T alpha = T{1}, T beta = T{0}) {
     constexpr size_t MR = 4;
     constexpr size_t NR = 2;
 
@@ -75,26 +76,27 @@
         const auto c2_ptr = C[i + 2] + j;
         const auto c3_ptr = C[i + 3] + j;
 
-        *c0_ptr = c00;
-        *(c0_ptr + 1) = c01;
+        Epilogue::store(c0_ptr + 0, c00, alpha, beta);
+        Epilogue::store(c0_ptr + 1, c01, alpha, beta);
 
-        *c1_ptr = c10;
-        *(c1_ptr + 1) = c11;
+        Epilogue::store(c1_ptr + 0, c10, alpha, beta);
+        Epilogue::store(c1_ptr + 1, c11, alpha, beta);
 
-        *c2_ptr = c20;
-        *(c2_ptr + 1) = c21;
+        Epilogue::store(c2_ptr + 0, c20, alpha, beta);
+        Epilogue::store(c2_ptr + 1, c21, alpha, beta);
 
-        *c3_ptr = c30;
-        *(c3_ptr + 1) = c31;
+        Epilogue::store(c3_ptr + 0, c30, alpha, beta);
+        Epilogue::store(c3_ptr + 1, c31, alpha, beta);
       }
     }
   }
 
-  template <int lmul = 1>
+  template <int lmul = 1, bool FastPath = false>
   static inline void
-  gemm_mippv2_skylake_register_blocked(const PackedRowMajor<T> &__restrict A,
-                                       const PackedRowMajor<T> &__restrict B,
-                                       PackedRowMajor<T> &__restrict C) {
+  gemm_mippv2_skylake_register_blocked_core(const PackedRowMajor<T> &__restrict A,
+                                            const PackedRowMajor<T> &__restrict B,
+                                            PackedRowMajor<T> &__restrict C,
+                                            T alpha = T{1}, T beta = T{0}) {
     using namespace mipp;
 
     constexpr size_t VL = N<T, lmul>();
@@ -157,18 +159,39 @@
         const auto c1_ptr = C[i + 1] + j;
         const auto c2_ptr = C[i + 2] + j;
         const auto c3_ptr = C[i + 3] + j;
-        store(c0_ptr, c00);
-        store(c0_ptr + VL, c01);
+        Epilogue::store<T, lmul, FastPath>(c0_ptr, c00, alpha, beta);
+        Epilogue::store<T, lmul, FastPath>(c0_ptr + VL, c01, alpha, beta);
 
-        store(c1_ptr, c10);
-        store(c1_ptr + VL, c11);
+        Epilogue::store<T, lmul, FastPath>(c1_ptr, c10, alpha, beta);
+        Epilogue::store<T, lmul, FastPath>(c1_ptr + VL, c11, alpha, beta);
 
-        store(c2_ptr, c20);
-        store(c2_ptr + VL, c21);
+        Epilogue::store<T, lmul, FastPath>(c2_ptr, c20, alpha, beta);
+        Epilogue::store<T, lmul, FastPath>(c2_ptr + VL, c21, alpha, beta);
 
-        store(c3_ptr, c30);
-        store(c3_ptr + VL, c31);
+        Epilogue::store<T, lmul, FastPath>(c3_ptr, c30, alpha, beta);
+        Epilogue::store<T, lmul, FastPath>(c3_ptr + VL, c31, alpha, beta);
       }
+    }
+  }
+
+  template <int lmul = 1>
+  static inline void
+  gemm_mippv2_skylake_register_blocked(const PackedRowMajor<T> &__restrict A,
+                                       const PackedRowMajor<T> &__restrict B,
+                                       PackedRowMajor<T> &__restrict C) {
+    gemm_mippv2_skylake_register_blocked_core<lmul, true>(A, B, C);
+  }
+
+  template <int lmul = 1>
+  static inline void
+  gemm_mippv2_skylake_register_blocked(const PackedRowMajor<T> &__restrict A,
+                                       const PackedRowMajor<T> &__restrict B,
+                                       PackedRowMajor<T> &__restrict C,
+                                       T alpha, T beta) {
+    if (__builtin_expect(alpha == T{1} && beta == T{0}, 1)) {
+      gemm_mippv2_skylake_register_blocked_core<lmul, true>(A, B, C);
+    } else {
+      gemm_mippv2_skylake_register_blocked_core<lmul, false>(A, B, C, alpha, beta);
     }
   }
 
@@ -176,7 +199,8 @@
   static inline void
   gemm_mippv2_skylake_lmul_register_blocked(const PackedRowMajor<T> &__restrict A,
                                             const PackedRowMajor<T> &__restrict B,
-                                            PackedRowMajor<T> &__restrict C) {
+                                            PackedRowMajor<T> &__restrict C,
+                                            T alpha = T{1}, T beta = T{0}) {
     using namespace mipp;
 
     // constexpr int lmul = 4;
@@ -212,19 +236,21 @@
           c10 = fmadd(a1, b0, c10);
         }
 
-        store(C[i + 0] + j, c00);
-        store(C[i + 1] + j, c10);
+        Epilogue::store<T, lmul>(C[i + 0] + j, c00, alpha, beta);
+        Epilogue::store<T, lmul>(C[i + 1] + j, c10, alpha, beta);
       }
     }
   }
 
   static inline void gemm_mippv2_skylake_panel(const PackedColMajor<T> &A,
                                                 const PackedRowMajor<T> &B,
-                                                PackedRowMajor<T> &C) {
+                                                PackedRowMajor<T> &C,
+                                                T alpha = T{1}, T beta = T{0}) {
     using namespace mipp;
 
+    constexpr size_t VL = N<T>();
     constexpr size_t MR = 4;
-    constexpr size_t NR = 8;
+    constexpr size_t NR = 2 * VL;
 
     for (size_t i = 0; i < A.rows; i += MR) {
       for (size_t j = 0; j < B.cols; j += NR) {
@@ -242,8 +268,8 @@
 
         // #pragma unroll
         for (size_t k = 0; k < A.cols; ++k) {
-          auto b0 = loadu<T>(&B(k, j + 0));
-          auto b1 = loadu<T>(&B(k, j + 4));
+          auto b0 = loadu<T>(&B(k, j + 0 * VL));
+          auto b1 = loadu<T>(&B(k, j + 1 * VL));
 
           auto a0 = set1<T>(A(i + 0, k));
           auto a1 = set1<T>(A(i + 1, k));
@@ -263,17 +289,17 @@
           c31 = fmadd(a3, b1, c31);
         }
 
-        storeu(&C(i + 0, j + 0), c00);
-        storeu(&C(i + 0, j + 4), c01);
+        Epilogue::store<T, 1>(&C(i + 0, j + 0 * VL), c00, alpha, beta);
+        Epilogue::store<T, 1>(&C(i + 0, j + 1 * VL), c01, alpha, beta);
 
-        storeu(&C(i + 1, j + 0), c10);
-        storeu(&C(i + 1, j + 4), c11);
+        Epilogue::store<T, 1>(&C(i + 1, j + 0 * VL), c10, alpha, beta);
+        Epilogue::store<T, 1>(&C(i + 1, j + 1 * VL), c11, alpha, beta);
 
-        storeu(&C(i + 2, j + 0), c20);
-        storeu(&C(i + 2, j + 4), c21);
+        Epilogue::store<T, 1>(&C(i + 2, j + 0 * VL), c20, alpha, beta);
+        Epilogue::store<T, 1>(&C(i + 2, j + 1 * VL), c21, alpha, beta);
 
-        storeu(&C(i + 3, j + 0), c30);
-        storeu(&C(i + 3, j + 4), c31);
+        Epilogue::store<T, 1>(&C(i + 3, j + 0 * VL), c30, alpha, beta);
+        Epilogue::store<T, 1>(&C(i + 3, j + 1 * VL), c31, alpha, beta);
       }
     }
   }
@@ -281,7 +307,8 @@
   template <int lmul = 1, int MR = 4, int NR_PACKETS = 1>
   static inline void gemm_mippv2_skylake_panel_lmul(const PackedColMajor<T> &A,
                                                      const PackedRowMajor<T> &B,
-                                                     PackedRowMajor<T> &C) {
+                                                     PackedRowMajor<T> &C,
+                                                     T alpha = T{1}, T beta = T{0}) {
     using namespace mipp;
 
     using VType = decltype(set0<T, lmul>());
@@ -320,7 +347,7 @@
         for (size_t r = 0; r < MR; ++r)
 #pragma unroll
           for (size_t p = 0; p < NR_PACKETS; ++p)
-            store(&C(i + r, j + p * VL), c[r][p]);
+            Epilogue::store<T, lmul>(&C(i + r, j + p * VL), c[r][p], alpha, beta);
       }
     }
   }
@@ -329,7 +356,8 @@
   static inline void
   gemm_mippv2_x100_register_blocked(const PackedRowMajor<T> &__restrict A,
                                     const PackedRowMajor<T> &__restrict B,
-                                    PackedRowMajor<T> &__restrict C) {
+                                    PackedRowMajor<T> &__restrict C,
+                                    T alpha = T{1}, T beta = T{0}) {
     using namespace mipp;
 
     constexpr size_t VL = N<T, lmul>();
@@ -371,14 +399,14 @@
           c21 = fmaddi(b1, a2_ptr[k], c21);
         }
 
-        store(C[i + 0] + j, c00);
-        store(C[i + 0] + j + VL, c01);
+        Epilogue::store<T, lmul>(C[i + 0] + j, c00, alpha, beta);
+        Epilogue::store<T, lmul>(C[i + 0] + j + VL, c01, alpha, beta);
 
-        store(C[i + 1] + j, c10);
-        store(C[i + 1] + j + VL, c11);
+        Epilogue::store<T, lmul>(C[i + 1] + j, c10, alpha, beta);
+        Epilogue::store<T, lmul>(C[i + 1] + j + VL, c11, alpha, beta);
 
-        store(C[i + 2] + j, c20);
-        store(C[i + 2] + j + VL, c21);
+        Epilogue::store<T, lmul>(C[i + 2] + j, c20, alpha, beta);
+        Epilogue::store<T, lmul>(C[i + 2] + j + VL, c21, alpha, beta);
       }
     }
 
@@ -400,8 +428,8 @@
           c1 = fmaddi(b1, a_ptr[k], c1);
         }
 
-        store(C[i] + j, c0);
-        store(C[i] + j + VL, c1);
+        Epilogue::store<T, lmul>(C[i] + j, c0, alpha, beta);
+        Epilogue::store<T, lmul>(C[i] + j + VL, c1, alpha, beta);
       }
     }
   }
@@ -415,7 +443,8 @@
   template <int lmul = 2>
   static inline void gemm_mippv2_x100_register_blocked_apack4(
       const PackedRowMajor<T> &__restrict A,
-      const PackedRowMajor<T> &__restrict B, PackedRowMajor<T> &__restrict C) {
+      const PackedRowMajor<T> &__restrict B, PackedRowMajor<T> &__restrict C,
+      T alpha = T{1}, T beta = T{0}) {
     using namespace mipp;
 
     constexpr size_t VL = N<T, lmul>();
@@ -499,14 +528,14 @@
           c21 = fmaddi(b01, a2.d3, c21);
         }
 
-        store(C[i + 0] + j, c00);
-        store(C[i + 0] + j + VL, c01);
+        Epilogue::store<T, lmul>(C[i + 0] + j, c00, alpha, beta);
+        Epilogue::store<T, lmul>(C[i + 0] + j + VL, c01, alpha, beta);
 
-        store(C[i + 1] + j, c10);
-        store(C[i + 1] + j + VL, c11);
+        Epilogue::store<T, lmul>(C[i + 1] + j, c10, alpha, beta);
+        Epilogue::store<T, lmul>(C[i + 1] + j + VL, c11, alpha, beta);
 
-        store(C[i + 2] + j, c20);
-        store(C[i + 2] + j + VL, c21);
+        Epilogue::store<T, lmul>(C[i + 2] + j, c20, alpha, beta);
+        Epilogue::store<T, lmul>(C[i + 2] + j + VL, c21, alpha, beta);
       }
     }
 
@@ -550,8 +579,8 @@
           c1 = fmaddi(b1, a.d3, c1);
         }
 
-        store(C[i] + j, c0);
-        store(C[i] + j + VL, c1);
+        Epilogue::store<T, lmul>(C[i] + j, c0, alpha, beta);
+        Epilogue::store<T, lmul>(C[i] + j + VL, c1, alpha, beta);
       }
     }
   }
@@ -560,7 +589,8 @@
   static inline void
   gemm_mippv2_panel_x100(const PackedColMajor<T> &__restrict A,
                          const PackedRowMajor<T> &__restrict B,
-                         PackedRowMajor<T> &__restrict C) {
+                         PackedRowMajor<T> &__restrict C,
+                         T alpha = T{1}, T beta = T{0}) {
     using namespace mipp;
 
     constexpr size_t VL = N<T, lmul>();
@@ -593,14 +623,14 @@
           c21 = fmaddi(b1, A(i + 2, k), c21);
         }
 
-        store(&C(i + 0, j), c00);
-        store(&C(i + 0, j + VL), c01);
+        Epilogue::store<T, lmul>(&C(i + 0, j), c00, alpha, beta);
+        Epilogue::store<T, lmul>(&C(i + 0, j + VL), c01, alpha, beta);
 
-        store(&C(i + 1, j), c10);
-        store(&C(i + 1, j + VL), c11);
+        Epilogue::store<T, lmul>(&C(i + 1, j), c10, alpha, beta);
+        Epilogue::store<T, lmul>(&C(i + 1, j + VL), c11, alpha, beta);
 
-        store(&C(i + 2, j), c20);
-        store(&C(i + 2, j + VL), c21);
+        Epilogue::store<T, lmul>(&C(i + 2, j), c20, alpha, beta);
+        Epilogue::store<T, lmul>(&C(i + 2, j + VL), c21, alpha, beta);
       }
     }
   }

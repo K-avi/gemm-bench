@@ -332,6 +332,220 @@ static void testGemmSuiteCRR()
     alloc.freePacked(A_ref);
 }
 
+template <typename T>
+static void testAlphaBetaSuite()
+{
+    constexpr size_t M = 32;
+    constexpr size_t N = 32;
+    constexpr size_t K = 32;
+
+    auto& cfg = GEMMBench::config();
+    SimdAlloc<T> alloc(cfg.packet_size, cfg.lmul, cfg.alignment, cfg.seed);
+
+    auto A = alloc.template allocatePacked<PackedRowMajor<T>>(M, K, InitMode::Random);
+    auto B = alloc.template allocatePacked<PackedRowMajor<T>>(K, N, InitMode::Random);
+    auto C_ref = alloc.template allocatePacked<PackedRowMajor<T>>(M, N, InitMode::Zero);
+    auto C_test = alloc.template allocatePacked<PackedRowMajor<T>>(M, N, InitMode::Zero);
+    auto C_init = alloc.template allocatePacked<PackedRowMajor<T>>(M, N, InitMode::Random);
+
+    GemmUKernel<T> gemm;
+
+    struct Param {
+        T alpha;
+        T beta;
+        const char* name;
+    };
+
+    Param params[] = {
+        { T{1.0}, T{0.0}, "alpha=1.0, beta=0.0" },
+        { T{1.0}, T{1.0}, "alpha=1.0, beta=1.0" },
+        { T{2.5}, T{0.5}, "alpha=2.5, beta=0.5" },
+        { T{0.0}, T{1.0}, "alpha=0.0, beta=1.0" },
+    };
+
+    for (const auto& p : params) {
+        DYNAMIC_SECTION("AlphaBeta RRR - " << p.name) {
+            for (size_t i = 0; i < M; ++i) {
+                for (size_t j = 0; j < N; ++j) {
+                    C_ref(i, j) = C_init(i, j);
+                    C_test(i, j) = C_init(i, j);
+                }
+            }
+
+            gemm.gemm_ijk(A, B, C_ref, p.alpha, p.beta);
+
+            SECTION("blocked_register_blocked") {
+                gemm.gemm_blocked_register_blocked(A, B, C_test, p.alpha, p.beta);
+                checkMatrixEqual(C_ref, C_test);
+            }
+
+            SECTION("mippv2_skylake_register_blocked") {
+                for (size_t i = 0; i < M; ++i)
+                    for (size_t j = 0; j < N; ++j)
+                        C_test(i, j) = C_init(i, j);
+                gemm.gemm_mippv2_skylake_register_blocked(A, B, C_test, p.alpha, p.beta);
+                checkMatrixEqual(C_ref, C_test);
+            }
+
+            SECTION("mippv2_skylake_lmul1") {
+                for (size_t i = 0; i < M; ++i)
+                    for (size_t j = 0; j < N; ++j)
+                        C_test(i, j) = C_init(i, j);
+                gemm.template gemm_mippv2_skylake_lmul_register_blocked<1>(A, B, C_test, p.alpha, p.beta);
+                checkMatrixEqual(C_ref, C_test);
+            }
+
+            SECTION("mippv2_skylake_lmul2") {
+                for (size_t i = 0; i < M; ++i)
+                    for (size_t j = 0; j < N; ++j)
+                        C_test(i, j) = C_init(i, j);
+                gemm.template gemm_mippv2_skylake_lmul_register_blocked<2>(A, B, C_test, p.alpha, p.beta);
+                checkMatrixEqual(C_ref, C_test);
+            }
+
+            SECTION("mippv2_skylake_lmul4") {
+                for (size_t i = 0; i < M; ++i)
+                    for (size_t j = 0; j < N; ++j)
+                        C_test(i, j) = C_init(i, j);
+                gemm.template gemm_mippv2_skylake_lmul_register_blocked<4>(A, B, C_test, p.alpha, p.beta);
+                checkMatrixEqual(C_ref, C_test);
+            }
+
+            SECTION("mippv2_x100_register_blocked_lmul1") {
+                for (size_t i = 0; i < M; ++i)
+                    for (size_t j = 0; j < N; ++j)
+                        C_test(i, j) = C_init(i, j);
+                gemm.template gemm_mippv2_x100_register_blocked<1>(A, B, C_test, p.alpha, p.beta);
+                checkMatrixEqual(C_ref, C_test);
+            }
+
+            SECTION("mippv2_x100_register_blocked_lmul2") {
+                for (size_t i = 0; i < M; ++i)
+                    for (size_t j = 0; j < N; ++j)
+                        C_test(i, j) = C_init(i, j);
+                gemm.template gemm_mippv2_x100_register_blocked<2>(A, B, C_test, p.alpha, p.beta);
+                checkMatrixEqual(C_ref, C_test);
+            }
+
+            SECTION("mippv2_x100_register_blocked_lmul4") {
+                for (size_t i = 0; i < M; ++i)
+                    for (size_t j = 0; j < N; ++j)
+                        C_test(i, j) = C_init(i, j);
+                gemm.template gemm_mippv2_x100_register_blocked<4>(A, B, C_test, p.alpha, p.beta);
+                checkMatrixEqual(C_ref, C_test);
+            }
+
+            SECTION("mippv2_x100_register_blocked_apack4") {
+                for (size_t i = 0; i < M; ++i)
+                    for (size_t j = 0; j < N; ++j)
+                        C_test(i, j) = C_init(i, j);
+                gemm.gemm_mippv2_x100_register_blocked_apack4(A, B, C_test, p.alpha, p.beta);
+                checkMatrixEqual(C_ref, C_test);
+            }
+        }
+    }
+
+    alloc.freePacked(A);
+    alloc.freePacked(B);
+    alloc.freePacked(C_ref);
+    alloc.freePacked(C_test);
+    alloc.freePacked(C_init);
+}
+
+template <typename T>
+static void testAlphaBetaSuiteCRR()
+{
+    constexpr size_t M = 32;
+    constexpr size_t N = 32;
+    constexpr size_t K = 32;
+
+    auto& cfg = GEMMBench::config();
+    SimdAlloc<T> alloc(cfg.packet_size, cfg.lmul, cfg.alignment, cfg.seed);
+
+    auto A = alloc.template allocatePacked<PackedColMajor<T>>(M, K, InitMode::Random);
+    auto A_ref = alloc.template allocatePacked<PackedRowMajor<T>>(M, K, InitMode::Zero);
+    auto B = alloc.template allocatePacked<PackedRowMajor<T>>(K, N, InitMode::Random);
+    auto C_ref = alloc.template allocatePacked<PackedRowMajor<T>>(M, N, InitMode::Zero);
+    auto C_test = alloc.template allocatePacked<PackedRowMajor<T>>(M, N, InitMode::Zero);
+    auto C_init = alloc.template allocatePacked<PackedRowMajor<T>>(M, N, InitMode::Random);
+
+    for (size_t i = 0; i < M; ++i)
+        for (size_t k = 0; k < K; ++k)
+            A_ref(i, k) = A(i, k);
+
+    GemmUKernel<T> gemm;
+
+    struct Param {
+        T alpha;
+        T beta;
+        const char* name;
+    };
+
+    Param params[] = {
+        { T{1.0}, T{0.0}, "alpha=1.0, beta=0.0" },
+        { T{1.0}, T{1.0}, "alpha=1.0, beta=1.0" },
+        { T{2.5}, T{0.5}, "alpha=2.5, beta=0.5" },
+        { T{0.0}, T{1.0}, "alpha=0.0, beta=1.0" },
+    };
+
+    for (const auto& p : params) {
+        DYNAMIC_SECTION("AlphaBeta CRR - " << p.name) {
+            for (size_t i = 0; i < M; ++i) {
+                for (size_t j = 0; j < N; ++j) {
+                    C_ref(i, j) = C_init(i, j);
+                    C_test(i, j) = C_init(i, j);
+                }
+            }
+
+            gemm.gemm_ijk(A_ref, B, C_ref, p.alpha, p.beta);
+
+            SECTION("mippv2_skylake_panel") {
+                gemm.gemm_mippv2_skylake_panel(A, B, C_test, p.alpha, p.beta);
+                checkMatrixEqual(C_ref, C_test);
+            }
+
+            SECTION("mippv2_skylake_panel_lmul1") {
+                for (size_t i = 0; i < M; ++i)
+                    for (size_t j = 0; j < N; ++j)
+                        C_test(i, j) = C_init(i, j);
+                gemm.template gemm_mippv2_skylake_panel_lmul<1>(A, B, C_test, p.alpha, p.beta);
+                checkMatrixEqual(C_ref, C_test);
+            }
+
+            SECTION("mippv2_skylake_panel_lmul2") {
+                for (size_t i = 0; i < M; ++i)
+                    for (size_t j = 0; j < N; ++j)
+                        C_test(i, j) = C_init(i, j);
+                gemm.template gemm_mippv2_skylake_panel_lmul<2>(A, B, C_test, p.alpha, p.beta);
+                checkMatrixEqual(C_ref, C_test);
+            }
+
+            SECTION("mippv2_skylake_panel_lmul4") {
+                for (size_t i = 0; i < M; ++i)
+                    for (size_t j = 0; j < N; ++j)
+                        C_test(i, j) = C_init(i, j);
+                gemm.template gemm_mippv2_skylake_panel_lmul<4>(A, B, C_test, p.alpha, p.beta);
+                checkMatrixEqual(C_ref, C_test);
+            }
+
+            SECTION("mippv2_panel_x100_lmul1") {
+                for (size_t i = 0; i < M; ++i)
+                    for (size_t j = 0; j < N; ++j)
+                        C_test(i, j) = C_init(i, j);
+                gemm.template gemm_mippv2_panel_x100<1>(A, B, C_test, p.alpha, p.beta);
+                checkMatrixEqual(C_ref, C_test);
+            }
+        }
+    }
+
+    alloc.freePacked(A);
+    alloc.freePacked(A_ref);
+    alloc.freePacked(B);
+    alloc.freePacked(C_ref);
+    alloc.freePacked(C_test);
+    alloc.freePacked(C_init);
+}
+
 TEST_CASE("GEMM RRR kernels", "[gemm]")
 {
     testGemmSuite<
@@ -344,4 +558,10 @@ TEST_CASE("GEMM RRR kernels", "[gemm]")
 TEST_CASE("GEMM CRR kernels", "[gemm]")
 {
     testGemmSuiteCRR<double>();
+}
+
+TEST_CASE("GEMM Alpha Beta scaling and accumulation", "[gemm]")
+{
+    testAlphaBetaSuite<double>();
+    testAlphaBetaSuiteCRR<double>();
 }

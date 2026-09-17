@@ -170,6 +170,7 @@ static BenchConfig parseArgs(int argc, char **argv) {
     std::string arg = argv[i];
 
     auto next = [&]() { return std::stoul(argv[++i]); };
+    auto next_double = [&]() { return std::stod(argv[++i]); };
 
     if (arg == "--m")
       cfg.M = next();
@@ -179,6 +180,12 @@ static BenchConfig parseArgs(int argc, char **argv) {
 
     else if (arg == "--k")
       cfg.K = next();
+
+    else if (arg == "--alpha" || arg == "-a")
+      cfg.alpha = next_double();
+
+    else if (arg == "--beta" || arg == "-b")
+      cfg.beta = next_double();
 
     else if (arg == "--iterations")
       cfg.iterations = next();
@@ -235,33 +242,37 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
   switch (cfg.kernel) {
   // Production / Optimized kernels
   case UKernelType::IJK:
-    BENCH_KERNEL(gemm.gemm_ijk(A, B, C));
+    BENCH_KERNEL(gemm.gemm_ijk(A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::blocked_register_blocked:
-    BENCH_KERNEL(gemm.gemm_blocked_register_blocked(A, B, C));
+    BENCH_KERNEL(gemm.gemm_blocked_register_blocked(A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_skylake_register_blocked:
-    BENCH_KERNEL(gemm.gemm_mippv2_skylake_register_blocked(A, B, C));
+    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
+      BENCH_KERNEL(gemm.gemm_mippv2_skylake_register_blocked(A, B, C));
+    } else {
+      BENCH_KERNEL(gemm.gemm_mippv2_skylake_register_blocked(A, B, C, cfg.alpha, cfg.beta));
+    }
 
   case UKernelType::mippv2_skylake_lmul_register_blocked:
-    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul_register_blocked<1>(A, B, C));
+    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul_register_blocked<1>(A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_skylake_lmul2_register_blocked:
-    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul_register_blocked<2>(A, B, C));
+    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul_register_blocked<2>(A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_skylake_lmul4_register_blocked:
-    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul_register_blocked<4>(A, B, C));
+    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul_register_blocked<4>(A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_x100_register_blocked_lmul1:
-    BENCH_KERNEL(gemm.template gemm_mippv2_x100_register_blocked<1>(A, B, C));
+    BENCH_KERNEL(gemm.template gemm_mippv2_x100_register_blocked<1>(A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_x100_register_blocked_lmul2:
-    BENCH_KERNEL(gemm.template gemm_mippv2_x100_register_blocked<2>(A, B, C));
+    BENCH_KERNEL(gemm.template gemm_mippv2_x100_register_blocked<2>(A, B, C, cfg.alpha, cfg.beta));
   case UKernelType::mippv2_x100_register_blocked_lmul4:
-    BENCH_KERNEL(gemm.template gemm_mippv2_x100_register_blocked<4>(A, B, C));
+    BENCH_KERNEL(gemm.template gemm_mippv2_x100_register_blocked<4>(A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_x100_register_blocked_apack4:
-    BENCH_KERNEL(gemm.gemm_mippv2_x100_register_blocked_apack4(A, B, C));
+    BENCH_KERNEL(gemm.gemm_mippv2_x100_register_blocked_apack4(A, B, C, cfg.alpha, cfg.beta));
 
 #ifdef GEMMBENCH_ENABLE_EXPLO
   case UKernelType::IKJ:
@@ -363,22 +374,22 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
   switch (cfg.kernel) {
   // Production / Optimized kernels
   case UKernelType::mippv2_skylake_panel:
-    BENCH_KERNEL(gemm.gemm_mippv2_skylake_panel(A, B, C));
+    BENCH_KERNEL(gemm.gemm_mippv2_skylake_panel(A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_skylake_panel_lmul:
-    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_panel_lmul<1>(A, B, C));
+    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_panel_lmul<1>(A, B, C, cfg.alpha, cfg.beta));
   case UKernelType::mippv2_skylake_panel_lmul2:
-    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_panel_lmul<2>(A, B, C));
+    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_panel_lmul<2>(A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_skylake_panel_lmul4:
-    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_panel_lmul<4>(A, B, C));
+    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_panel_lmul<4>(A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_panel_x100_lmul1:
-    BENCH_KERNEL(gemm.template gemm_mippv2_panel_x100<1>(A, B, C));
+    BENCH_KERNEL(gemm.template gemm_mippv2_panel_x100<1>(A, B, C, cfg.alpha, cfg.beta));
   case UKernelType::mippv2_panel_x100_lmul2:
-    BENCH_KERNEL(gemm.template gemm_mippv2_panel_x100<2>(A, B, C));
+    BENCH_KERNEL(gemm.template gemm_mippv2_panel_x100<2>(A, B, C, cfg.alpha, cfg.beta));
   case UKernelType::mippv2_panel_x100_lmul4:
-    BENCH_KERNEL(gemm.template gemm_mippv2_panel_x100<4>(A, B, C));
+    BENCH_KERNEL(gemm.template gemm_mippv2_panel_x100<4>(A, B, C, cfg.alpha, cfg.beta));
 
 #ifdef GEMMBENCH_ENABLE_EXPLO
   case UKernelType::mippv2_skylake_panel_lmul8:
@@ -407,10 +418,13 @@ void printResults(const BenchConfig &cfg,
     std::cout << "M: " << cfg.M << "\n"
               << "N: " << cfg.N << "\n"
               << "K: " << cfg.K << "\n"
+              << "Alpha: " << cfg.alpha << "\n"
+              << "Beta: " << cfg.beta << "\n"
               << "Time(s): " << std::setprecision(12) << time_s << "\n"
               << "GFLOP/s: " << gflops << "\n";
   } else {
     std::cout << name_buff << "," << cfg.M << "," << cfg.N << "," << cfg.K
+              << "," << cfg.alpha << "," << cfg.beta
               << "," << time_s << "," << gflops << "\n";
   }
 }
@@ -435,7 +449,11 @@ void runBenchmark(const BenchConfig &cfg) {
   auto B =
       alloc.template allocatePacked<BPacked>(cfg.K, cfg.N, InitMode::Random);
 
-  auto C = alloc.template allocatePacked<CPacked>(cfg.M, cfg.N, InitMode::Zero);
+  auto C = (cfg.beta != 0.0)
+               ? alloc.template allocatePacked<CPacked>(cfg.M, cfg.N,
+                                                        InitMode::Random)
+               : alloc.template allocatePacked<CPacked>(cfg.M, cfg.N,
+                                                        InitMode::Zero);
 
   if (!csv_mode) {
     std::cout << "A.ld = " << A.ld << "\n";

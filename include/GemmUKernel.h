@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Alloc.h"
+#include "Epilogue.hpp"
 #include "StorageType.h"
 #include "mipp.hpp"
 #include "mipp_custom.h"

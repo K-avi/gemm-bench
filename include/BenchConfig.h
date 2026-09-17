@@ -26,6 +26,9 @@ struct BenchConfig
 
     uint32_t seed = 12;
 
+    double alpha = 1.0;
+    double beta = 0.0;
+
     UKernelType kernel = UKernelType::IJK;
     PLayout storage_order = PLayout::Row;
 };

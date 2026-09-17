@@ -23,16 +23,33 @@ unset CXXFLAGS || true
 
 RUN_ALL=false
 FORCE_REBUILD=false
+ALPHA=1.0
+BETA=0.0
 REQUESTED_COMPILERS=()
 
-for arg in "$@"; do
-    if [[ "$arg" == "--run-all" ]]; then
-        RUN_ALL=true
-    elif [[ "$arg" == "--rebuild" ]]; then
-        FORCE_REBUILD=true
-    else
-        REQUESTED_COMPILERS+=("$arg")
-    fi
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --run-all)
+            RUN_ALL=true
+            shift
+            ;;
+        --rebuild)
+            FORCE_REBUILD=true
+            shift
+            ;;
+        -a|--alpha)
+            ALPHA="$2"
+            shift 2
+            ;;
+        -b|--beta)
+            BETA="$2"
+            shift 2
+            ;;
+        *)
+            REQUESTED_COMPILERS+=("$1")
+            shift
+            ;;
+    esac
 done
 
 # Default to running both g++ and clang++, or accept specific compiler(s) as args
@@ -236,7 +253,7 @@ do
     echo "################################################################################"
 
     CSV="results/gemm_results_${COMPILER_TAG}.csv"
-    echo "Build,Kernel,M,N,K,Time_s,GFLOPS,PaddingA" > "$CSV"
+    echo "Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS" > "$CSV"
 
     # Build
     for VERSION in "${VERSIONS[@]}"
@@ -322,6 +339,8 @@ do
                         --m "$M" \
                         --n "$M" \
                         --k "$M" \
+                        --alpha "$ALPHA" \
+                        --beta "$BETA" \
                         --iterations "$ITER" \
                         --warmup "$WARM" \
                         --csv
