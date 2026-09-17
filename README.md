@@ -4,21 +4,26 @@
 > **Work in Progress (WIP)**: This repository is under development. Microkernels, benchmark (and anything else to be honest) might change any time.
 
 This repostitory contains a high-performance General Matrix Multiply (DGEMM) microbenchmark suite, built on top of [MIPPv2](https://github.com/aff3ct/MIPP/tree/develop) (MyIntrinsics++ v2).
-It currently contains microbenchmarks tuned for Intel Skylake (AVX2 + FMA) and SpacemiT X100 (RVV 1.0).
+It currently contains microbenchmarks for Intel Meteor Lake (Redwood Cove P-Core, AVX2 + FMA), Intel Skylake (AVX2 + FMA), and SpacemiT X100 (RVV 1.0).
 
 > [!NOTE]
 > **Origins & Context**: Developed during a research internship at **LIP6** (Sorbonne Université), this benchmark evaluates MIPPv2 as a zero-overhead abstraction layer for compute-bound microkernels (DGEMM). Key objectives included assessing cross-platform efficiency across different microarchitectures (Intel Skylake vs. SpacemiT X100) and determining whether MIPPv2 features (such as emulated LMUL on fixed-width SIMD) simplify microkernel design space exploration.
-> **Repurposing & Roadmap**: This microkernel benchmark is being repurposed and actively expanded into a standalone **GEMM benchmark** and optimized kernel suite mainly targetting SpacemiT RISC-V architectures.
-> - **SpacemiT K3 X100**
-> - **SpacemiT K1 X60**
+>
+> **Repurposing & Roadmap**: This microkernel benchmark is being repurposed and actively expanded into a standalone **GEMM benchmark** and optimized kernel suite across multiple architectures:
+> - **Intel Meteor Lake (Redwood Cove P-Core)**: AVX2 microkernel ($M_R=4, N_R=12$) reaching **75.96 GFLOP/s (93% of theoretical peak)**.
+> - **SpacemiT K3 X100**: RVV 1.0 microkernel with vector-scalar FMA reaching **16.43 GFLOP/s (93% of theoretical peak)**.
+> - **Intel Skylake**: AVX2 microkernel ($M_R=2, N_R=8$) reaching **33.84 GFLOP/s (92% of theoretical peak)**.
 > - Target extension under investigation: **SpacemiT K3 A100**.
-> - Potential future microkernel targets (tentative): **AMD Zen 4** (AVX-512) and **Apple Silicon M1** (ARM NEON).
+> - Next microkernel targets: **AMD Zen 4 / Zen 5** (AVX-512) and **ARM Cortex-A76 / Apple Silicon M1 Firestorm** (ARM NEON).
 
 ---
 
 ## Performance Overview
 
-The highest measured throughput on the SpacemiT K3 X100 reaches **16.43 GFLOP/s**, reaching **93% of the theoretical peak performance** (17.6 GFLOP/s at target clock) on a single core using the `mippv2_x100_register_blocked_apack4` microkernel. Achieving >93% hardware utilization is notable given that the X100 core was released only a few months ago and that the microkernel is written in C++ and uses an SIMD abstraction library (MIPPv2) rather than hand-crafted assembly.
+- **Intel Meteor Lake (Redwood Cove P-Core, 5.10 GHz)**: Reaches **75.96 GFLOP/s** (**93.1% of theoretical peak**, 81.60 GFLOP/s) on a single core using the `mippv2_meteorlake_mr4_nr3` microkernel.
+- **SpacemiT K3 X100 (RVV 1.0, 1.60 GHz)**: Reaches **16.43 GFLOP/s** (**93.3% of theoretical peak**, 17.6 GFLOP/s) on a single core using the `mippv2_x100_register_blocked_apack4` microkernel.
+
+Achieving >93% hardware utilization on both modern x86 and emerging RISC-V architectures demonstrates that pure C++ using a well-designed SIMD abstraction library (MIPPv2) can match hand-crafted assembly while retaining portability.
 
 > [!NOTE]
 > **Scope & Experimental Caveats**:
@@ -44,6 +49,7 @@ The highest measured throughput on the SpacemiT K3 X100 reaches **16.43 GFLOP/s*
 ```text
 gemm_bench/
 ├── assets/                  # Performance summary figures (SVG)
+├── docs/                    # In-depth microarchitectural analysis documents (WIP, not pushed yet!)
 ├── include/
 │   ├── Alloc.h              # Cache/SIMD-aligned memory allocators
 │   ├── BenchConfig.h        # Benchmark configuration types
@@ -173,6 +179,7 @@ python3 plot_results.py \
 - **Generic MIPPv2**: Direct vectorized loops parameterized across vector lengths and unrolling factors (`mippv2_lmul1/2/4/8`, `mippv2_blocked`).
 - **Register Blocked**: Microkernels with accumulators kept in vector register files to maximize arithmetic intensity.
 - **Panel / Packed**: GotoBLAS/BLIS-style contiguous packing for continuous streaming into vector execution units.
+- **Intel Meteor Lake P-Core Microkernel (`mippv2_meteorlake_mr4_nr3`)**: Optimal $4 \times 3$ register tile ($M_R=4, N_R=12$ doubles = 48 FP64 elements) designed for the Redwood Cove core. Balances FMA throughput on Ports 0/1 against the Port 5 vector-broadcast bottleneck (3:1 ratio), uses C++ lexical block scoping for zero register spills within the 16-register AVX2 budget, and features decoupled $4 \times 2$ cleanup tiles reaching **75.96 GFLOP/s (93.1% of theoretical peak)**.
 - **SpacemiT-Tuned Microkernels**: Microkernels exploring register pressure and dynamic vector-length configurations for SpacemiT cores ($VLEN=256$):
   - **Vector-Scalar FMA**: Uses `include/mipp_custom.h` to emit `vfmacc.vf` instructions, eliminating explicit vector broadcast (`vfmv.v.f`) overhead inside the inner accumulation loop.
   - **Register File Budgeting**: RVV provides 32 architectural vector registers. Custom tiles allocate up to 16–24 registers for accumulators while keeping A-matrix scalars and B-matrix vectors resident.
