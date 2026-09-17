@@ -105,6 +105,19 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/x100_uarch_exp/broadcast_bench.cpp")
     )
 endif()
 
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/fma_peak_bench.cpp")
+    add_executable(fma_peak_bench
+        fma_peak_bench.cpp
+    )
+    target_compile_options(fma_peak_bench
+        PRIVATE
+            -O3
+            -mavx2
+            -mfma
+            -finline-functions
+    )
+endif()
+
 # -----------------------------------------------------------------------------
 # Tests
 # -----------------------------------------------------------------------------

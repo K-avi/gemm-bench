@@ -213,6 +213,10 @@ static void testGemmSuite()
         "MIPPv2 Skylake LMUL4 register blocked",
         gemm.template gemm_mippv2_skylake_lmul_register_blocked<4>(A, B, C_test));
 
+    TEST_KERNEL(
+        "MIPPv2 Meteorlake MR4 NR3",
+        gemm.gemm_mippv2_meteorlake_mr4_nr3(A, B, C_test));
+
     // test x100 register blocked kernels
     TEST_KERNEL(
         "MIPPv2 x100 register blocked LMUL1",
@@ -408,6 +412,14 @@ static void testAlphaBetaSuite()
                     for (size_t j = 0; j < N; ++j)
                         C_test(i, j) = C_init(i, j);
                 gemm.template gemm_mippv2_skylake_lmul_register_blocked<4>(A, B, C_test, p.alpha, p.beta);
+                checkMatrixEqual(C_ref, C_test);
+            }
+
+            SECTION("mippv2_meteorlake_mr4_nr3") {
+                for (size_t i = 0; i < M; ++i)
+                    for (size_t j = 0; j < N; ++j)
+                        C_test(i, j) = C_init(i, j);
+                gemm.gemm_mippv2_meteorlake_mr4_nr3(A, B, C_test, p.alpha, p.beta);
                 checkMatrixEqual(C_ref, C_test);
             }
 

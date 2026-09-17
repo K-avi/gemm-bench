@@ -130,6 +130,7 @@ DEFAULT_KERNELS=(
     blocked_register_blocked
     mippv2_skylake_register_blocked
     mippv2_skylake_lmul4_register_blocked
+    mippv2_meteorlake_mr4_nr3
     mippv2_x100_register_blocked_lmul2
     mippv2_x100_register_blocked_apack4
 )
@@ -168,6 +169,8 @@ MIPP_KERNELS=(
     mippv2_skylake_panel_lmul
     mippv2_skylake_panel_lmul2
     mippv2_skylake_panel_lmul4
+
+    mippv2_meteorlake_mr4_nr3
 
     mippv2_dot
     
@@ -217,6 +220,8 @@ else
     SIZES=(
         "32 100000 10000"
         "64 10000 1000"
+        "128 10000 5000"
+
     )
 fi
 

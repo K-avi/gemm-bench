@@ -70,6 +70,9 @@ static UKernelType parseKernel(const std::string &name) {
   if (name == "mippv2_skylake_panel_lmul4")
     return UKernelType::mippv2_skylake_panel_lmul4;
 
+  if (name == "mippv2_meteorlake_mr4_nr3")
+    return UKernelType::mippv2_meteorlake_mr4_nr3;
+
   if (name == "mippv2_x100_register_blocked_lmul1")
     return UKernelType::mippv2_x100_register_blocked_lmul1;
   if (name == "mippv2_x100_register_blocked_lmul2")
@@ -262,6 +265,13 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
 
   case UKernelType::mippv2_skylake_lmul4_register_blocked:
     BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul_register_blocked<4>(A, B, C, cfg.alpha, cfg.beta));
+
+  case UKernelType::mippv2_meteorlake_mr4_nr3:
+    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
+      BENCH_KERNEL(gemm.gemm_mippv2_meteorlake_mr4_nr3(A, B, C));
+    } else {
+      BENCH_KERNEL(gemm.gemm_mippv2_meteorlake_mr4_nr3(A, B, C, cfg.alpha, cfg.beta));
+    }
 
   case UKernelType::mippv2_x100_register_blocked_lmul1:
     BENCH_KERNEL(gemm.template gemm_mippv2_x100_register_blocked<1>(A, B, C, cfg.alpha, cfg.beta));
