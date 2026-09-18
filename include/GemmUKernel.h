@@ -31,6 +31,9 @@ enum class UKernelType {
   // Meteor Lake kernels
   mippv2_meteorlake_mr4_nr3,
 
+  // Cortex-A76 NEON kernels
+  mippv2_a76_mr6_nr3,
+
   // Zen 4 AVX-512 kernels
   mippv2_zen4_mr4_nr4,
   mippv2_zen4_mr4_nr4_fmaddi,
@@ -116,6 +119,9 @@ inline constexpr KernelDescriptor kernelTable[] = {
 
     // Meteor Lake kernels
     {UKernelType::mippv2_meteorlake_mr4_nr3, "mippv2_meteorlake_mr4_nr3", RRR},
+
+    // Cortex-A76 NEON kernels
+    {UKernelType::mippv2_a76_mr6_nr3, "mippv2_a76_mr6_nr3", RRR},
 
     // Zen 4 AVX-512 kernels
     {UKernelType::mippv2_zen4_mr4_nr4, "mippv2_zen4_mr4_nr4", RRR},

@@ -2,21 +2,6 @@ cmake_minimum_required(VERSION 3.20)
 
 project(GemmBench LANGUAGES CXX)
 
-set(GEMMBENCH_COMPILER "clang"
-    CACHE STRING
-    "C++ compiler to use (clang or gcc)"
-)
-set_property(CACHE GEMMBENCH_COMPILER PROPERTY STRINGS clang gcc)
-
-if(GEMMBENCH_COMPILER STREQUAL "clang")
-    set(CMAKE_CXX_COMPILER clang++)
-elseif(GEMMBENCH_COMPILER STREQUAL "gcc")
-    set(CMAKE_CXX_COMPILER g++)
-else()
-    message(FATAL_ERROR
-        "Unknown GEMMBENCH_COMPILER=${GEMMBENCH_COMPILER}. Use clang or gcc."
-    )
-endif()
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -105,18 +90,7 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/x100_uarch_exp/broadcast_bench.cpp")
     )
 endif()
 
-if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/fma_peak_bench.cpp")
-    add_executable(fma_peak_bench
-        fma_peak_bench.cpp
-    )
-    target_compile_options(fma_peak_bench
-        PRIVATE
-            -O3
-            -mavx2
-            -mfma
-            -finline-functions
-    )
-endif()
+
 
 # -----------------------------------------------------------------------------
 # Tests
