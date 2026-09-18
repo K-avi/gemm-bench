@@ -256,6 +256,16 @@ static void testGemmSuite()
         "MIPPv2 x100 register blocked LMUL4",
         gemm.template gemm_mippv2_x100_register_blocked<4>(A, B, C_test));
 
+    // test A100 kernels
+    TEST_KERNEL(
+        "MIPPv2 A100 MR7 NR4 pipe",
+        gemm.gemm_mippv2_a100_mr7_nr4_pipe(A, B, C_test));
+    TEST_KERNEL(
+        "MIPPv2 A100 MR7 NR2 lmul2 pipe",
+        gemm.gemm_mippv2_a100_mr7_nr2_lmul2_pipe(A, B, C_test));
+
+
+
 #ifdef GEMMBENCH_ENABLE_EXPLO
     TEST_KERNEL(
         "MIPPv2 x100 register blocked LMUL8",
@@ -538,6 +548,24 @@ static void testAlphaBetaSuite()
                 gemm.gemm_mippv2_x100_register_blocked_apack4(A, B, C_test, p.alpha, p.beta);
                 checkMatrixEqual(C_ref, C_test);
             }
+
+            SECTION("mippv2_a100_mr7_nr4_pipe") {
+                for (size_t i = 0; i < M; ++i)
+                    for (size_t j = 0; j < N; ++j)
+                        C_test(i, j) = C_init(i, j);
+                gemm.gemm_mippv2_a100_mr7_nr4_pipe(A, B, C_test, p.alpha, p.beta);
+                checkMatrixEqual(C_ref, C_test);
+            }
+
+            SECTION("mippv2_a100_mr7_nr2_lmul2_pipe") {
+                for (size_t i = 0; i < M; ++i)
+                    for (size_t j = 0; j < N; ++j)
+                        C_test(i, j) = C_init(i, j);
+                gemm.gemm_mippv2_a100_mr7_nr2_lmul2_pipe(A, B, C_test, p.alpha, p.beta);
+                checkMatrixEqual(C_ref, C_test);
+            }
+
+
         }
     }
 

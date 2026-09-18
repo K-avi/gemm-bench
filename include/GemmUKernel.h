@@ -57,6 +57,10 @@ enum class UKernelType {
   // X60 RVV kernel
   mippv2_x60_mr6_nr4_fmaddi,
 
+  // A100 RVV kernels
+  mippv2_a100_mr7_nr4_pipe,
+  mippv2_a100_mr7_nr2_lmul2_pipe,
+
 
 #ifdef GEMMBENCH_ENABLE_EXPLO
   // Exploratory kernels (guarded by GEMMBENCH_ENABLE_EXPLO)
@@ -112,6 +116,8 @@ constexpr KernelPacking CRR = {PLayout::Col, PLayout::Row, PLayout::Row};
 
 inline constexpr KernelDescriptor kernelTable[] = {
     // Production / Optimized kernels
+
+    // Scalar baselines
     {UKernelType::IJK, "ijk", RRR},
     {UKernelType::blocked_register_blocked, "blocked_register_blocked", RRR},
 
@@ -154,8 +160,12 @@ inline constexpr KernelDescriptor kernelTable[] = {
     {UKernelType::mippv2_panel_x100_lmul2, "mippv2_panel_x100_lmul2", CRR},
     {UKernelType::mippv2_panel_x100_lmul4, "mippv2_panel_x100_lmul4", CRR},
 
-    // X60 RVV register blocked
+    // X60 RVV
     {UKernelType::mippv2_x60_mr6_nr4_fmaddi, "mippv2_x60_mr6_nr4_fmaddi", RRR},
+
+    // A100 RVV
+    {UKernelType::mippv2_a100_mr7_nr4_pipe, "mippv2_a100_mr7_nr4_pipe", RRR},
+    {UKernelType::mippv2_a100_mr7_nr2_lmul2_pipe, "mippv2_a100_mr7_nr2_lmul2_pipe", RRR},
 
 #ifdef GEMMBENCH_ENABLE_EXPLO
     // Exploratory kernels

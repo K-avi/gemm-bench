@@ -110,6 +110,13 @@ static UKernelType parseKernel(const std::string &name) {
   if (name == "mippv2_x60_mr6_nr4_fmaddi")
     return UKernelType::mippv2_x60_mr6_nr4_fmaddi;
 
+  if (name == "mippv2_a100_mr7_nr4_pipe")
+    return UKernelType::mippv2_a100_mr7_nr4_pipe;
+  if (name == "mippv2_a100_mr7_nr2_lmul2_pipe")
+    return UKernelType::mippv2_a100_mr7_nr2_lmul2_pipe;
+
+
+
 #ifdef GEMMBENCH_ENABLE_EXPLO
   if (name == "ikj")
     return UKernelType::IKJ;
@@ -359,6 +366,22 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
     } else {
       BENCH_KERNEL(gemm.gemm_mippv2_x60_mr6_nr4_fmaddi(A, B, C, cfg.alpha, cfg.beta));
     }
+
+  case UKernelType::mippv2_a100_mr7_nr4_pipe:
+    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
+      BENCH_KERNEL(gemm.gemm_mippv2_a100_mr7_nr4_pipe(A, B, C));
+    } else {
+      BENCH_KERNEL(gemm.gemm_mippv2_a100_mr7_nr4_pipe(A, B, C, cfg.alpha, cfg.beta));
+    }
+
+  case UKernelType::mippv2_a100_mr7_nr2_lmul2_pipe:
+    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
+      BENCH_KERNEL(gemm.gemm_mippv2_a100_mr7_nr2_lmul2_pipe(A, B, C));
+    } else {
+      BENCH_KERNEL(gemm.gemm_mippv2_a100_mr7_nr2_lmul2_pipe(A, B, C, cfg.alpha, cfg.beta));
+    }
+
+
 
 #ifdef GEMMBENCH_ENABLE_EXPLO
   case UKernelType::IKJ:
