@@ -11,17 +11,19 @@ It currently contains microbenchmarks for AMD Zen 4 (AVX-512), Intel Meteor Lake
 >
 > **Repurposing & Roadmap**: This microkernel benchmark is being repurposed and actively expanded into a standalone **GEMM benchmark** and optimized kernel suite across multiple architectures:
 > - **AMD Zen 4 (Ryzen 9 7945HX)**: AVX-512 microkernel ($M_R=4, N_R=32$) reaching **85.06 GFLOP/s (97% of theoretical peak)**.
+> - **Apple Silicon M1 Firestorm (M1 Ultra / Pro / Max @ 3.036 GHz)**: ARM NEON microkernel ($M_R=4, N_R=8$) reaching **47.51 GFLOP/s (98.1% of hardware peak, 97.8% of theoretical peak)**.
 > - **Intel Meteor Lake (Redwood Cove P-Core)**: AVX2 microkernel ($M_R=4, N_R=12$) reaching **75.96 GFLOP/s (93% of theoretical peak)**.
 > - **ARM Cortex-A76 (Raspberry Pi 5, BCM2712 @ 2.40 GHz)**: ARM NEON microkernel ($M_R=6, N_R=6$) reaching **17.92 GFLOP/s (93.3% of theoretical peak)**.
 > - **SpacemiT K3 X100**: RVV 1.0 microkernel with vector-scalar FMA reaching **16.43 GFLOP/s (93% of theoretical peak)**.
 > - **Intel Skylake**: AVX2 microkernel ($M_R=2, N_R=8$) reaching **33.84 GFLOP/s (92% of theoretical peak)**.
-> - Next microkernel targets: **Apple Silicon M1 Firestorm** (ARM NEON), **SpacemiT x60** (RVV1.0) and **SpacemiT A100** (RVV1.0)
+> - Next microkernel targets: **SpacemiT x60** (RVV1.0) and **SpacemiT A100** (RVV1.0)
 
 ---
 
 ## Performance Overview
 
 - **AMD Zen 4 (Ryzen 9 7945HX, 5.46 GHz max boost)**: Reaches **85.06 GFLOP/s** (**97.3% of theoretical peak**, 87.40 GFLOP/s) on a single core using the `mippv2_zen4_mr4_nr4_fmaddi` microkernel.
+- **Apple Silicon M1 Firestorm (M1 Ultra, 3.036 GHz, Asahi Linux)**: Reaches **47.51 GFLOP/s** (**97.8% of theoretical peak** 48.58 GFLOP/s, and **98.1% of measured hardware peak** 48.43 GFLOP/s) on a single P-core using the `mippv2_firestorm_mr4_nr4_fmaddi` microkernel.
 - **Intel Meteor Lake (Redwood Cove P-Core, 5.10 GHz)**: Reaches **75.96 GFLOP/s** (**93.1% of theoretical peak**, 81.60 GFLOP/s) on a single core using the `mippv2_meteorlake_mr4_nr3` microkernel.
 - **ARM Cortex-A76 (Raspberry Pi 5, BCM2712 @ 2.40 GHz)**: Reaches **17.92 GFLOP/s** (**93.3% of theoretical peak**, 19.20 GFLOP/s, and **93.6%** of measured hardware register peak 19.14 GFLOP/s) on a single core using the `mippv2_a76_mr6_nr3` microkernel.
 - **SpacemiT K3 X100 (RVV 1.0, 1.60 GHz)**: Reaches **16.43 GFLOP/s** (**93.3% of theoretical peak**, 17.6 GFLOP/s) on a single core using the `mippv2_x100_register_blocked_apack4` microkernel.
@@ -153,8 +155,8 @@ This script functions the same way as `run_benchmarks.sh` except it builds for R
 ./run_benchmarks_rvv.sh
 ```
 
-### Automated ARM NEON (Cortex-A76 / Raspberry Pi 5) Execution
-Builds with native ARM NEON flags across compilers (`g++`, `clang++`) and sweeps matrix dimensions $32 \times 32$ to $128 \times 128$:
+### Automated ARM NEON (Apple Silicon Firestorm / Cortex-A76) Execution
+Builds with native ARM NEON flags across compilers (`g++`, `clang++`), auto-detects and pins to Performance Cores (P-cores), and sweeps matrix dimensions $32 \times 32$ to $128 \times 128$:
 
 ```bash
 ./run_benchmarks_neon.sh
@@ -192,6 +194,11 @@ python3 plot_results.py \
 - **Intel Meteor Lake P-Core Microkernel (`mippv2_meteorlake_mr4_nr3`)**: Optimal $4 \times 3$ register tile ($M_R=4, N_R=12$ doubles = 48 FP64 elements) designed for the Redwood Cove core. Balances FMA throughput on Ports 0/1 against the Port 5 vector-broadcast bottleneck (3:1 ratio), uses C++ lexical block scoping for zero register spills within the 16-register AVX2 budget, and features decoupled $4 \times 2$ cleanup tiles reaching **75.96 GFLOP/s (93.1% of theoretical peak)**.
 - **AMD Zen 4 Microkernels (`mippv2_zen4_mr4_nr4` & `mippv2_zen4_mr4_nr4_fmaddi`)**: $4 \times 4$ register tile ($M_R=4, N_R=32$ doubles = 128 FP64 elements) utilizing 16 ZMM accumulators on AVX-512. Designed for Zen 4's dual 256-bit FPU pipelines (double-pumped 512-bit FMA). Reaches **85.06 GFLOP/s (97.3% of theoretical peak)**.
 - **ARM Cortex-A76 Microkernel (`mippv2_a76_mr6_nr3`)**: $6 \times 3$ register tile ($M_R=6, N_R=6$ doubles = 36 FP64 elements) on ARM NEON using 18 vector accumulators, 3 B registers, and 1 broadcasted A register (22/32 architectural registers). Leverages Cortex-A76 2-cycle accumulate-forwarding latency and pairs FMA emissions across rows ($c_{0j}/c_{1j}, c_{2j}/c_{3j}, c_{4j}/c_{5j}$) to dual-issue pure vector-vector FMAs across both 128-bit FP pipelines simultaneously, surpassing the 18.01 GFLOP/s vector-scalar register read-port ceiling and reaching **17.92 GFLOP/s (93.3% of theoretical peak)**.
+- **Apple Silicon M1 Firestorm Microkernels (`mippv2_firestorm_mr4_nr4_fmaddi` & `mippv2_firestorm_mr6_nr4_fmaddi`)**: 
+  - **Pipeline Geometry & Little's Law**: The Firestorm P-core features **4 symmetric 128-bit NEON FMA execution pipelines** (latency = 4 cycles, throughput = 4 FMAs/cycle = 8 FLOPs/pipe/cycle = 16 FP64 FLOPs/cycle). Saturating these pipelines requires at least $4 \text{ pipes} \times 4 \text{ cycles} = 16$ independent vector accumulators.
+  - **`mippv2_firestorm_mr4_nr4_fmaddi`**: $4 \times 4$ vector tile ($M_R=4, N_R=8$ doubles = 32 FP64 elements) maintaining exactly 16 vector accumulators and 4 B-vector registers in flight (20/32 NEON registers). Broadcasts $a_{i,k}$ via vector-scalar `mipp::fmaddi` (`vfmaq_n_f64`), achieving **47.51 GFLOP/s (98.1% of measured hardware peak)**.
+  - **`mippv2_firestorm_mr6_nr4_fmaddi`**: $6 \times 4$ vector tile ($M_R=6, N_R=8$ doubles = 48 FP64 elements) holding 24 vector accumulators and 4 B-vector registers (28/32 NEON registers). Increases arithmetic intensity to 2.4 FMAs per load (compared to 2.0 in $4 \times 4$), delivering superior performance on larger matrix tiles.
+  - **L1D Cache Sweet Spot**: Firestorm features a massive **128 KB private L1D cache** per P-core (3 cycles load-to-use latency, 3 simultaneous 128-bit loads/cycle = 48 bytes/cycle). At $96 \times 96$, matrix $B$ requires 73.7 KB (comfortably residing 100% in L1D), enabling sustained 98.1% pipeline saturation, whereas $128 \times 128$ ($B = 131\text{ KB} > 128\text{ KB}$) overflows into the shared L2 cache.
 - **SpacemiT-Tuned Microkernels**: Microkernels exploring register pressure and dynamic vector-length configurations for SpacemiT cores ($VLEN=256$):
   - **Vector-Scalar FMA**: Uses `include/mipp_custom.h` to emit `vfmacc.vf` instructions, eliminating explicit vector broadcast (`vfmv.v.f`) overhead inside the inner accumulation loop.
   - **Register File Budgeting**: RVV provides 32 architectural vector registers. Custom tiles allocate up to 16–24 registers for accumulators while keeping A-matrix scalars and B-matrix vectors resident.

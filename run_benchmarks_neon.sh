@@ -25,6 +25,8 @@ RUN_ALL=false
 FORCE_REBUILD=false
 ALPHA=1.0
 BETA=0.0
+PIN_CORE=""
+AUTO_PIN=true
 REQUESTED_COMPILERS=()
 
 while [[ $# -gt 0 ]]; do
@@ -35,6 +37,16 @@ while [[ $# -gt 0 ]]; do
             ;;
         --rebuild)
             FORCE_REBUILD=true
+            shift
+            ;;
+        -c|--core|--pin-core)
+            PIN_CORE="$2"
+            AUTO_PIN=false
+            shift 2
+            ;;
+        --no-pin)
+            AUTO_PIN=false
+            PIN_CORE=""
             shift
             ;;
         -a|--alpha)
@@ -55,6 +67,37 @@ done
 # Default to running both g++ and clang++, or accept specific compiler(s) as args
 if [[ ${#REQUESTED_COMPILERS[@]} -eq 0 ]]; then
     REQUESTED_COMPILERS=("g++" "clang++")
+fi
+
+# Auto-detect Performance Core (P-core) if not explicitly specified and taskset is available
+if [[ "$AUTO_PIN" == "true" && -z "$PIN_CORE" ]]; then
+    if command -v taskset &>/dev/null; then
+        MAX_F=0
+        BEST_CORE=""
+        for f in /sys/devices/system/cpu/cpu[0-9]*/cpufreq/cpuinfo_max_freq; do
+            if [[ -f "$f" ]]; then
+                FREQ=$(cat "$f" 2>/dev/null || echo 0)
+                CORE=$(echo "$f" | sed -n 's|.*/cpu\([0-9]\+\)/.*|\1|p')
+                if (( FREQ > MAX_F )); then
+                    MAX_F=$FREQ
+                    BEST_CORE=$CORE
+                fi
+            fi
+        done
+        if [[ -n "$BEST_CORE" && "$MAX_F" -gt 0 ]]; then
+            PIN_CORE="$BEST_CORE"
+            echo "================================================================================"
+            echo "Auto-detected Performance Core (P-core): Core #${PIN_CORE} (${MAX_F} kHz)"
+            echo "================================================================================"
+        fi
+    fi
+fi
+
+if [[ -n "$PIN_CORE" ]]; then
+    TASKSET_CMD="taskset -c ${PIN_CORE}"
+    echo "Benchmarking will be pinned to CPU core ${PIN_CORE} via 'taskset -c ${PIN_CORE}'"
+else
+    TASKSET_CMD=""
 fi
 
 
@@ -127,6 +170,8 @@ DEFAULT_KERNELS=(
     mippv2_skylake_lmul4_register_blocked
     mippv2_meteorlake_mr4_nr3
     mippv2_a76_mr6_nr3
+    mippv2_firestorm_mr4_nr4_fmaddi
+    mippv2_firestorm_mr6_nr4_fmaddi
     mippv2_zen4_mr4_nr4
     mippv2_zen4_mr4_nr4_fmaddi
     mippv2_x100_register_blocked_lmul2
@@ -170,6 +215,10 @@ MIPP_KERNELS=(
 
     mippv2_meteorlake_mr4_nr3
     mippv2_a76_mr6_nr3
+    mippv2_firestorm_mr4_nr4
+    mippv2_firestorm_mr4_nr4_fmaddi
+    mippv2_firestorm_mr6_nr4
+    mippv2_firestorm_mr6_nr4_fmaddi
     mippv2_zen4_mr4_nr4
     mippv2_zen4_mr4_nr4_fmaddi
 
@@ -259,6 +308,9 @@ do
             if [[ -n "$DETECTED_GCC_DIR" && -d "$DETECTED_GCC_DIR" ]]; then
                 EXTRA_COMPILER_FLAGS="--gcc-install-dir=${DETECTED_GCC_DIR}"
             fi
+        fi
+        if grep -q -E "0x61|Firestorm|Apple" /proc/cpuinfo 2>/dev/null; then
+            EXTRA_COMPILER_FLAGS="${EXTRA_COMPILER_FLAGS} -mcpu=apple-m1"
         fi
     else
         COMPILER="$COMPILER_REQ"
@@ -355,7 +407,7 @@ do
                 read M ITER WARM <<< "$ENTRY"
 
                 LINE=$(
-                    "$BIN" \
+                    $TASKSET_CMD "$BIN" \
                         --kernel "$KERNEL" \
                         --m "$M" \
                         --n "$M" \

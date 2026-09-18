@@ -34,6 +34,12 @@ enum class UKernelType {
   // Cortex-A76 NEON kernels
   mippv2_a76_mr6_nr3,
 
+  // Apple Firestorm NEON kernels
+  mippv2_firestorm_mr4_nr4,
+  mippv2_firestorm_mr4_nr4_fmaddi,
+  mippv2_firestorm_mr6_nr4,
+  mippv2_firestorm_mr6_nr4_fmaddi,
+
   // Zen 4 AVX-512 kernels
   mippv2_zen4_mr4_nr4,
   mippv2_zen4_mr4_nr4_fmaddi,
@@ -122,6 +128,12 @@ inline constexpr KernelDescriptor kernelTable[] = {
 
     // Cortex-A76 NEON kernels
     {UKernelType::mippv2_a76_mr6_nr3, "mippv2_a76_mr6_nr3", RRR},
+
+    // Apple Firestorm NEON kernels
+    {UKernelType::mippv2_firestorm_mr4_nr4, "mippv2_firestorm_mr4_nr4", RRR},
+    {UKernelType::mippv2_firestorm_mr4_nr4_fmaddi, "mippv2_firestorm_mr4_nr4_fmaddi", RRR},
+    {UKernelType::mippv2_firestorm_mr6_nr4, "mippv2_firestorm_mr6_nr4", RRR},
+    {UKernelType::mippv2_firestorm_mr6_nr4_fmaddi, "mippv2_firestorm_mr6_nr4_fmaddi", RRR},
 
     // Zen 4 AVX-512 kernels
     {UKernelType::mippv2_zen4_mr4_nr4, "mippv2_zen4_mr4_nr4", RRR},
