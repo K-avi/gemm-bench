@@ -107,6 +107,9 @@ static UKernelType parseKernel(const std::string &name) {
   if (name == "mippv2_panel_x100_lmul4")
     return UKernelType::mippv2_panel_x100_lmul4;
 
+  if (name == "mippv2_x60_mr6_nr4_fmaddi")
+    return UKernelType::mippv2_x60_mr6_nr4_fmaddi;
+
 #ifdef GEMMBENCH_ENABLE_EXPLO
   if (name == "ikj")
     return UKernelType::IKJ;
@@ -349,6 +352,13 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
 
   case UKernelType::mippv2_x100_register_blocked_apack4:
     BENCH_KERNEL(gemm.gemm_mippv2_x100_register_blocked_apack4(A, B, C, cfg.alpha, cfg.beta));
+
+  case UKernelType::mippv2_x60_mr6_nr4_fmaddi:
+    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
+      BENCH_KERNEL(gemm.gemm_mippv2_x60_mr6_nr4_fmaddi(A, B, C));
+    } else {
+      BENCH_KERNEL(gemm.gemm_mippv2_x60_mr6_nr4_fmaddi(A, B, C, cfg.alpha, cfg.beta));
+    }
 
 #ifdef GEMMBENCH_ENABLE_EXPLO
   case UKernelType::IKJ:

@@ -54,6 +54,10 @@ enum class UKernelType {
   mippv2_panel_x100_lmul2,
   mippv2_panel_x100_lmul4,
 
+  // X60 RVV kernel
+  mippv2_x60_mr6_nr4_fmaddi,
+
+
 #ifdef GEMMBENCH_ENABLE_EXPLO
   // Exploratory kernels (guarded by GEMMBENCH_ENABLE_EXPLO)
   IKJ,
@@ -149,6 +153,9 @@ inline constexpr KernelDescriptor kernelTable[] = {
     {UKernelType::mippv2_panel_x100_lmul1, "mippv2_panel_x100_lmul1", CRR},
     {UKernelType::mippv2_panel_x100_lmul2, "mippv2_panel_x100_lmul2", CRR},
     {UKernelType::mippv2_panel_x100_lmul4, "mippv2_panel_x100_lmul4", CRR},
+
+    // X60 RVV register blocked
+    {UKernelType::mippv2_x60_mr6_nr4_fmaddi, "mippv2_x60_mr6_nr4_fmaddi", RRR},
 
 #ifdef GEMMBENCH_ENABLE_EXPLO
     // Exploratory kernels

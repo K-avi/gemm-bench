@@ -2843,3 +2843,24 @@
       }
     }
   }
+
+  template <int lmul = 1>
+  static inline void
+  gemm_mippv2_x60_mr6_nr4_fmaddi(const PackedRowMajor<T> &__restrict A,
+                                       const PackedRowMajor<T> &__restrict B,
+                                       PackedRowMajor<T> &__restrict C) {
+    gemm_mippv2_firestorm_mr6_nr4_fmaddi_core<lmul, true>(A, B, C);
+  }
+
+  template <int lmul = 1>
+  static inline void
+  gemm_mippv2_x60_mr6_nr4_fmaddi(const PackedRowMajor<T> &__restrict A,
+                                       const PackedRowMajor<T> &__restrict B,
+                                       PackedRowMajor<T> &__restrict C,
+                                       T alpha, T beta) {
+    if (__builtin_expect(alpha == T{1} && beta == T{0}, 1)) {
+      gemm_mippv2_firestorm_mr6_nr4_fmaddi_core<lmul, true>(A, B, C);
+    } else {
+      gemm_mippv2_firestorm_mr6_nr4_fmaddi_core<lmul, false>(A, B, C, alpha, beta);
+    }
+  }
