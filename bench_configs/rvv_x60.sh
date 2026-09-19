@@ -1,7 +1,7 @@
-# Platform: SpacemiT X100 (RVV 1.0, VLEN = 256 bits)
-PLATFORM_NAME="SpacemiT X100 (RVV 256-bit)"
-BUILD_DIR_PREFIX="build_rvv_x100"
-CSV_PREFIX="gemm_results_rvv_x100"
+# Platform: SpacemiT X60 (RVV 1.0, VLEN = 256 bits)
+PLATFORM_NAME="SpacemiT X60 (RVV 256-bit)"
+BUILD_DIR_PREFIX="build_rvv_x60"
+CSV_PREFIX="gemm_results_rvv_x60"
 DEFAULT_VERSION="rvv"
 
 COMMON_FLAGS="

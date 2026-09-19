@@ -89,6 +89,8 @@ source "$CONFIG_FILE"
 ################################################################################
 
 RUN_ALL=false
+RUN_TESTS=false
+TESTS_ONLY=false
 FORCE_REBUILD=false
 ALPHA=1.0
 BETA=0.0
@@ -104,6 +106,15 @@ OUTPUT_PREFIX=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --tests)
+            RUN_TESTS=true
+            shift
+            ;;
+        --tests-only)
+            RUN_TESTS=true
+            TESTS_ONLY=true
+            shift
+            ;;
         --run-all)
             RUN_ALL=true
             shift
@@ -168,26 +179,24 @@ if declare -f platform_setup > /dev/null; then
 fi
 
 # Taskset / CPU pinning configuration
+TASKSET_PREFIX=()
 if [[ -n "$PIN_CORE" ]]; then
     if command -v taskset &>/dev/null; then
         if taskset -c "${PIN_CORE}" true 2>/dev/null; then
-            TASKSET_CMD="taskset -c ${PIN_CORE}"
+            TASKSET_PREFIX=(taskset -c "${PIN_CORE}")
             echo "================================================================================"
             echo "Core Affinity: Benchmarks will be pinned to Core #${PIN_CORE} via taskset"
             echo "================================================================================"
         else
-            TASKSET_CMD=""
             echo "================================================================================"
             echo "Warning: CPU core #${PIN_CORE} is not accessible via taskset."
             echo "         Falling back to unpinned execution."
             echo "================================================================================"
         fi
     else
-        TASKSET_CMD=""
         echo "Warning: 'taskset' utility not found. Running without core pinning."
     fi
 else
-    TASKSET_CMD=""
     echo "Core pinning disabled or unconfigured."
 fi
 
@@ -368,14 +377,36 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
 
         echo "Flags: ${FORMATTED_FLAGS}"
 
+        TEST_BUILD_FLAG=""
+        if [[ "$RUN_TESTS" == "true" ]]; then
+            TEST_BUILD_FLAG="-DGEMMBENCH_BUILD_TESTS=ON"
+        fi
+
         cmake -B "${BUILD_DIR}" -S . \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_CXX_COMPILER="${COMPILER}" \
             -DCMAKE_CXX_FLAGS="${FORMATTED_FLAGS}" \
-            ${EXPLO_FLAG}
+            ${EXPLO_FLAG} \
+            ${TEST_BUILD_FLAG}
 
         cmake --build "${BUILD_DIR}" --parallel
+
+        if [[ "$RUN_TESTS" == "true" ]]; then
+            echo
+            echo "======================================="
+            echo "Running Catch2 Tests for ${VERSION} (${COMPILER})"
+            echo "======================================="
+            if ! "${TASKSET_PREFIX[@]}" "${BUILD_DIR}/tests/GemmBenchTests"; then
+                echo "Error: Tests failed for ${VERSION} (${COMPILER})!"
+                exit 1
+            fi
+            echo "All tests passed for ${VERSION} (${COMPILER})!"
+        fi
     done
+
+    if [[ "$TESTS_ONLY" == "true" ]]; then
+        continue
+    fi
 
     # Run phase
     for VERSION in "${VERSIONS[@]}"; do
@@ -410,7 +441,7 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
             for SIZE_ENTRY in "${SIZES[@]}"; do
                 read -r SIZE ITERS WARMUP <<< "${SIZE_ENTRY}"
 
-                LINE=$(${TASKSET_CMD} "${BIN}" \
+                LINE=$("${TASKSET_PREFIX[@]}" "${BIN}" \
                     --kernel "${KERNEL}" \
                     --m "${SIZE}" \
                     --n "${SIZE}" \

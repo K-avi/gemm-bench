@@ -1,7 +1,18 @@
 # Platform: ARMv8-A NEON
-PLATFORM_NAME="ARMv8-A (NEON)"
-BUILD_DIR_PREFIX="build"
-CSV_PREFIX="gemm_results"
+if [[ "$(hostname)" == *"m1"* || "${PLATFORM_TAG:-}" == "m1" ]]; then
+    PLATFORM_NAME="Apple M1 (NEON)"
+    BUILD_DIR_PREFIX="build_neon_m1"
+    CSV_PREFIX="gemm_results_neon_m1"
+    DEFAULT_PIN_CORE="3"
+elif [[ "$(hostname)" == *"rpi"* || "${PLATFORM_TAG:-}" == "rpi5" ]]; then
+    PLATFORM_NAME="Raspberry Pi 5 (NEON)"
+    BUILD_DIR_PREFIX="build_neon_rpi5"
+    CSV_PREFIX="gemm_results_neon_rpi5"
+else
+    PLATFORM_NAME="ARMv8-A (NEON)"
+    BUILD_DIR_PREFIX="build_neon"
+    CSV_PREFIX="gemm_results_neon"
+fi
 
 COMMON_FLAGS="
 -O3

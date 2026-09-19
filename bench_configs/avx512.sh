@@ -1,7 +1,7 @@
 # Platform: x86_64 AVX-512
 PLATFORM_NAME="x86_64 (AVX-512)"
-BUILD_DIR_PREFIX="build"
-CSV_PREFIX="gemm_results"
+BUILD_DIR_PREFIX="build_avx512"
+CSV_PREFIX="gemm_results_avx512"
 
 COMMON_FLAGS="
 -O3

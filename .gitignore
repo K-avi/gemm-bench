@@ -35,3 +35,12 @@ test_plots/
 # Local external dependencies
 libs/
 third_party/
+
+# Cluster runner scripts (LIP6 Dalek specific)
+tools/run_cluster_benchmarks.sh
+
+# Local artifacts and disassembly dumps
+GemmBench_*
+dump_gemmbench_*/
+k3-6.pdf
+results_zen5/
