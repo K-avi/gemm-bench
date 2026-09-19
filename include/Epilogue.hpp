@@ -9,7 +9,7 @@ struct Epilogue {
   // Épilogue scalaire
   //
   template <typename T, bool FastPath = false>
-  static inline void store(T *ptr, T acc, T alpha, T beta) {
+  static inline void store(T *__restrict ptr, T acc, T alpha, T beta) {
     if constexpr (FastPath) {
       *ptr = acc;
     } else {
@@ -28,7 +28,7 @@ struct Epilogue {
   // Épilogue vectoriel SIMD / RVV (MIPP v2)
   //
   template <typename T, int lmul = 1, bool FastPath = false, typename VReg>
-  static inline void store(T *ptr, const VReg &acc, T alpha, T beta) {
+  static inline void store(T *__restrict ptr, const VReg &acc, T alpha, T beta) {
     using namespace mipp;
 
     if constexpr (FastPath) {
