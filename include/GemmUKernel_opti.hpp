@@ -2750,8 +2750,8 @@
     double d3;
   };
 
-  // FastPath 3-argument version (alpha=1, beta=0): identical to origin/main + hoisted C pointers
-  template <int lmul = 2>
+  // FastPath 3-argument version (alpha=1, beta=0): identical to origin/main
+ template <int lmul = 2>
   static inline void gemm_mippv2_x100_register_blocked_apack4(
       const PackedRowMajor<T> &__restrict A,
       const PackedRowMajor<T> &__restrict B, PackedRowMajor<T> &__restrict C) {
@@ -2771,10 +2771,6 @@
       const auto *a0_ptr = reinterpret_cast<const ABlock4 *>(A[i + 0]);
       const auto *a1_ptr = reinterpret_cast<const ABlock4 *>(A[i + 1]);
       const auto *a2_ptr = reinterpret_cast<const ABlock4 *>(A[i + 2]);
-
-      T *__restrict c0_base = C[i + 0];
-      T *__restrict c1_base = C[i + 1];
-      T *__restrict c2_base = C[i + 2];
 
       for (size_t j = 0; j < B.cols; j += NR) {
         auto c00 = set0<T, lmul>();
@@ -2842,14 +2838,14 @@
           c21 = fmaddi(b01, a2.d3, c21);
         }
 
-        store(c0_base + j, c00);
-        store(c0_base + j + VL, c01);
+        store(C[i + 0] + j, c00);
+        store(C[i + 0] + j + VL, c01);
 
-        store(c1_base + j, c10);
-        store(c1_base + j + VL, c11);
+        store(C[i + 1] + j, c10);
+        store(C[i + 1] + j + VL, c11);
 
-        store(c2_base + j, c20);
-        store(c2_base + j + VL, c21);
+        store(C[i + 2] + j, c20);
+        store(C[i + 2] + j + VL, c21);
       }
     }
 
@@ -2858,7 +2854,6 @@
     //
     for (size_t i = Mfull; i < A.rows; ++i) {
       const auto *a_ptr = reinterpret_cast<const ABlock4 *>(A[i]);
-      T *__restrict c_base = C[i];
 
       for (size_t j = 0; j < B.cols; j += NR) {
         auto c0 = set0<T, lmul>();
@@ -2894,13 +2889,12 @@
           c1 = fmaddi(b1, a.d3, c1);
         }
 
-        store(c_base + j, c0);
-        store(c_base + j + VL, c1);
+        store(C[i] + j, c0);
+        store(C[i] + j + VL, c1);
       }
     }
   }
-
-  // General 5-argument version (arbitrary alpha, beta)
+ // General 5-argument version (arbitrary alpha, beta)
   template <int lmul = 2>
   static inline void gemm_mippv2_x100_register_blocked_apack4(
       const PackedRowMajor<T> &__restrict A,
@@ -3049,6 +3043,7 @@
       }
     }
   }
+
 
   // =========================================================================
   // X100: gemm_mippv2_panel_x100
