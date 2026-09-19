@@ -115,8 +115,6 @@ static UKernelType parseKernel(const std::string &name) {
   if (name == "mippv2_a100_mr7_nr2_lmul2_pipe")
     return UKernelType::mippv2_a100_mr7_nr2_lmul2_pipe;
 
-
-
 #ifdef GEMMBENCH_ENABLE_EXPLO
   if (name == "ikj")
     return UKernelType::IKJ;
@@ -275,29 +273,35 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
     BENCH_KERNEL(gemm.gemm_ijk(A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::blocked_register_blocked:
-    BENCH_KERNEL(gemm.gemm_blocked_register_blocked(A, B, C, cfg.alpha, cfg.beta));
+    BENCH_KERNEL(
+        gemm.gemm_blocked_register_blocked(A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_skylake_register_blocked:
     if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
       BENCH_KERNEL(gemm.gemm_mippv2_skylake_register_blocked(A, B, C));
     } else {
-      BENCH_KERNEL(gemm.gemm_mippv2_skylake_register_blocked(A, B, C, cfg.alpha, cfg.beta));
+      BENCH_KERNEL(gemm.gemm_mippv2_skylake_register_blocked(A, B, C, cfg.alpha,
+                                                             cfg.beta));
     }
 
   case UKernelType::mippv2_skylake_lmul_register_blocked:
-    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul_register_blocked<1>(A, B, C, cfg.alpha, cfg.beta));
+    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul_register_blocked<1>(
+        A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_skylake_lmul2_register_blocked:
-    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul_register_blocked<2>(A, B, C, cfg.alpha, cfg.beta));
+    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul_register_blocked<2>(
+        A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_skylake_lmul4_register_blocked:
-    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul_register_blocked<4>(A, B, C, cfg.alpha, cfg.beta));
+    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul_register_blocked<4>(
+        A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_meteorlake_mr4_nr3:
     if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
       BENCH_KERNEL(gemm.gemm_mippv2_meteorlake_mr4_nr3(A, B, C));
     } else {
-      BENCH_KERNEL(gemm.gemm_mippv2_meteorlake_mr4_nr3(A, B, C, cfg.alpha, cfg.beta));
+      BENCH_KERNEL(
+          gemm.gemm_mippv2_meteorlake_mr4_nr3(A, B, C, cfg.alpha, cfg.beta));
     }
 
   case UKernelType::mippv2_a76_mr6_nr3:
@@ -311,28 +315,32 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
     if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
       BENCH_KERNEL(gemm.gemm_mippv2_firestorm_mr4_nr4(A, B, C));
     } else {
-      BENCH_KERNEL(gemm.gemm_mippv2_firestorm_mr4_nr4(A, B, C, cfg.alpha, cfg.beta));
+      BENCH_KERNEL(
+          gemm.gemm_mippv2_firestorm_mr4_nr4(A, B, C, cfg.alpha, cfg.beta));
     }
 
   case UKernelType::mippv2_firestorm_mr4_nr4_fmaddi:
     if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
       BENCH_KERNEL(gemm.gemm_mippv2_firestorm_mr4_nr4_fmaddi(A, B, C));
     } else {
-      BENCH_KERNEL(gemm.gemm_mippv2_firestorm_mr4_nr4_fmaddi(A, B, C, cfg.alpha, cfg.beta));
+      BENCH_KERNEL(gemm.gemm_mippv2_firestorm_mr4_nr4_fmaddi(A, B, C, cfg.alpha,
+                                                             cfg.beta));
     }
 
   case UKernelType::mippv2_firestorm_mr6_nr4:
     if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
       BENCH_KERNEL(gemm.gemm_mippv2_firestorm_mr6_nr4(A, B, C));
     } else {
-      BENCH_KERNEL(gemm.gemm_mippv2_firestorm_mr6_nr4(A, B, C, cfg.alpha, cfg.beta));
+      BENCH_KERNEL(
+          gemm.gemm_mippv2_firestorm_mr6_nr4(A, B, C, cfg.alpha, cfg.beta));
     }
 
   case UKernelType::mippv2_firestorm_mr6_nr4_fmaddi:
     if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
       BENCH_KERNEL(gemm.gemm_mippv2_firestorm_mr6_nr4_fmaddi(A, B, C));
     } else {
-      BENCH_KERNEL(gemm.gemm_mippv2_firestorm_mr6_nr4_fmaddi(A, B, C, cfg.alpha, cfg.beta));
+      BENCH_KERNEL(gemm.gemm_mippv2_firestorm_mr6_nr4_fmaddi(A, B, C, cfg.alpha,
+                                                             cfg.beta));
     }
 
   case UKernelType::mippv2_zen4_mr4_nr4:
@@ -346,42 +354,64 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
     if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
       BENCH_KERNEL(gemm.gemm_mippv2_zen4_mr4_nr4_fmaddi(A, B, C));
     } else {
-      BENCH_KERNEL(gemm.gemm_mippv2_zen4_mr4_nr4_fmaddi(A, B, C, cfg.alpha, cfg.beta));
+      BENCH_KERNEL(
+          gemm.gemm_mippv2_zen4_mr4_nr4_fmaddi(A, B, C, cfg.alpha, cfg.beta));
     }
 
   case UKernelType::mippv2_x100_register_blocked_lmul1:
-    BENCH_KERNEL(gemm.template gemm_mippv2_x100_register_blocked<1>(A, B, C, cfg.alpha, cfg.beta));
+    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
+      BENCH_KERNEL(gemm.template gemm_mippv2_x100_register_blocked<1>(A, B, C));
+    } else {
+      BENCH_KERNEL(gemm.template gemm_mippv2_x100_register_blocked<1>(
+          A, B, C, cfg.alpha, cfg.beta));
+    }
 
   case UKernelType::mippv2_x100_register_blocked_lmul2:
-    BENCH_KERNEL(gemm.template gemm_mippv2_x100_register_blocked<2>(A, B, C, cfg.alpha, cfg.beta));
+    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
+      BENCH_KERNEL(gemm.template gemm_mippv2_x100_register_blocked<2>(A, B, C));
+    } else {
+      BENCH_KERNEL(gemm.template gemm_mippv2_x100_register_blocked<2>(
+          A, B, C, cfg.alpha, cfg.beta));
+    }
   case UKernelType::mippv2_x100_register_blocked_lmul4:
-    BENCH_KERNEL(gemm.template gemm_mippv2_x100_register_blocked<4>(A, B, C, cfg.alpha, cfg.beta));
+    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
+      BENCH_KERNEL(gemm.template gemm_mippv2_x100_register_blocked<4>(A, B, C));
+    } else {
+      BENCH_KERNEL(gemm.template gemm_mippv2_x100_register_blocked<4>(
+          A, B, C, cfg.alpha, cfg.beta));
+    }
 
   case UKernelType::mippv2_x100_register_blocked_apack4:
-    BENCH_KERNEL(gemm.gemm_mippv2_x100_register_blocked_apack4(A, B, C, cfg.alpha, cfg.beta));
+    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
+      BENCH_KERNEL(gemm.gemm_mippv2_x100_register_blocked_apack4(A, B, C));
+    } else {
+      BENCH_KERNEL(gemm.gemm_mippv2_x100_register_blocked_apack4(
+          A, B, C, cfg.alpha, cfg.beta));
+    }
 
   case UKernelType::mippv2_x60_mr6_nr4_fmaddi:
     if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
       BENCH_KERNEL(gemm.gemm_mippv2_x60_mr6_nr4_fmaddi(A, B, C));
     } else {
-      BENCH_KERNEL(gemm.gemm_mippv2_x60_mr6_nr4_fmaddi(A, B, C, cfg.alpha, cfg.beta));
+      BENCH_KERNEL(
+          gemm.gemm_mippv2_x60_mr6_nr4_fmaddi(A, B, C, cfg.alpha, cfg.beta));
     }
 
   case UKernelType::mippv2_a100_mr7_nr4_pipe:
     if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
       BENCH_KERNEL(gemm.gemm_mippv2_a100_mr7_nr4_pipe(A, B, C));
     } else {
-      BENCH_KERNEL(gemm.gemm_mippv2_a100_mr7_nr4_pipe(A, B, C, cfg.alpha, cfg.beta));
+      BENCH_KERNEL(
+          gemm.gemm_mippv2_a100_mr7_nr4_pipe(A, B, C, cfg.alpha, cfg.beta));
     }
 
   case UKernelType::mippv2_a100_mr7_nr2_lmul2_pipe:
     if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
       BENCH_KERNEL(gemm.gemm_mippv2_a100_mr7_nr2_lmul2_pipe(A, B, C));
     } else {
-      BENCH_KERNEL(gemm.gemm_mippv2_a100_mr7_nr2_lmul2_pipe(A, B, C, cfg.alpha, cfg.beta));
+      BENCH_KERNEL(gemm.gemm_mippv2_a100_mr7_nr2_lmul2_pipe(A, B, C, cfg.alpha,
+                                                            cfg.beta));
     }
-
-
 
 #ifdef GEMMBENCH_ENABLE_EXPLO
   case UKernelType::IKJ:
@@ -433,7 +463,8 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
     BENCH_KERNEL(gemm.gemm_mippv2_blocked_register_blocked(A, B, C));
 
   case UKernelType::mippv2_skylake_lmul8_register_blocked:
-    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul_register_blocked<8>(A, B, C));
+    BENCH_KERNEL(
+        gemm.template gemm_mippv2_skylake_lmul_register_blocked<8>(A, B, C));
 
   case UKernelType::mippv2_x100_lmul1:
     BENCH_KERNEL(gemm.template gemm_mippv2_x100<1>(A, B, C));
@@ -486,19 +517,37 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
     BENCH_KERNEL(gemm.gemm_mippv2_skylake_panel(A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_skylake_panel_lmul:
-    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_panel_lmul<1>(A, B, C, cfg.alpha, cfg.beta));
+    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_panel_lmul<1>(
+        A, B, C, cfg.alpha, cfg.beta));
   case UKernelType::mippv2_skylake_panel_lmul2:
-    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_panel_lmul<2>(A, B, C, cfg.alpha, cfg.beta));
+    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_panel_lmul<2>(
+        A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_skylake_panel_lmul4:
-    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_panel_lmul<4>(A, B, C, cfg.alpha, cfg.beta));
+    BENCH_KERNEL(gemm.template gemm_mippv2_skylake_panel_lmul<4>(
+        A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_panel_x100_lmul1:
-    BENCH_KERNEL(gemm.template gemm_mippv2_panel_x100<1>(A, B, C, cfg.alpha, cfg.beta));
+    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
+      BENCH_KERNEL(gemm.template gemm_mippv2_panel_x100<1>(A, B, C));
+    } else {
+      BENCH_KERNEL(
+          gemm.template gemm_mippv2_panel_x100<1>(A, B, C, cfg.alpha, cfg.beta));
+    }
   case UKernelType::mippv2_panel_x100_lmul2:
-    BENCH_KERNEL(gemm.template gemm_mippv2_panel_x100<2>(A, B, C, cfg.alpha, cfg.beta));
+    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
+      BENCH_KERNEL(gemm.template gemm_mippv2_panel_x100<2>(A, B, C));
+    } else {
+      BENCH_KERNEL(
+          gemm.template gemm_mippv2_panel_x100<2>(A, B, C, cfg.alpha, cfg.beta));
+    }
   case UKernelType::mippv2_panel_x100_lmul4:
-    BENCH_KERNEL(gemm.template gemm_mippv2_panel_x100<4>(A, B, C, cfg.alpha, cfg.beta));
+    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
+      BENCH_KERNEL(gemm.template gemm_mippv2_panel_x100<4>(A, B, C));
+    } else {
+      BENCH_KERNEL(
+          gemm.template gemm_mippv2_panel_x100<4>(A, B, C, cfg.alpha, cfg.beta));
+    }
 
 #ifdef GEMMBENCH_ENABLE_EXPLO
   case UKernelType::mippv2_skylake_panel_lmul8:
@@ -533,8 +582,8 @@ void printResults(const BenchConfig &cfg,
               << "GFLOP/s: " << gflops << "\n";
   } else {
     std::cout << name_buff << "," << cfg.M << "," << cfg.N << "," << cfg.K
-              << "," << cfg.alpha << "," << cfg.beta
-              << "," << time_s << "," << gflops << "\n";
+              << "," << cfg.alpha << "," << cfg.beta << "," << time_s << ","
+              << gflops << "\n";
   }
 }
 

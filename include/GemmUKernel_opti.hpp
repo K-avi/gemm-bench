@@ -2561,12 +2561,12 @@
     }
   }
 
-  template <int lmul = 4>
+  template <int lmul = 4, bool FastPath = false>
   static inline void
-  gemm_mippv2_x100_register_blocked(const PackedRowMajor<T> &__restrict A,
-                                    const PackedRowMajor<T> &__restrict B,
-                                    PackedRowMajor<T> &__restrict C,
-                                    T alpha = T{1}, T beta = T{0}) {
+  gemm_mippv2_x100_register_blocked_core(const PackedRowMajor<T> &__restrict A,
+                                         const PackedRowMajor<T> &__restrict B,
+                                         PackedRowMajor<T> &__restrict C,
+                                         T alpha = T{1}, T beta = T{0}) {
     using namespace mipp;
 
     constexpr size_t VL = N<T, lmul>();
@@ -2608,14 +2608,14 @@
           c21 = fmaddi(b1, a2_ptr[k], c21);
         }
 
-        Epilogue::store<T, lmul>(C[i + 0] + j, c00, alpha, beta);
-        Epilogue::store<T, lmul>(C[i + 0] + j + VL, c01, alpha, beta);
+        Epilogue::store<T, lmul, FastPath>(C[i + 0] + j, c00, alpha, beta);
+        Epilogue::store<T, lmul, FastPath>(C[i + 0] + j + VL, c01, alpha, beta);
 
-        Epilogue::store<T, lmul>(C[i + 1] + j, c10, alpha, beta);
-        Epilogue::store<T, lmul>(C[i + 1] + j + VL, c11, alpha, beta);
+        Epilogue::store<T, lmul, FastPath>(C[i + 1] + j, c10, alpha, beta);
+        Epilogue::store<T, lmul, FastPath>(C[i + 1] + j + VL, c11, alpha, beta);
 
-        Epilogue::store<T, lmul>(C[i + 2] + j, c20, alpha, beta);
-        Epilogue::store<T, lmul>(C[i + 2] + j + VL, c21, alpha, beta);
+        Epilogue::store<T, lmul, FastPath>(C[i + 2] + j, c20, alpha, beta);
+        Epilogue::store<T, lmul, FastPath>(C[i + 2] + j + VL, c21, alpha, beta);
       }
     }
 
@@ -2637,9 +2637,30 @@
           c1 = fmaddi(b1, a_ptr[k], c1);
         }
 
-        Epilogue::store<T, lmul>(C[i] + j, c0, alpha, beta);
-        Epilogue::store<T, lmul>(C[i] + j + VL, c1, alpha, beta);
+        Epilogue::store<T, lmul, FastPath>(C[i] + j, c0, alpha, beta);
+        Epilogue::store<T, lmul, FastPath>(C[i] + j + VL, c1, alpha, beta);
       }
+    }
+  }
+
+  template <int lmul = 4>
+  static inline void
+  gemm_mippv2_x100_register_blocked(const PackedRowMajor<T> &__restrict A,
+                                    const PackedRowMajor<T> &__restrict B,
+                                    PackedRowMajor<T> &__restrict C) {
+    gemm_mippv2_x100_register_blocked_core<lmul, true>(A, B, C);
+  }
+
+  template <int lmul = 4>
+  static inline void
+  gemm_mippv2_x100_register_blocked(const PackedRowMajor<T> &__restrict A,
+                                    const PackedRowMajor<T> &__restrict B,
+                                    PackedRowMajor<T> &__restrict C,
+                                    T alpha, T beta) {
+    if (__builtin_expect(alpha == T{1} && beta == T{0}, 1)) {
+      gemm_mippv2_x100_register_blocked_core<lmul, true>(A, B, C);
+    } else {
+      gemm_mippv2_x100_register_blocked_core<lmul, false>(A, B, C, alpha, beta);
     }
   }
 
@@ -2649,8 +2670,9 @@
     double d2;
     double d3;
   };
-  template <int lmul = 2>
-  static inline void gemm_mippv2_x100_register_blocked_apack4(
+
+  template <int lmul = 2, bool FastPath = false>
+  static inline void gemm_mippv2_x100_register_blocked_apack4_core(
       const PackedRowMajor<T> &__restrict A,
       const PackedRowMajor<T> &__restrict B, PackedRowMajor<T> &__restrict C,
       T alpha = T{1}, T beta = T{0}) {
@@ -2737,14 +2759,14 @@
           c21 = fmaddi(b01, a2.d3, c21);
         }
 
-        Epilogue::store<T, lmul>(C[i + 0] + j, c00, alpha, beta);
-        Epilogue::store<T, lmul>(C[i + 0] + j + VL, c01, alpha, beta);
+        Epilogue::store<T, lmul, FastPath>(C[i + 0] + j, c00, alpha, beta);
+        Epilogue::store<T, lmul, FastPath>(C[i + 0] + j + VL, c01, alpha, beta);
 
-        Epilogue::store<T, lmul>(C[i + 1] + j, c10, alpha, beta);
-        Epilogue::store<T, lmul>(C[i + 1] + j + VL, c11, alpha, beta);
+        Epilogue::store<T, lmul, FastPath>(C[i + 1] + j, c10, alpha, beta);
+        Epilogue::store<T, lmul, FastPath>(C[i + 1] + j + VL, c11, alpha, beta);
 
-        Epilogue::store<T, lmul>(C[i + 2] + j, c20, alpha, beta);
-        Epilogue::store<T, lmul>(C[i + 2] + j + VL, c21, alpha, beta);
+        Epilogue::store<T, lmul, FastPath>(C[i + 2] + j, c20, alpha, beta);
+        Epilogue::store<T, lmul, FastPath>(C[i + 2] + j + VL, c21, alpha, beta);
       }
     }
 
@@ -2788,18 +2810,37 @@
           c1 = fmaddi(b1, a.d3, c1);
         }
 
-        Epilogue::store<T, lmul>(C[i] + j, c0, alpha, beta);
-        Epilogue::store<T, lmul>(C[i] + j + VL, c1, alpha, beta);
+        Epilogue::store<T, lmul, FastPath>(C[i] + j, c0, alpha, beta);
+        Epilogue::store<T, lmul, FastPath>(C[i] + j + VL, c1, alpha, beta);
       }
     }
   }
 
-  template <int lmul = 4>
+  template <int lmul = 2>
+  static inline void gemm_mippv2_x100_register_blocked_apack4(
+      const PackedRowMajor<T> &__restrict A,
+      const PackedRowMajor<T> &__restrict B, PackedRowMajor<T> &__restrict C) {
+    gemm_mippv2_x100_register_blocked_apack4_core<lmul, true>(A, B, C);
+  }
+
+  template <int lmul = 2>
+  static inline void gemm_mippv2_x100_register_blocked_apack4(
+      const PackedRowMajor<T> &__restrict A,
+      const PackedRowMajor<T> &__restrict B, PackedRowMajor<T> &__restrict C,
+      T alpha, T beta) {
+    if (__builtin_expect(alpha == T{1} && beta == T{0}, 1)) {
+      gemm_mippv2_x100_register_blocked_apack4_core<lmul, true>(A, B, C);
+    } else {
+      gemm_mippv2_x100_register_blocked_apack4_core<lmul, false>(A, B, C, alpha, beta);
+    }
+  }
+
+  template <int lmul = 4, bool FastPath = false>
   static inline void
-  gemm_mippv2_panel_x100(const PackedColMajor<T> &__restrict A,
-                         const PackedRowMajor<T> &__restrict B,
-                         PackedRowMajor<T> &__restrict C,
-                         T alpha = T{1}, T beta = T{0}) {
+  gemm_mippv2_panel_x100_core(const PackedColMajor<T> &__restrict A,
+                              const PackedRowMajor<T> &__restrict B,
+                              PackedRowMajor<T> &__restrict C,
+                              T alpha = T{1}, T beta = T{0}) {
     using namespace mipp;
 
     constexpr size_t VL = N<T, lmul>();
@@ -2832,15 +2873,36 @@
           c21 = fmaddi(b1, A(i + 2, k), c21);
         }
 
-        Epilogue::store<T, lmul>(&C(i + 0, j), c00, alpha, beta);
-        Epilogue::store<T, lmul>(&C(i + 0, j + VL), c01, alpha, beta);
+        Epilogue::store<T, lmul, FastPath>(&C(i + 0, j), c00, alpha, beta);
+        Epilogue::store<T, lmul, FastPath>(&C(i + 0, j + VL), c01, alpha, beta);
 
-        Epilogue::store<T, lmul>(&C(i + 1, j), c10, alpha, beta);
-        Epilogue::store<T, lmul>(&C(i + 1, j + VL), c11, alpha, beta);
+        Epilogue::store<T, lmul, FastPath>(&C(i + 1, j), c10, alpha, beta);
+        Epilogue::store<T, lmul, FastPath>(&C(i + 1, j + VL), c11, alpha, beta);
 
-        Epilogue::store<T, lmul>(&C(i + 2, j), c20, alpha, beta);
-        Epilogue::store<T, lmul>(&C(i + 2, j + VL), c21, alpha, beta);
+        Epilogue::store<T, lmul, FastPath>(&C(i + 2, j), c20, alpha, beta);
+        Epilogue::store<T, lmul, FastPath>(&C(i + 2, j + VL), c21, alpha, beta);
       }
+    }
+  }
+
+  template <int lmul = 4>
+  static inline void
+  gemm_mippv2_panel_x100(const PackedColMajor<T> &__restrict A,
+                         const PackedRowMajor<T> &__restrict B,
+                         PackedRowMajor<T> &__restrict C) {
+    gemm_mippv2_panel_x100_core<lmul, true>(A, B, C);
+  }
+
+  template <int lmul = 4>
+  static inline void
+  gemm_mippv2_panel_x100(const PackedColMajor<T> &__restrict A,
+                         const PackedRowMajor<T> &__restrict B,
+                         PackedRowMajor<T> &__restrict C,
+                         T alpha, T beta) {
+    if (__builtin_expect(alpha == T{1} && beta == T{0}, 1)) {
+      gemm_mippv2_panel_x100_core<lmul, true>(A, B, C);
+    } else {
+      gemm_mippv2_panel_x100_core<lmul, false>(A, B, C, alpha, beta);
     }
   }
 
