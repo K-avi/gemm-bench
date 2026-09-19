@@ -382,12 +382,19 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
             TEST_BUILD_FLAG="-DGEMMBENCH_BUILD_TESTS=ON"
         fi
 
+        LOCAL_CATCH2="$HOME/.local/catch2/$(uname -m)"
+        CATCH2_PREFIX_FLAG=""
+        if [[ -d "${LOCAL_CATCH2}" ]]; then
+            CATCH2_PREFIX_FLAG="-DCMAKE_PREFIX_PATH=${LOCAL_CATCH2}"
+        fi
+
         cmake -B "${BUILD_DIR}" -S . \
             -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_CXX_COMPILER="${COMPILER}" \
             -DCMAKE_CXX_FLAGS="${FORMATTED_FLAGS}" \
             ${EXPLO_FLAG} \
-            ${TEST_BUILD_FLAG}
+            ${TEST_BUILD_FLAG} \
+            ${CATCH2_PREFIX_FLAG}
 
         cmake --build "${BUILD_DIR}" --parallel
 
