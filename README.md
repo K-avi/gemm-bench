@@ -68,9 +68,9 @@ gemm_bench/
 ├── tests/                   # Catch2 unit and validation tests
 ├── x100_uarch_exp/
 │   └── broadcast_bench.cpp  # FMA & vector-broadcast microarchitectural probe
-├── plot_results.py          # Fancy plotting script
-├── run_benchmarks.sh        # Automated build & benchmark runner for x86
-└── run_benchmarks_rvv.sh    # Automated build & benchmark runner for RVV
+├── bench_configs/       # Per-platform compiler flags and hardware configurations
+├── plot_results.py      # Fancy plotting script
+└── run_benchmarks.sh    # Unified benchmark runner across all platforms
 ```
 
 ---
@@ -140,27 +140,43 @@ ctest --test-dir build --output-on-failure
 
 ## Running Benchmarks
 
-### Automated x86 Execution
-The `run_benchmarks.sh` script compiles multiple target configurations (scalar, SSE4.2, AVX2, native) and sweeps matrix dimensions $32 \times 32$ to $512 \times 512$:
+Benchmarks are executed via the unified driver `./run_benchmarks.sh <platform> [options] [compilers...]`.
 
-```bash
-./run_benchmarks.sh
-```
-Results will be exported to `results/gemm_results.csv`.
+### Supported Platforms
+- `avx2`: x86_64 with AVX2 and FMA
+- `avx512`: x86_64 with AVX-512 (F, DQ, VL, BW)
+- `neon`: ARMv8-A NEON (with automatic P-core detection on big.LITTLE / Apple Silicon)
+- `rvv_x100`: SpacemiT X100 / X60 (RVV 1.0, VLEN = 256 bits)
+- `rvv_a100`: SpacemiT A100 (RVV 1.0, VLEN = 1024 bits, automated `/proc/set_ai_thread` unlock)
 
-### Automated RISC-V Vector (SpacemiT X100 / X60) Execution
-This script functions the same way as `run_benchmarks.sh` except it builds for RVV1.0 with fixed size VLEN=256. It also runs every ukernel for matrices ranging from 32x32 to 512x512 to map performance.
+### Common Examples
 
-```bash
-./run_benchmarks_rvv.sh
-```
+- **Standard run (AVX2, both GCC and Clang, default sizes 32/64/96/128)**:
+  ```bash
+  ./run_benchmarks.sh avx2
+  ```
 
-### Automated ARM NEON (Apple Silicon Firestorm / Cortex-A76) Execution
-Builds with native ARM NEON flags across compilers (`g++`, `clang++`), auto-detects and pins to Performance Cores (P-cores), and sweeps matrix dimensions $32 \times 32$ to $128 \times 128$:
+- **Run only GCC on AVX-512 with forced clean rebuild**:
+  ```bash
+  ./run_benchmarks.sh avx512 --rebuild gcc
+  ```
 
-```bash
-./run_benchmarks_neon.sh
-```
+- **ARM NEON with explicit core pinning**:
+  ```bash
+  ./run_benchmarks.sh neon -c 4
+  ```
+
+- **SpacemiT A100 targeting specific sizes and kernels**:
+  ```bash
+  ./run_benchmarks.sh rvv_a100 -s 64 -s 128 -k mippv2_a100_mr7_nr4_pipe
+  ```
+
+- **Exhaustive run including scalar reference and large sizes (up to 512)**:
+  ```bash
+  ./run_benchmarks.sh avx2 --run-all
+  ```
+
+Results are saved to `results/gemm_results_<compiler>.csv` (or `results/gemm_results_a100_<compiler>.csv` for A100).
 
 ---
 
