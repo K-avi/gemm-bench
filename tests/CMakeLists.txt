@@ -1,20 +1,19 @@
-# Look for pre-installed Catch2 in ~/.local/catch2/<arch> if present
-if(EXISTS "$ENV{HOME}/.local/catch2/${CMAKE_SYSTEM_PROCESSOR}")
-    list(PREPEND CMAKE_PREFIX_PATH "$ENV{HOME}/.local/catch2/${CMAKE_SYSTEM_PROCESSOR}")
+# Determine target architecture for pre-installed Catch2
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "riscv|rv64")
+    set(_CATCH2_ARCH "riscv64")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
+    set(_CATCH2_ARCH "aarch64")
+elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|amd64")
+    set(_CATCH2_ARCH "x86_64")
+else()
+    set(_CATCH2_ARCH "${CMAKE_SYSTEM_PROCESSOR}")
 endif()
 
-find_package(Catch2 3 QUIET)
-
-if(NOT Catch2_FOUND)
-    include(FetchContent)
-    message(STATUS "Catch2 v3 not found locally. Fetching from upstream...")
-    FetchContent_Declare(
-        Catch2
-        GIT_REPOSITORY https://github.com/catchorg/Catch2.git
-        GIT_TAG        v3.5.2
-    )
-    FetchContent_MakeAvailable(Catch2)
+if(EXISTS "$ENV{HOME}/.local/catch2/${_CATCH2_ARCH}/lib/cmake/Catch2")
+    list(PREPEND CMAKE_PREFIX_PATH "$ENV{HOME}/.local/catch2/${_CATCH2_ARCH}")
 endif()
+
+find_package(Catch2 3 REQUIRED)
 
 add_executable(GemmBenchTests
     TestMain.cpp
