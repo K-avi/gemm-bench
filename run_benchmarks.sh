@@ -396,7 +396,12 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
             ${TEST_BUILD_FLAG} \
             ${CATCH2_PREFIX_FLAG}
 
-        cmake --build "${BUILD_DIR}" --parallel
+        BUILD_TARGET_FLAG=""
+        if [[ "$TESTS_ONLY" == "true" ]]; then
+            BUILD_TARGET_FLAG="--target GemmBenchTests"
+        fi
+
+        cmake --build "${BUILD_DIR}" ${BUILD_TARGET_FLAG} --parallel
 
         if [[ "$RUN_TESTS" == "true" ]]; then
             echo

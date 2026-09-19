@@ -24,10 +24,7 @@ add_executable(GemmBenchTests
 
 target_compile_options(GemmBenchTests
     PRIVATE
-        -O3
-        -ffast-math
-        -finline-functions
-        -funroll-loops
+        -O2
 )
 
 target_link_libraries(GemmBenchTests
