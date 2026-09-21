@@ -173,7 +173,7 @@ Microkernels are implemented in [`include/GemmUKernel_opti.hpp`](file:///home/iv
    - Total register budget $\approx (M_R \times N_V) + N_V + \min(M_R, 2)$ operands.
    - Ensure the total budget fits within the architectural register file (16 registers on AVX2, 32 on AVX-512 / NEON / RVV) with zero spilling. On RVV, account for register grouping: physical registers = $\text{LMUL} \times \text{logical registers}$.
 
-   > [!TIP]
+   > [!NOTE]
    > - **Register Pressure vs. Loop Unrolling**: When unrolling loops (e.g. along $K$), declaring more intermediate variables than available architectural registers is often viable: modern compilers perform live-range analysis and can interleave register reuse without spilling to the stack. Maybe check the assembly though.
    > - **MIPPv2 LMUL Abstraction for Power-of-Two Tiles**: For configurations with power-of-two vector widths ($N_V \in \{2, 4, 8\}$, e.g. $2 \times 2VL$, $4 \times 2VL$, $8 \times 4VL$), you can leverage MIPPv2's `lmul` template parameter (`set0<T, lmul>()`, `load<T, lmul>()`, `fmadd()`). This produces concise, portable code across architectures: on RVV it maps directly to hardware vector register groups, while on fixed-width ISAs (AVX2, AVX-512, NEON) MIPPv2 automatically emulates LMUL by unrolling native SIMD registers under a unified API.
 
