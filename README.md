@@ -365,11 +365,11 @@ Generative AI assistants (**Google Gemini** and **OpenAI ChatGPT**) were utilize
 
 The foundational DGEMM microkernel designs tuned for **Intel Skylake** (AVX2 + FMA) and the **SpacemiT K3 X100** core are the result of multiple weeks of work and reflection on the underlying microarchitectures and platforms. And the best **X100** microkernels are, I think, some of the best results of my internship.
 
-For subsequent target microarchitectures, the methodology was empirical: the exploration workflow relied on pre-established invariants:
+For subsequent target microarchitectures, the methodology was empirical, the exploration workflow relied on pre-established invariants:
 - **Consistent Layout**: Favoring the $RRR$ packing format (Row-major $A, B, C$). I've messed with CRR & CRC when I was getting desperate on the X60. It didn't amount to much...
 - **Inner-Loop Access Patterns**: Preserving either the scalar broadcast pattern (`mipp::set1` + `mipp::fmadd`) or the indexed FMA pattern (`mipp::fmaddi`) on matrix $A$.
 
-Under these invariants, the exploration focused on empirically sweeping register block dimensions ($M_R \times N_R$) that made sense given the uarch characteristics. Register file size, number of FMA pipelines/execution units and FMA latency being the three things that answer the questions :
+Under these, the exploration focused on sweeping register block dimensions ($M_R \times N_R$) that made sense given the uarch characteristics. Register file size, number of FMA pipelines/execution units and FMA latency being the three things that answer the questions :
 - How many accumulators can I have at most? 
 - How many accumulators do I want? 
 - How many accumulators do I need at least?
