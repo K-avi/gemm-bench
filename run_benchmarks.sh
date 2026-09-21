@@ -341,7 +341,11 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
 
     if [[ -n "${OUTPUT_PREFIX}" ]]; then
         local_prefix="${OUTPUT_PREFIX%_}"
-        CSV="results/${local_prefix}_${CSV_PREFIX}_${COMPILER_TAG}.csv"
+        if [[ "${local_prefix}" == gemm_results_* ]]; then
+            CSV="results/${local_prefix}_${COMPILER_TAG}.csv"
+        else
+            CSV="results/gemm_results_${local_prefix}_${COMPILER_TAG}.csv"
+        fi
     else
         CSV="results/${CSV_PREFIX}_${COMPILER_TAG}.csv"
     fi
@@ -453,7 +457,7 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
             for SIZE_ENTRY in "${SIZES[@]}"; do
                 read -r SIZE ITERS WARMUP <<< "${SIZE_ENTRY}"
 
-                LINE=$("${TASKSET_PREFIX[@]}" "${BIN}" \
+                if LINE=$("${TASKSET_PREFIX[@]}" "${BIN}" \
                     --kernel "${KERNEL}" \
                     --m "${SIZE}" \
                     --n "${SIZE}" \
@@ -462,10 +466,12 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
                     --beta "${BETA}" \
                     --iterations "${ITERS}" \
                     --warmup "${WARMUP}" \
-                    --csv)
-
-                echo "${VERSION},${LINE}" >> "${CSV}"
-                echo "[${COMPILER_TAG}] ${VERSION} ${KERNEL} ${SIZE}x${SIZE}"
+                    --csv); then
+                    echo "${VERSION},${LINE}" >> "${CSV}"
+                    echo "[${COMPILER_TAG}] ${VERSION} ${KERNEL} ${SIZE}x${SIZE}"
+                else
+                    echo "[${COMPILER_TAG}] ${VERSION} ${KERNEL} ${SIZE}x${SIZE} FAILED" >&2
+                fi
             done
         done
     done

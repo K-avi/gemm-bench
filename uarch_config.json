@@ -1,0 +1,82 @@
+{
+  "avx2": {
+    "skylake": {
+      "name": "Intel Skylake",
+      "cpu_model": "i5-6200U",
+      "frequency_ghz": 2.3,
+      "peak_flop_per_cycle": 16.0,
+      "expected_best_kernel": "mippv2_skylake_register_blocked",
+      "csv_pattern": "*gemm_results_*skylake*_{compiler}.csv"
+    },
+    "meteorlake": {
+      "name": "Intel Meteor Lake",
+      "cpu_model": "Redwood Cove P-core",
+      "frequency_ghz": 5.1,
+      "peak_flop_per_cycle": 16.0,
+      "expected_best_kernel": "mippv2_meteorlake_mr4_nr3",
+      "csv_pattern": "*gemm_results_*meteorlake*_{compiler}.csv"
+    }
+  },
+  "avx512": {
+    "zen4": {
+      "name": "AMD Zen 4",
+      "cpu_model": "Ryzen 9 7900X",
+      "frequency_ghz": 5.4,
+      "peak_flop_per_cycle": 16.0,
+      "expected_best_kernel": "mippv2_zen4_mr4_nr4_fmaddi",
+      "csv_pattern": "*gemm_results_*zen4*_{compiler}.csv"
+    },
+    "zen5": {
+      "name": "AMD Zen 5 Strix Point",
+      "cpu_model": "Ryzen AI 9 HX 370",
+      "frequency_ghz": 5.1,
+      "peak_flop_per_cycle": 16.0,
+      "expected_best_kernel": "mippv2_zen4_mr4_nr4_fmaddi",
+      "csv_pattern": "*gemm_results_*zen5*_{compiler}.csv"
+    }
+  },
+  "neon": {
+    "m1": {
+      "name": "Apple M1",
+      "cpu_model": "Firestorm",
+      "frequency_ghz": 3.0,
+      "peak_flop_per_cycle": 16.0,
+      "expected_best_kernel": "mippv2_firestorm_mr6_nr4_fmaddi",
+      "csv_pattern": "*gemm_results_*m1*_{compiler}.csv"
+    },
+    "rpi5": {
+      "name": "Raspberry Pi 5",
+      "cpu_model": "Cortex-A76",
+      "frequency_ghz": 2.4,
+      "peak_flop_per_cycle": 8.0,
+      "expected_best_kernel": "mippv2_a76_mr6_nr3",
+      "csv_pattern": "*gemm_results_*rpi5*_{compiler}.csv"
+    }
+  },
+  "rvv": {
+    "x100": {
+      "name": "SpacemiT X100",
+      "cpu_model": "SpacemiT X100",
+      "frequency_ghz": 2.2,
+      "peak_flop_per_cycle": 8.0,
+      "expected_best_kernel": "mippv2_x100_register_blocked_apack4",
+      "csv_pattern": "*gemm_results_*x100*_{compiler}.csv"
+    },
+    "x60": {
+      "name": "SpacemiT X60",
+      "cpu_model": "SpacemiT X60",
+      "frequency_ghz": 1.6,
+      "peak_flop_per_cycle": 8.0,
+      "expected_best_kernel": "mippv2_x60_mr6_nr4_fmaddi",
+      "csv_pattern": "*gemm_results_*x60*_{compiler}.csv"
+    },
+    "a100": {
+      "name": "SpacemiT A100",
+      "cpu_model": "SpacemiT A100",
+      "frequency_ghz": 1.8,
+      "peak_flop_per_cycle": 8.0,
+      "expected_best_kernel": "mippv2_a100_mr7_nr4_pipe",
+      "csv_pattern": "*gemm_results_*a100*_{compiler}.csv"
+    }
+  }
+}

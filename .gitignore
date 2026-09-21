@@ -47,3 +47,4 @@ dump_gemmbench_*/
 k3-6.pdf
 results_zen5/
 logs/
+gemm-bench-results-backup/
