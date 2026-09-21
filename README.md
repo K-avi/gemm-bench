@@ -171,12 +171,13 @@ Benchmarks are executed via the unified driver `./run_benchmarks.sh <platform> [
   ./run_benchmarks.sh rvv_a100 -s 64 -s 128 -k mippv2_a100_mr7_nr4_pipe
   ```
 
-- **Exhaustive run including scalar reference and large sizes (up to 512)**:
+- **Custom output prefix (e.g. for comparative architecture sweeps)**:
   ```bash
-  ./run_benchmarks.sh avx2 --run-all
+  ./run_benchmarks.sh avx2 --output zen4
+  # Writes to results/zen4_gemm_results_<compiler>.csv
   ```
 
-Results are saved to `results/gemm_results_<compiler>.csv` (or `results/gemm_results_a100_<compiler>.csv` for A100).
+Results are saved to `results/gemm_results_<compiler>.csv` (or `results/<prefix>_gemm_results_<compiler>.csv` when `--output` is specified).
 
 ---
 

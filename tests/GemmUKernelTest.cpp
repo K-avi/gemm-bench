@@ -46,6 +46,17 @@ checkMatrixEqual(const MA &A, const MB &B,
   }
 }
 
+template <typename MDest, typename MSrc>
+static void resetMatrix(MDest &dest, const MSrc &src) {
+  REQUIRE(dest.rows == src.rows);
+  REQUIRE(dest.cols == src.cols);
+  for (size_t i = 0; i < dest.rows; ++i) {
+    for (size_t j = 0; j < dest.cols; ++j) {
+      dest(i, j) = src(i, j);
+    }
+  }
+}
+
 template <typename T, class AMatrix, class BMatrix, class CMatrix>
 static void testGemmSuite() {
 
@@ -75,14 +86,6 @@ static void testGemmSuite() {
    */
   gemm.gemm_ijk(A, B, C_ref);
 
-#define TEST_KERNEL(NAME, CALL)                                                \
-  SECTION(NAME) {                                                              \
-    std::fill_n(C_test.data, C_test.padded_rows * C_test.padded_cols, T{});    \
-                                                                               \
-    CALL;                                                                      \
-                                                                               \
-    checkMatrixEqual(C_ref, C_test);                                           \
-  }
 
 #ifdef GEMMBENCH_ENABLE_EXPLO
   TEST_KERNEL("IKJ scalar GEMM", gemm.gemm_ikj(A, B, C_test));
@@ -319,12 +322,8 @@ template <typename T> static void testAlphaBetaSuite() {
 
   for (const auto &p : params) {
     DYNAMIC_SECTION("AlphaBeta RRR - " << p.name) {
-      for (size_t i = 0; i < M; ++i) {
-        for (size_t j = 0; j < N; ++j) {
-          C_ref(i, j) = C_init(i, j);
-          C_test(i, j) = C_init(i, j);
-        }
-      }
+      resetMatrix(C_ref, C_init);
+      resetMatrix(C_test, C_init);
 
       gemm.gemm_ijk(A, B, C_ref, p.alpha, p.beta);
 
@@ -334,155 +333,119 @@ template <typename T> static void testAlphaBetaSuite() {
       }
 
       SECTION("mippv2_skylake_register_blocked") {
-        for (size_t i = 0; i < M; ++i)
-          for (size_t j = 0; j < N; ++j)
-            C_test(i, j) = C_init(i, j);
+        resetMatrix(C_test, C_init);
         gemm.gemm_mippv2_skylake_register_blocked(A, B, C_test, p.alpha,
                                                   p.beta);
         checkMatrixEqual(C_ref, C_test);
       }
 
       SECTION("mippv2_skylake_lmul1") {
-        for (size_t i = 0; i < M; ++i)
-          for (size_t j = 0; j < N; ++j)
-            C_test(i, j) = C_init(i, j);
+        resetMatrix(C_test, C_init);
         gemm.template gemm_mippv2_skylake_lmul_register_blocked<1>(
             A, B, C_test, p.alpha, p.beta);
         checkMatrixEqual(C_ref, C_test);
       }
 
       SECTION("mippv2_skylake_lmul2") {
-        for (size_t i = 0; i < M; ++i)
-          for (size_t j = 0; j < N; ++j)
-            C_test(i, j) = C_init(i, j);
+        resetMatrix(C_test, C_init);
         gemm.template gemm_mippv2_skylake_lmul_register_blocked<2>(
             A, B, C_test, p.alpha, p.beta);
         checkMatrixEqual(C_ref, C_test);
       }
 
       SECTION("mippv2_skylake_lmul4") {
-        for (size_t i = 0; i < M; ++i)
-          for (size_t j = 0; j < N; ++j)
-            C_test(i, j) = C_init(i, j);
+        resetMatrix(C_test, C_init);
         gemm.template gemm_mippv2_skylake_lmul_register_blocked<4>(
             A, B, C_test, p.alpha, p.beta);
         checkMatrixEqual(C_ref, C_test);
       }
 
       SECTION("mippv2_meteorlake_mr4_nr3") {
-        for (size_t i = 0; i < M; ++i)
-          for (size_t j = 0; j < N; ++j)
-            C_test(i, j) = C_init(i, j);
+        resetMatrix(C_test, C_init);
         gemm.gemm_mippv2_meteorlake_mr4_nr3(A, B, C_test, p.alpha, p.beta);
         checkMatrixEqual(C_ref, C_test);
       }
 
       SECTION("mippv2_a76_mr6_nr3") {
-        for (size_t i = 0; i < M; ++i)
-          for (size_t j = 0; j < N; ++j)
-            C_test(i, j) = C_init(i, j);
+        resetMatrix(C_test, C_init);
         gemm.gemm_mippv2_a76_mr6_nr3(A, B, C_test, p.alpha, p.beta);
         checkMatrixEqual(C_ref, C_test);
       }
 
       SECTION("mippv2_firestorm_mr4_nr4") {
-        for (size_t i = 0; i < M; ++i)
-          for (size_t j = 0; j < N; ++j)
-            C_test(i, j) = C_init(i, j);
+        resetMatrix(C_test, C_init);
         gemm.gemm_mippv2_firestorm_mr4_nr4(A, B, C_test, p.alpha, p.beta);
         checkMatrixEqual(C_ref, C_test);
       }
 
       SECTION("mippv2_firestorm_mr4_nr4_fmaddi") {
-        for (size_t i = 0; i < M; ++i)
-          for (size_t j = 0; j < N; ++j)
-            C_test(i, j) = C_init(i, j);
+        resetMatrix(C_test, C_init);
         gemm.gemm_mippv2_firestorm_mr4_nr4_fmaddi(A, B, C_test, p.alpha,
                                                   p.beta);
         checkMatrixEqual(C_ref, C_test);
       }
 
       SECTION("mippv2_firestorm_mr6_nr4") {
-        for (size_t i = 0; i < M; ++i)
-          for (size_t j = 0; j < N; ++j)
-            C_test(i, j) = C_init(i, j);
+        resetMatrix(C_test, C_init);
         gemm.gemm_mippv2_firestorm_mr6_nr4(A, B, C_test, p.alpha, p.beta);
         checkMatrixEqual(C_ref, C_test);
       }
 
       SECTION("mippv2_firestorm_mr6_nr4_fmaddi") {
-        for (size_t i = 0; i < M; ++i)
-          for (size_t j = 0; j < N; ++j)
-            C_test(i, j) = C_init(i, j);
+        resetMatrix(C_test, C_init);
         gemm.gemm_mippv2_firestorm_mr6_nr4_fmaddi(A, B, C_test, p.alpha,
                                                   p.beta);
         checkMatrixEqual(C_ref, C_test);
       }
 
       SECTION("mippv2_zen4_mr4_nr4") {
-        for (size_t i = 0; i < M; ++i)
-          for (size_t j = 0; j < N; ++j)
-            C_test(i, j) = C_init(i, j);
+        resetMatrix(C_test, C_init);
         gemm.gemm_mippv2_zen4_mr4_nr4(A, B, C_test, p.alpha, p.beta);
         checkMatrixEqual(C_ref, C_test);
       }
 
       SECTION("mippv2_zen4_mr4_nr4_fmaddi") {
-        for (size_t i = 0; i < M; ++i)
-          for (size_t j = 0; j < N; ++j)
-            C_test(i, j) = C_init(i, j);
+        resetMatrix(C_test, C_init);
         gemm.gemm_mippv2_zen4_mr4_nr4_fmaddi(A, B, C_test, p.alpha, p.beta);
         checkMatrixEqual(C_ref, C_test);
       }
 
       SECTION("mippv2_x100_register_blocked_lmul1") {
-        for (size_t i = 0; i < M; ++i)
-          for (size_t j = 0; j < N; ++j)
-            C_test(i, j) = C_init(i, j);
+        resetMatrix(C_test, C_init);
         gemm.template gemm_mippv2_x100_register_blocked<1>(A, B, C_test,
                                                            p.alpha, p.beta);
         checkMatrixEqual(C_ref, C_test);
       }
 
       SECTION("mippv2_x100_register_blocked_lmul2") {
-        for (size_t i = 0; i < M; ++i)
-          for (size_t j = 0; j < N; ++j)
-            C_test(i, j) = C_init(i, j);
+        resetMatrix(C_test, C_init);
         gemm.template gemm_mippv2_x100_register_blocked<2>(A, B, C_test,
                                                            p.alpha, p.beta);
         checkMatrixEqual(C_ref, C_test);
       }
 
       SECTION("mippv2_x100_register_blocked_lmul4") {
-        for (size_t i = 0; i < M; ++i)
-          for (size_t j = 0; j < N; ++j)
-            C_test(i, j) = C_init(i, j);
+        resetMatrix(C_test, C_init);
         gemm.template gemm_mippv2_x100_register_blocked<4>(A, B, C_test,
                                                            p.alpha, p.beta);
         checkMatrixEqual(C_ref, C_test);
       }
 
       SECTION("mippv2_x100_register_blocked_apack4") {
-        for (size_t i = 0; i < M; ++i)
-          for (size_t j = 0; j < N; ++j)
-            C_test(i, j) = C_init(i, j);
+        resetMatrix(C_test, C_init);
         gemm.gemm_mippv2_x100_register_blocked_apack4(A, B, C_test, p.alpha,
                                                       p.beta);
         checkMatrixEqual(C_ref, C_test);
       }
 
       SECTION("mippv2_a100_mr7_nr4_pipe") {
-        for (size_t i = 0; i < M; ++i)
-          for (size_t j = 0; j < N; ++j)
-            C_test(i, j) = C_init(i, j);
+        resetMatrix(C_test, C_init);
         gemm.gemm_mippv2_a100_mr7_nr4_pipe(A, B, C_test, p.alpha, p.beta);
         checkMatrixEqual(C_ref, C_test);
       }
 
       SECTION("mippv2_a100_mr7_nr2_lmul2_pipe") {
-        for (size_t i = 0; i < M; ++i)
-          for (size_t j = 0; j < N; ++j)
-            C_test(i, j) = C_init(i, j);
+        resetMatrix(C_test, C_init);
         gemm.gemm_mippv2_a100_mr7_nr2_lmul2_pipe(A, B, C_test, p.alpha, p.beta);
         checkMatrixEqual(C_ref, C_test);
       }
@@ -538,12 +501,8 @@ template <typename T> static void testAlphaBetaSuiteCRR() {
 
   for (const auto &p : params) {
     DYNAMIC_SECTION("AlphaBeta CRR - " << p.name) {
-      for (size_t i = 0; i < M; ++i) {
-        for (size_t j = 0; j < N; ++j) {
-          C_ref(i, j) = C_init(i, j);
-          C_test(i, j) = C_init(i, j);
-        }
-      }
+      resetMatrix(C_ref, C_init);
+      resetMatrix(C_test, C_init);
 
       gemm.gemm_ijk(A_ref, B, C_ref, p.alpha, p.beta);
 
@@ -553,36 +512,28 @@ template <typename T> static void testAlphaBetaSuiteCRR() {
       }
 
       SECTION("mippv2_skylake_panel_lmul1") {
-        for (size_t i = 0; i < M; ++i)
-          for (size_t j = 0; j < N; ++j)
-            C_test(i, j) = C_init(i, j);
+        resetMatrix(C_test, C_init);
         gemm.template gemm_mippv2_skylake_panel_lmul<1>(A, B, C_test, p.alpha,
                                                         p.beta);
         checkMatrixEqual(C_ref, C_test);
       }
 
       SECTION("mippv2_skylake_panel_lmul2") {
-        for (size_t i = 0; i < M; ++i)
-          for (size_t j = 0; j < N; ++j)
-            C_test(i, j) = C_init(i, j);
+        resetMatrix(C_test, C_init);
         gemm.template gemm_mippv2_skylake_panel_lmul<2>(A, B, C_test, p.alpha,
                                                         p.beta);
         checkMatrixEqual(C_ref, C_test);
       }
 
       SECTION("mippv2_skylake_panel_lmul4") {
-        for (size_t i = 0; i < M; ++i)
-          for (size_t j = 0; j < N; ++j)
-            C_test(i, j) = C_init(i, j);
+        resetMatrix(C_test, C_init);
         gemm.template gemm_mippv2_skylake_panel_lmul<4>(A, B, C_test, p.alpha,
                                                         p.beta);
         checkMatrixEqual(C_ref, C_test);
       }
 
       SECTION("mippv2_panel_x100_lmul1") {
-        for (size_t i = 0; i < M; ++i)
-          for (size_t j = 0; j < N; ++j)
-            C_test(i, j) = C_init(i, j);
+        resetMatrix(C_test, C_init);
         gemm.template gemm_mippv2_panel_x100<1>(A, B, C_test, p.alpha, p.beta);
         checkMatrixEqual(C_ref, C_test);
       }

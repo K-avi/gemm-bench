@@ -28,6 +28,7 @@ test_plots/
 # IDE and Editor
 .vscode/
 .idea/
+.cache/
 *.swp
 *.swo
 *~

@@ -35,216 +35,6 @@ static inline bool isKernelTileSize66(UKernelType kernel) {
   return false;
 }
 
-bool csv_mode = false;
-char name_buff[256] = {0};
-
-static UKernelType parseKernel(const std::string &name) {
-  // Production / Optimized kernels
-  if (name == "ijk")
-    return UKernelType::IJK;
-
-  if (name == "blocked_register_blocked")
-    return UKernelType::blocked_register_blocked;
-
-  if (name == "mippv2_skylake_register_blocked")
-    return UKernelType::mippv2_skylake_register_blocked;
-
-  if (name == "mippv2_skylake_lmul_register_blocked")
-    return UKernelType::mippv2_skylake_lmul_register_blocked;
-
-  if (name == "mippv2_skylake_lmul2_register_blocked")
-    return UKernelType::mippv2_skylake_lmul2_register_blocked;
-
-  if (name == "mippv2_skylake_lmul4_register_blocked")
-    return UKernelType::mippv2_skylake_lmul4_register_blocked;
-
-  if (name == "mippv2_skylake_panel")
-    return UKernelType::mippv2_skylake_panel;
-
-  if (name == "mippv2_skylake_panel_lmul")
-    return UKernelType::mippv2_skylake_panel_lmul;
-
-  if (name == "mippv2_skylake_panel_lmul2")
-    return UKernelType::mippv2_skylake_panel_lmul2;
-
-  if (name == "mippv2_skylake_panel_lmul4")
-    return UKernelType::mippv2_skylake_panel_lmul4;
-
-  if (name == "mippv2_meteorlake_mr4_nr3")
-    return UKernelType::mippv2_meteorlake_mr4_nr3;
-
-  if (name == "mippv2_a76_mr6_nr3")
-    return UKernelType::mippv2_a76_mr6_nr3;
-
-  if (name == "mippv2_firestorm_mr4_nr4")
-    return UKernelType::mippv2_firestorm_mr4_nr4;
-  if (name == "mippv2_firestorm_mr4_nr4_fmaddi")
-    return UKernelType::mippv2_firestorm_mr4_nr4_fmaddi;
-  if (name == "mippv2_firestorm_mr6_nr4")
-    return UKernelType::mippv2_firestorm_mr6_nr4;
-  if (name == "mippv2_firestorm_mr6_nr4_fmaddi")
-    return UKernelType::mippv2_firestorm_mr6_nr4_fmaddi;
-
-  if (name == "mippv2_zen4_mr4_nr4")
-    return UKernelType::mippv2_zen4_mr4_nr4;
-  if (name == "mippv2_zen4_mr4_nr4_fmaddi")
-    return UKernelType::mippv2_zen4_mr4_nr4_fmaddi;
-
-  if (name == "mippv2_x100_register_blocked_lmul1")
-    return UKernelType::mippv2_x100_register_blocked_lmul1;
-  if (name == "mippv2_x100_register_blocked_lmul2")
-    return UKernelType::mippv2_x100_register_blocked_lmul2;
-  if (name == "mippv2_x100_register_blocked_lmul4")
-    return UKernelType::mippv2_x100_register_blocked_lmul4;
-
-  if (name == "mippv2_x100_register_blocked_apack4")
-    return UKernelType::mippv2_x100_register_blocked_apack4;
-
-  if (name == "mippv2_panel_x100_lmul1")
-    return UKernelType::mippv2_panel_x100_lmul1;
-  if (name == "mippv2_panel_x100_lmul2")
-    return UKernelType::mippv2_panel_x100_lmul2;
-  if (name == "mippv2_panel_x100_lmul4")
-    return UKernelType::mippv2_panel_x100_lmul4;
-
-  if (name == "mippv2_x60_mr6_nr4_fmaddi")
-    return UKernelType::mippv2_x60_mr6_nr4_fmaddi;
-
-  if (name == "mippv2_a100_mr7_nr4_pipe")
-    return UKernelType::mippv2_a100_mr7_nr4_pipe;
-  if (name == "mippv2_a100_mr7_nr2_lmul2_pipe")
-    return UKernelType::mippv2_a100_mr7_nr2_lmul2_pipe;
-
-#ifdef GEMMBENCH_ENABLE_EXPLO
-  if (name == "ikj")
-    return UKernelType::IKJ;
-
-  if (name == "blocked")
-    return UKernelType::blocked;
-
-  if (name == "blocked_unroll2")
-    return UKernelType::blocked_unroll2;
-
-  if (name == "blocked_unroll4")
-    return UKernelType::blocked_unroll4;
-
-  if (name == "mippv2")
-    return UKernelType::mippv2;
-
-  if (name == "mippv2_lmul2")
-    return UKernelType::mippv2_lmul2;
-
-  if (name == "mippv2_lmul4")
-    return UKernelType::mippv2_lmul4;
-
-  if (name == "mippv2_lmul8")
-    return UKernelType::mippv2_lmul8;
-
-  if (name == "mippv2_blocked")
-    return UKernelType::mippv2_blocked;
-
-  if (name == "mippv2_blocked_lmul2")
-    return UKernelType::mippv2_blocked_lmul2;
-
-  if (name == "mippv2_blocked_lmul4")
-    return UKernelType::mippv2_blocked_lmul4;
-
-  if (name == "mippv2_blocked_lmul8")
-    return UKernelType::mippv2_blocked_lmul8;
-
-  if (name == "mippv2_blocked_unroll2")
-    return UKernelType::mippv2_blocked_unroll2;
-
-  if (name == "mippv2_blocked_unroll4")
-    return UKernelType::mippv2_blocked_unroll4;
-
-  if (name == "mippv2_blocked_unroll_jam4")
-    return UKernelType::mippv2_blocked_unroll_jam4;
-
-  if (name == "mippv2_blocked_register_blocked")
-    return UKernelType::mippv2_blocked_register_blocked;
-
-  if (name == "mippv2_skylake_lmul8_register_blocked")
-    return UKernelType::mippv2_skylake_lmul8_register_blocked;
-
-  if (name == "mippv2_skylake_panel_lmul8")
-    return UKernelType::mippv2_skylake_panel_lmul8;
-
-  if (name == "mippv2_dot")
-    return UKernelType::mippv2_dot;
-  if (name == "mippv2_x100_lmul1")
-    return UKernelType::mippv2_x100_lmul1;
-  if (name == "mippv2_x100_lmul2")
-    return UKernelType::mippv2_x100_lmul2;
-  if (name == "mippv2_x100_lmul4")
-    return UKernelType::mippv2_x100_lmul4;
-  if (name == "mippv2_x100_lmul8")
-    return UKernelType::mippv2_x100_lmul8;
-
-  if (name == "mippv2_x100_register_blocked_lmul8")
-    return UKernelType::mippv2_x100_register_blocked_lmul8;
-
-  if (name == "mippv2_panel_x100_lmul8")
-    return UKernelType::mippv2_panel_x100_lmul8;
-#endif
-
-  throw std::runtime_error("Unknown GEMM kernel: " + name);
-}
-
-static BenchConfig parseArgs(int argc, char **argv) {
-  BenchConfig cfg;
-
-  for (int i = 1; i < argc; ++i) {
-    std::string arg = argv[i];
-
-    auto next = [&]() { return std::stoul(argv[++i]); };
-    auto next_double = [&]() { return std::stod(argv[++i]); };
-
-    if (arg == "--m")
-      cfg.M = next();
-
-    else if (arg == "--n")
-      cfg.N = next();
-
-    else if (arg == "--k")
-      cfg.K = next();
-
-    else if (arg == "--alpha" || arg == "-a")
-      cfg.alpha = next_double();
-
-    else if (arg == "--beta" || arg == "-b")
-      cfg.beta = next_double();
-
-    else if (arg == "--iterations")
-      cfg.iterations = next();
-
-    else if (arg == "--warmup")
-      cfg.warmup = next();
-
-    else if (arg == "--packet-size")
-      cfg.packet_size = next();
-
-    else if (arg == "--lmul")
-      cfg.lmul = next();
-
-    else if (arg == "--alignment")
-      cfg.alignment = next();
-
-    else if (arg == "--kernel") {
-      cfg.kernel = parseKernel(argv[++i]);
-      std::strncpy(name_buff, argv[i], sizeof(name_buff) - 1);
-    } else if (arg == "--csv")
-      csv_mode = true;
-
-    else {
-      std::cerr << "Unknown argument: " << arg << '\n';
-      std::exit(EXIT_FAILURE);
-    }
-  }
-
-  return cfg;
-}
-
 #define BENCH_KERNEL(CALL)                                                     \
   do {                                                                         \
     for (size_t i = 0; i < cfg.warmup; ++i)                                    \
@@ -572,7 +362,7 @@ void printResults(const BenchConfig &cfg,
 
   const double gflops = ops / time_s / 1e9;
 
-  if (!csv_mode) {
+  if (!cfg.csv_mode) {
     std::cout << "M: " << cfg.M << "\n"
               << "N: " << cfg.N << "\n"
               << "K: " << cfg.K << "\n"
@@ -581,7 +371,7 @@ void printResults(const BenchConfig &cfg,
               << "Time(s): " << std::setprecision(12) << time_s << "\n"
               << "GFLOP/s: " << gflops << "\n";
   } else {
-    std::cout << name_buff << "," << cfg.M << "," << cfg.N << "," << cfg.K
+    std::cout << cfg.kernel_name << "," << cfg.M << "," << cfg.N << "," << cfg.K
               << "," << cfg.alpha << "," << cfg.beta << "," << time_s << ","
               << gflops << "\n";
   }
@@ -591,15 +381,8 @@ template <typename T, typename APacked, typename BPacked, typename CPacked>
 void runBenchmark(const BenchConfig &cfg) {
   GemmUKernel<T> gemm;
 
-  SimdAlloc<T> *alloc_ptr;
-  if (isKernelTileSize66(cfg.kernel)) {
-    alloc_ptr = new SimdAlloc<T>(cfg.packet_size, cfg.lmul, cfg.alignment,
-                                 cfg.seed, 66);
-  } else {
-    alloc_ptr = new SimdAlloc<T>(cfg.packet_size, cfg.lmul, cfg.alignment,
-                                 cfg.seed, 64);
-  }
-  auto &alloc = *alloc_ptr;
+  const size_t tile = isKernelTileSize66(cfg.kernel) ? 66 : 64;
+  SimdAlloc<T> alloc(cfg.packet_size, cfg.lmul, cfg.alignment, cfg.seed, tile);
 
   auto A =
       alloc.template allocatePacked<APacked>(cfg.M, cfg.K, InitMode::Random);
@@ -613,7 +396,7 @@ void runBenchmark(const BenchConfig &cfg) {
                : alloc.template allocatePacked<CPacked>(cfg.M, cfg.N,
                                                         InitMode::Zero);
 
-  if (!csv_mode) {
+  if (!cfg.csv_mode) {
     std::cout << "A.ld = " << A.ld << "\n";
     std::cout << "B.ld = " << B.ld << "\n";
     std::cout << "C.ld = " << C.ld << "\n";
@@ -623,10 +406,9 @@ void runBenchmark(const BenchConfig &cfg) {
 
   printResults<T>(cfg, time);
 
-  alloc_ptr->freePacked(A);
-  alloc_ptr->freePacked(B);
-  alloc_ptr->freePacked(C);
-  delete alloc_ptr;
+  alloc.freePacked(A);
+  alloc.freePacked(B);
+  alloc.freePacked(C);
 }
 
 void dispatchBenchmark(const BenchConfig &cfg) {

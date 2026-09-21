@@ -218,6 +218,15 @@ inline const KernelDescriptor &getKernelDescriptor(UKernelType type) {
   throw std::runtime_error("Unknown kernel");
 }
 
+inline const KernelDescriptor &getKernelDescriptor(const std::string &name) {
+  for (const auto &k : kernelTable) {
+    if (k.name == name)
+      return k;
+  }
+
+  throw std::runtime_error("Unknown GEMM kernel: " + name);
+}
+
 template <typename T> class GemmUKernel {
 public:
   static void checkDimensions(const PackedRowMajor<T> &A,

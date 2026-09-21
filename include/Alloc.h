@@ -156,7 +156,7 @@ public:
         assert(packet_size_ * sizeof(T) == alignment_);
     }
 
-    constexpr size_t tileSize()
+    size_t tileSize() const
     {
         return TileSize;
     }
@@ -358,8 +358,6 @@ private:
         }
     }
 
-
-private:
 
     size_t packet_size_;
     size_t lmul_;

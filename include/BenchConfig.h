@@ -2,6 +2,8 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstdlib>
+#include <iostream>
 #include <string>
 
 #include "GemmUKernel.h"
@@ -31,6 +33,9 @@ struct BenchConfig
 
     UKernelType kernel = UKernelType::IJK;
     PLayout storage_order = PLayout::Row;
+
+    bool csv_mode = false;
+    std::string kernel_name = "ijk";
 };
 
 inline BenchConfig& config()
@@ -40,32 +45,82 @@ inline BenchConfig& config()
 }
 
 
-inline void parseArguments(int argc,
-                           char** argv)
+inline void parseArgs(int argc,
+                      char** argv,
+                      BenchConfig& cfg,
+                      bool ignore_unknown = false)
 {
-    auto& cfg = config();
-
     for(int i = 1; i < argc; ++i)
     {
         std::string arg = argv[i];
 
-        if(arg == "--packet-size" && i + 1 < argc)
+        auto next = [&]() {
+            if (i + 1 >= argc)
+            {
+                std::cerr << "Missing value for argument: " << arg << '\n';
+                std::exit(EXIT_FAILURE);
+            }
+            return argv[++i];
+        };
+
+        auto next_ulong = [&]() {
+            return std::stoul(next());
+        };
+
+        auto next_double = [&]() {
+            return std::stod(next());
+        };
+
+        if(arg == "--m")
+            cfg.M = next_ulong();
+        else if(arg == "--n")
+            cfg.N = next_ulong();
+        else if(arg == "--k")
+            cfg.K = next_ulong();
+        else if(arg == "--alpha" || arg == "-a")
+            cfg.alpha = next_double();
+        else if(arg == "--beta" || arg == "-b")
+            cfg.beta = next_double();
+        else if(arg == "--iterations")
+            cfg.iterations = next_ulong();
+        else if(arg == "--warmup")
+            cfg.warmup = next_ulong();
+        else if(arg == "--packet-size")
+            cfg.packet_size = next_ulong();
+        else if(arg == "--lmul")
+            cfg.lmul = next_ulong();
+        else if(arg == "--alignment")
+            cfg.alignment = next_ulong();
+        else if(arg == "--seed")
+            cfg.seed = static_cast<uint32_t>(next_ulong());
+        else if(arg == "--kernel")
         {
-            cfg.packet_size = std::stoul(argv[++i]);
+            cfg.kernel_name = next();
+            cfg.kernel = getKernelDescriptor(cfg.kernel_name).type;
         }
-        else if(arg == "--lmul" && i + 1 < argc)
+        else if(arg == "--csv")
+            cfg.csv_mode = true;
+        else if(!ignore_unknown)
         {
-            cfg.lmul = std::stoul(argv[++i]);
-        }
-        else if(arg == "--alignment" && i + 1 < argc)
-        {
-            cfg.alignment = std::stoul(argv[++i]);
-        }
-        else if(arg == "--seed" && i + 1 < argc)
-        {
-            cfg.seed = std::stoul(argv[++i]);
+            std::cerr << "Unknown argument: " << arg << '\n';
+            std::exit(EXIT_FAILURE);
         }
     }
 }
 
+inline BenchConfig parseArgs(int argc,
+                             char** argv,
+                             bool ignore_unknown = false)
+{
+    BenchConfig cfg;
+    parseArgs(argc, argv, cfg, ignore_unknown);
+    return cfg;
 }
+
+inline void parseArguments(int argc,
+                           char** argv)
+{
+    parseArgs(argc, argv, config(), /*ignore_unknown=*/true);
+}
+
+} // namespace GEMMBench

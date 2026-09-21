@@ -3,6 +3,7 @@ PLATFORM_NAME="SpacemiT X100 (RVV 256-bit)"
 BUILD_DIR_PREFIX="build_rvv_x100"
 CSV_PREFIX="gemm_results_rvv_x100"
 DEFAULT_VERSION="rvv"
+DEFAULT_PIN_CORE="0"
 
 COMMON_FLAGS="
 -O3
