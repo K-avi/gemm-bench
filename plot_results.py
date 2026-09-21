@@ -27,46 +27,65 @@ import pandas as pd
 
 
 # ==============================================================================
-# Styling and Palette Configuration
+# Styling and Palette Configuration (Publication-Grade Light Mode)
 # ==============================================================================
+
+LIGHT_BG = "#ffffff"       # Clean white canvas
+CARD_BG = "#ffffff"        # White plot axes
+BORDER_COLOR = "#d0d7de"   # Subtle GitHub-style border
+TEXT_PRIMARY = "#1f2328"   # Dark slate for primary text
+TEXT_SECONDARY = "#656d76" # Muted slate for subtitles and labels
+TEXT_MUTED = "#8c959f"     # Dim label
+GRID_COLOR = "#eaeef2"     # Subtle grid lines
+
+SIMD_FAMILY_COLORS = {
+    "avx512": "#dc2626",   # Crimson Red
+    "avx2": "#0284c7",     # Sky Blue
+    "neon": "#7c3aed",     # Purple / Violet
+    "rvv": "#059669",      # Emerald Green
+}
+
+UARCH_COLORS = {
+    "zen4": "#dc2626",       # Crimson Red (AMD AVX-512)
+    "zen5": "#b91c1c",       # Darker Red (AMD Zen 5)
+    "m1": "#7c3aed",         # Purple (Apple M1 NEON)
+    "rpi5": "#db2777",       # Pink (RPi5 Cortex-A76 NEON)
+    "meteorlake": "#0284c7", # Sky Blue (Intel Meteor Lake AVX2)
+    "skylake": "#0369a1",    # Deep Sky (Intel Skylake AVX2)
+    "x100": "#059669",       # Emerald Green (SpacemiT X100 RVV)
+    "x60": "#10b981",        # Sea Green (SpacemiT X60 RVV)
+    "a100": "#047857",       # Dark Emerald (SpacemiT A100 RVV)
+}
 
 plt.rcParams.update(
     {
-        "figure.figsize": (11, 6.5),
-        "font.size": 11,
-        "axes.titlesize": 13,
+        "figure.facecolor": LIGHT_BG,
+        "figure.edgecolor": LIGHT_BG,
+        "axes.facecolor": CARD_BG,
+        "axes.edgecolor": BORDER_COLOR,
+        "axes.labelcolor": TEXT_PRIMARY,
         "axes.labelsize": 11,
-        "legend.fontsize": 9,
-        "svg.fonttype": "none",
+        "axes.titlesize": 13,
+        "axes.titleweight": "bold",
+        "axes.titlecolor": TEXT_PRIMARY,
         "axes.grid": True,
-        "grid.alpha": 0.35,
+        "grid.color": GRID_COLOR,
+        "grid.alpha": 0.9,
         "grid.linestyle": "--",
+        "grid.linewidth": 0.8,
+        "xtick.color": TEXT_SECONDARY,
+        "ytick.color": TEXT_SECONDARY,
+        "xtick.labelsize": 10,
+        "ytick.labelsize": 10,
+        "legend.facecolor": CARD_BG,
+        "legend.edgecolor": BORDER_COLOR,
+        "legend.fontsize": 9.5,
+        "text.color": TEXT_PRIMARY,
+        "font.family": "sans-serif",
+        "font.sans-serif": ["DejaVu Sans", "Liberation Sans", "Helvetica", "Arial", "sans-serif"],
+        "svg.fonttype": "none",
     }
 )
-
-UARCH_COLORS = {
-    "zen4": "#D32F2F",       # Deep Red (AMD)
-    "zen5": "#B71C1C",       # Darker Red
-    "m1": "#1976D2",         # Blue (Apple)
-    "rpi5": "#E91E63",       # Raspberry Pink
-    "meteorlake": "#0288D1", # Cyan/Blue (Intel)
-    "skylake": "#0097A7",    # Teal (Intel)
-    "x100": "#388E3C",       # Green (RISC-V)
-    "x60": "#689F38",        # Light Green
-    "a100": "#7B1FA2",       # Purple (High throughput)
-}
-
-UARCH_MARKERS = {
-    "zen4": "s",
-    "zen5": "D",
-    "m1": "o",
-    "rpi5": "^",
-    "meteorlake": "v",
-    "skylake": "<",
-    "x100": "p",
-    "x60": "h",
-    "a100": "P",
-}
 
 
 # ==============================================================================
@@ -83,6 +102,9 @@ class UArchSpec:
     peak_flop_per_cycle: float
     expected_best_kernel: str
     csv_pattern: str
+    measured_peak_flop_per_cycle: Optional[float] = None
+    hardware_max_frequency_ghz: Optional[float] = None
+    notes: Optional[str] = None
 
     @property
     def peak_gflops(self) -> float:
@@ -109,6 +131,9 @@ def load_uarch_config(config_path: Path) -> Dict[str, UArchSpec]:
                 peak_flop_per_cycle=float(spec.get("peak_flop_per_cycle", 1.0)),
                 expected_best_kernel=spec.get("expected_best_kernel", ""),
                 csv_pattern=spec.get("csv_pattern", f"*gemm_results_{uarch_id}_*.csv"),
+                measured_peak_flop_per_cycle=float(spec["measured_peak_flop_per_cycle"]) if "measured_peak_flop_per_cycle" in spec else None,
+                hardware_max_frequency_ghz=float(spec["hardware_max_frequency_ghz"]) if "hardware_max_frequency_ghz" in spec else None,
+                notes=spec.get("notes"),
             )
     return specs
 
@@ -151,7 +176,6 @@ def load_dataset_for_uarch(input_dir: Path, spec: UArchSpec) -> pd.DataFrame:
             if df.empty or "Kernel" not in df.columns or "GFLOPS" not in df.columns:
                 continue
 
-            # Compute derived metrics cleanly without chained assignment
             flop_per_cycle = df["GFLOPS"] / spec.frequency_ghz
             efficiency_pct = (flop_per_cycle / spec.peak_flop_per_cycle) * 100.0
 
@@ -177,7 +201,6 @@ def load_dataset_for_uarch(input_dir: Path, spec: UArchSpec) -> pd.DataFrame:
         return pd.DataFrame()
 
     combined = pd.concat(dfs, ignore_index=True)
-    # Deduplicate measurements if any
     dedup_cols = ["UArchId", "Compiler", "Kernel", "M", "N", "K"]
     combined = combined.sort_values(by=["GFLOPS"], ascending=False).groupby(dedup_cols, as_index=False).first()
     return combined
@@ -196,8 +219,10 @@ class UArchChampion:
     peak_gflops: float
     peak_flop_per_cycle: float
     efficiency_pct: float
+    measured_efficiency_pct: Optional[float]
     matches_expected: bool
     data: pd.DataFrame
+    peak_m: int = 128
 
 
 def analyze_uarch(df: pd.DataFrame, spec: UArchSpec) -> Optional[UArchChampion]:
@@ -205,7 +230,6 @@ def analyze_uarch(df: pd.DataFrame, spec: UArchSpec) -> Optional[UArchChampion]:
     if df.empty:
         return None
 
-    # Identify the best (Kernel, Compiler) pair across all matrix sizes
     peak_by_kernel_compiler = df.groupby(["Kernel", "Compiler"], as_index=False)["GFLOPS"].max()
     best_row = peak_by_kernel_compiler.sort_values("GFLOPS", ascending=False).iloc[0]
 
@@ -213,10 +237,13 @@ def analyze_uarch(df: pd.DataFrame, spec: UArchSpec) -> Optional[UArchChampion]:
     best_compiler = best_row["Compiler"]
 
     champion_data = df[(df["Kernel"] == best_kernel) & (df["Compiler"] == best_compiler)].sort_values("M")
-    peak_gflops = champion_data["GFLOPS"].max()
-    peak_flop_per_cycle = champion_data["FLOP_per_cycle"].max()
-    efficiency_pct = (peak_flop_per_cycle / spec.peak_flop_per_cycle) * 100.0
+    peak_row = champion_data.sort_values("GFLOPS", ascending=False).iloc[0]
+    peak_gflops = float(peak_row["GFLOPS"])
+    peak_flop_per_cycle = float(peak_row["FLOP_per_cycle"])
+    peak_m = int(peak_row["M"])
 
+    efficiency_pct = (peak_flop_per_cycle / spec.peak_flop_per_cycle) * 100.0
+    measured_eff = (peak_flop_per_cycle / spec.measured_peak_flop_per_cycle * 100.0) if spec.measured_peak_flop_per_cycle else None
     matches_expected = (best_kernel == spec.expected_best_kernel)
 
     return UArchChampion(
@@ -227,161 +254,383 @@ def analyze_uarch(df: pd.DataFrame, spec: UArchSpec) -> Optional[UArchChampion]:
         peak_gflops=peak_gflops,
         peak_flop_per_cycle=peak_flop_per_cycle,
         efficiency_pct=efficiency_pct,
+        measured_efficiency_pct=measured_eff,
         matches_expected=matches_expected,
         data=champion_data,
+        peak_m=peak_m,
     )
 
 
 # ==============================================================================
-# Visualization Engine
+# Visualization Engine (Publication-Grade Light Mode)
 # ==============================================================================
 
+def format_uarch_axis_label(c: UArchChampion) -> str:
+    """Formats a concise two-line label for the Y-axis."""
+    name = c.spec.name
+    model = c.spec.cpu_model
+    if "Strix Point" in name and "HX 370" in model:
+        line1 = "AMD Zen 5 (Ryzen AI 9 HX 370)"
+    elif model and model not in name:
+        line1 = f"{name} ({model})"
+    else:
+        line1 = name
+    line2 = f"{c.spec.simd.upper()} @ {c.spec.frequency_ghz:.1f} GHz"
+    return f"{line1}\n{line2}"
+
+
+def group_champions_by_family(champions: List[UArchChampion], sort_metric: str = "efficiency") -> List[UArchChampion]:
+    """Groups champions by family: AVX-512, AVX2, NEON, RVV.
+
+    Returns the list sorted so that AVX-512 appears at the top of a barh chart.
+    """
+    family_order = ["avx512", "avx2", "neon", "rvv"]
+    grouped: List[UArchChampion] = []
+    for fam in family_order:
+        fam_champs = [c for c in champions if c.spec.simd == fam]
+        if sort_metric == "efficiency":
+            fam_champs.sort(key=lambda c: c.efficiency_pct, reverse=True)
+        else:
+            fam_champs.sort(key=lambda c: c.peak_flop_per_cycle, reverse=True)
+        grouped.extend(fam_champs)
+
+    # In barh, index 0 is at the bottom, so reverse to put AVX-512 at the top
+    return list(reversed(grouped))
+
+
 def plot_cross_uarch_efficiency(champions: List[UArchChampion], output_path: Path) -> None:
-    """Generates the comparison plot of all uarch champions in % of theoretical peak."""
-    fig, ax = plt.subplots(figsize=(12, 7))
+    """Generates an executive horizontal ranking bar chart grouped by SIMD family."""
+    fig, ax = plt.subplots(figsize=(13.5, 7.5))
 
-    # Reference 100% line
-    ax.axhline(100.0, color="#212121", linestyle="--", linewidth=1.5, label="Theoretical Peak (100%)", zorder=1)
-    ax.set_ylim(0, 105)
+    sorted_champs = group_champions_by_family(champions, sort_metric="efficiency")
+    y_positions = np.arange(len(sorted_champs))
+    bar_height = 0.58
 
-    sizes = set()
-    for champ in champions:
-        sizes.update(champ.data["M"].tolist())
-    sorted_sizes = sorted(sizes)
+    bar_colors = [SIMD_FAMILY_COLORS.get(c.spec.simd, "#0284c7") for c in sorted_champs]
 
-    for champ in champions:
-        c = UARCH_COLORS.get(champ.uarch_id, "#455A64")
-        m = UARCH_MARKERS.get(champ.uarch_id, "o")
-        label = f"{champ.spec.name} ({champ.spec.simd}) : {champ.kernel} [{champ.compiler}] (Peak: {champ.efficiency_pct:.1f}%)"
+    bars = ax.barh(
+        y_positions,
+        [c.efficiency_pct for c in sorted_champs],
+        height=bar_height,
+        color=bar_colors,
+        edgecolor=BORDER_COLOR,
+        linewidth=0.8,
+        zorder=3,
+    )
 
-        ax.plot(
-            champ.data["M"],
-            champ.data["Efficiency_pct"],
-            label=label,
-            color=c,
-            marker=m,
-            markersize=7,
-            linewidth=2.2,
-            zorder=3,
+    # 100% Theoretical Peak reference line
+    ax.axvline(100.0, color="#1e293b", linestyle="--", linewidth=1.5, zorder=4)
+    ax.text(
+        100.2,
+        len(sorted_champs) - 0.45,
+        "100% Theoretical Peak",
+        color="#1e293b",
+        fontsize=9,
+        fontweight="bold",
+        va="center",
+        zorder=5,
+    )
+
+    # Dock text cleanly on the left border inside the bar (white bold text):
+    for idx, (champ, bar) in enumerate(zip(sorted_champs, bars)):
+        eff = champ.efficiency_pct
+        gflops = champ.peak_gflops
+        flop_cyc = champ.peak_flop_per_cycle
+        m_dim = champ.peak_m
+
+        text_label = f" {eff:.1f}%  ({gflops:.1f} GFLOP/s @ M={m_dim} | {flop_cyc:.2f} FLOP/cyc)"
+        ax.text(
+            1.2,
+            idx,
+            text_label,
+            va="center",
+            ha="left",
+            color="#ffffff",
+            fontweight="bold",
+            fontsize=9.5,
+            zorder=5,
         )
 
-    ax.set_xscale("log", base=2)
-    ax.set_xticks(sorted_sizes)
-    ax.set_xticklabels([str(s) for s in sorted_sizes])
-    ax.set_xlabel("Matrix dimension M=N=K")
-    ax.set_ylabel("Efficiency (% of Theoretical Peak FLOP/cycle)")
-    ax.set_title("Cross-Microarchitecture GEMM Efficiency (% of Theoretical Peak)")
+    y_labels = [format_uarch_axis_label(c) for c in sorted_champs]
+    ax.set_yticks(y_positions)
+    ax.set_yticklabels(y_labels, fontsize=9.5)
 
-    ax.legend(loc="lower right", framealpha=0.9)
-    fig.tight_layout()
-    fig.savefig(output_path, format="svg")
+    ax.set_xlim(0, 105)
+    ax.set_xticks([0, 20, 40, 60, 80, 100])
+    ax.set_xticklabels(["0%", "20%", "40%", "60%", "80%", "100%"], fontsize=10)
+    ax.set_xlabel("Hardware Efficiency (% of Theoretical Peak FLOP/cycle)", fontsize=11, fontweight="bold", labelpad=10)
+
+    fig.text(
+        0.04, 0.965,
+        "Cross-Microarchitecture GEMM Peak Efficiency (% of Theoretical Peak)",
+        fontsize=13.5,
+        fontweight="bold",
+        color=TEXT_PRIMARY,
+        ha="left",
+    )
+    fig.text(
+        0.04, 0.935,
+        "FP64 Canonical DGEMM (α=1, β=0) | Evaluated across M=N=K ∈ {32, 64, 96, 128} (L1/L2 cache resident)",
+        fontsize=9.5,
+        color=TEXT_SECONDARY,
+        ha="left",
+    )
+
+    from matplotlib.patches import Patch
+    legend_elements = [
+        Patch(facecolor=SIMD_FAMILY_COLORS["avx512"], edgecolor=BORDER_COLOR, label="AVX-512"),
+        Patch(facecolor=SIMD_FAMILY_COLORS["avx2"], edgecolor=BORDER_COLOR, label="AVX2"),
+        Patch(facecolor=SIMD_FAMILY_COLORS["neon"], edgecolor=BORDER_COLOR, label="NEON"),
+        Patch(facecolor=SIMD_FAMILY_COLORS["rvv"], edgecolor=BORDER_COLOR, label="RVV 1.0"),
+    ]
+    fig.legend(
+        handles=legend_elements,
+        loc="upper right",
+        bbox_to_anchor=(0.96, 0.97),
+        ncol=4,
+        framealpha=0.92,
+        edgecolor=BORDER_COLOR,
+        facecolor=CARD_BG,
+        fontsize=9,
+    )
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_color(BORDER_COLOR)
+    ax.spines["bottom"].set_color(BORDER_COLOR)
+    ax.xaxis.grid(True, color=GRID_COLOR, linestyle="--", alpha=0.9)
+    ax.yaxis.grid(False)
+
+    plt.subplots_adjust(top=0.91, bottom=0.10, left=0.28, right=0.96)
+    if output_path.suffix == ".png":
+        fig.savefig(output_path, format="png", dpi=150)
+    else:
+        fig.savefig(output_path, format="svg")
     plt.close(fig)
     print(f"Generated: {output_path}")
 
 
 def plot_cross_uarch_flop_per_cycle(champions: List[UArchChampion], output_path: Path) -> None:
-    """Generates comparison in raw DP FLOP/cycle."""
-    fig, ax = plt.subplots(figsize=(12, 7))
+    """Generates comparison in raw DP FLOP/cycle grouped by SIMD family."""
+    fig, ax = plt.subplots(figsize=(13.5, 7.5))
 
-    sizes = set()
-    for champ in champions:
-        sizes.update(champ.data["M"].tolist())
-    sorted_sizes = sorted(sizes)
+    sorted_champs = group_champions_by_family(champions, sort_metric="flop_cycle")
+    y_positions = np.arange(len(sorted_champs))
+    bar_height = 0.58
 
-    for champ in champions:
-        c = UARCH_COLORS.get(champ.uarch_id, "#455A64")
-        m = UARCH_MARKERS.get(champ.uarch_id, "o")
-        label = f"{champ.spec.name} : {champ.kernel} [{champ.compiler}] (Peak: {champ.peak_flop_per_cycle:.1f} FLOP/cyc)"
+    bar_colors = [SIMD_FAMILY_COLORS.get(c.spec.simd, "#0284c7") for c in sorted_champs]
 
-        ax.plot(
-            champ.data["M"],
-            champ.data["FLOP_per_cycle"],
-            label=label,
-            color=c,
-            marker=m,
-            markersize=7,
-            linewidth=2.2,
+    bars = ax.barh(
+        y_positions,
+        [c.peak_flop_per_cycle for c in sorted_champs],
+        height=bar_height,
+        color=bar_colors,
+        edgecolor=BORDER_COLOR,
+        linewidth=0.8,
+        zorder=3,
+    )
+
+    max_val = max(c.peak_flop_per_cycle for c in sorted_champs)
+
+    # Dock text cleanly on the left border inside the bar:
+    for idx, (champ, bar) in enumerate(zip(sorted_champs, bars)):
+        val = champ.peak_flop_per_cycle
+        theo = champ.spec.peak_flop_per_cycle
+        eff = champ.efficiency_pct
+        gflops = champ.peak_gflops
+        m_dim = champ.peak_m
+        text_label = f" {val:.2f} / {theo:.0f} FLOP/cyc  ({eff:.1f}% peak | {gflops:.1f} GFLOP/s @ M={m_dim})"
+        ax.text(
+            max_val * 0.015,
+            idx,
+            text_label,
+            va="center",
+            ha="left",
+            color="#ffffff",
+            fontweight="bold",
+            fontsize=9.5,
+            zorder=5,
         )
 
-    ax.set_xscale("log", base=2)
-    ax.set_xticks(sorted_sizes)
-    ax.set_xticklabels([str(s) for s in sorted_sizes])
-    ax.set_xlabel("Matrix dimension M=N=K")
-    ax.set_ylabel("Performance (DP FLOP / cycle)")
-    ax.set_title("Cross-Microarchitecture GEMM Compute Density (DP FLOP/cycle)")
+    y_labels = [format_uarch_axis_label(c) for c in sorted_champs]
+    ax.set_yticks(y_positions)
+    ax.set_yticklabels(y_labels, fontsize=9.5)
 
-    ax.legend(loc="upper left", framealpha=0.9)
-    fig.tight_layout()
-    fig.savefig(output_path, format="svg")
+    ax.set_xlim(0, max_val * 1.08)
+    ax.set_xlabel("Compute Density (DP FLOP / cycle)", fontsize=11, fontweight="bold", labelpad=10)
+
+    fig.text(
+        0.04, 0.965,
+        "Cross-Microarchitecture GEMM Compute Density (DP FLOP/cycle)",
+        fontsize=13.5,
+        fontweight="bold",
+        color=TEXT_PRIMARY,
+        ha="left",
+    )
+    fig.text(
+        0.04, 0.935,
+        "Higher is better | Evaluated across M=N=K ∈ {32, 64, 96, 128} | Theoretical ceiling defined by datapath width & execution ports",
+        fontsize=9.5,
+        color=TEXT_SECONDARY,
+        ha="left",
+    )
+
+    from matplotlib.patches import Patch
+    legend_elements = [
+        Patch(facecolor=SIMD_FAMILY_COLORS["avx512"], edgecolor=BORDER_COLOR, label="AVX-512"),
+        Patch(facecolor=SIMD_FAMILY_COLORS["avx2"], edgecolor=BORDER_COLOR, label="AVX2"),
+        Patch(facecolor=SIMD_FAMILY_COLORS["neon"], edgecolor=BORDER_COLOR, label="NEON"),
+        Patch(facecolor=SIMD_FAMILY_COLORS["rvv"], edgecolor=BORDER_COLOR, label="RVV 1.0"),
+    ]
+    fig.legend(
+        handles=legend_elements,
+        loc="upper right",
+        bbox_to_anchor=(0.96, 0.97),
+        ncol=4,
+        framealpha=0.92,
+        edgecolor=BORDER_COLOR,
+        facecolor=CARD_BG,
+        fontsize=9,
+    )
+
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.spines["left"].set_color(BORDER_COLOR)
+    ax.spines["bottom"].set_color(BORDER_COLOR)
+    ax.xaxis.grid(True, color=GRID_COLOR, linestyle="--", alpha=0.9)
+    ax.yaxis.grid(False)
+
+    plt.subplots_adjust(top=0.91, bottom=0.10, left=0.28, right=0.96)
+    if output_path.suffix == ".png":
+        fig.savefig(output_path, format="png", dpi=150)
+    else:
+        fig.savefig(output_path, format="svg")
     plt.close(fig)
     print(f"Generated: {output_path}")
 
 
 def plot_uarch_overview(df: pd.DataFrame, champ: UArchChampion, output_path: Path) -> None:
-    """Generates an individual overview figure for a specific uarch."""
-    fig, ax1 = plt.subplots(figsize=(11, 6.5))
-
-    # Dual axis: GFLOP/s on left, FLOP/cycle on right
+    """Generates a single-panel publication figure showing scaling vs matrix dimensions (M=N=K)."""
+    fig, ax1 = plt.subplots(figsize=(10.5, 6.0))
     ax2 = ax1.twinx()
 
     freq = champ.spec.frequency_ghz
     peak_gflops = champ.spec.peak_gflops
     peak_flop_per_cycle = champ.spec.peak_flop_per_cycle
 
-    # Peak lines
-    ax1.axhline(peak_gflops, color="black", linestyle=":", linewidth=1.5,
-                label=f"Peak: {peak_gflops:.1f} GFLOP/s ({peak_flop_per_cycle:.0f} FLOP/cyc)")
+    sorted_sizes = sorted(df["M"].unique())
 
-    # Find Top 3 kernels by peak GFLOPS
+    # Theoretical peak horizontal line
+    ax1.axhline(
+        peak_gflops,
+        color="#1e293b",
+        linestyle="--",
+        linewidth=1.5,
+        label=f"Theoretical Peak: {peak_gflops:.1f} GFLOP/s ({peak_flop_per_cycle:.0f} FLOP/cyc | 100%)",
+        zorder=2,
+    )
+
+    # Top evaluated kernels + scalar baseline
     kernel_peaks = df.groupby("Kernel")["GFLOPS"].max().sort_values(ascending=False)
     top_kernels = list(kernel_peaks.index[:4])
     if "ijk" in df["Kernel"].values and "ijk" not in top_kernels:
         top_kernels.append("ijk")
 
-    sorted_sizes = sorted(df["M"].unique())
-
-    palette = ["#D32F2F", "#1976D2", "#388E3C", "#7B1FA2", "#F57C00", "#616161"]
-    markers = ["o", "s", "^", "D", "v", "x"]
-
-    for idx, kern in enumerate(top_kernels):
-        k_df = df[df["Kernel"] == kern]
-        # Pick winning compiler for this kernel
+    panel_kernels = []
+    for k in top_kernels:
+        k_df = df[df["Kernel"] == k]
         best_comp = k_df.groupby("Compiler")["GFLOPS"].max().idxmax()
-        line_data = k_df[k_df["Compiler"] == best_comp].sort_values("M")
+        peak_k_gflops = k_df[k_df["Compiler"] == best_comp]["GFLOPS"].max()
+        panel_kernels.append({
+            "kernel": k,
+            "compiler": best_comp,
+            "gflops": peak_k_gflops,
+            "is_champ": (k == champ.kernel),
+            "is_scalar": (k == "ijk"),
+        })
 
-        is_champ = (kern == champ.kernel)
-        lw = 2.6 if is_champ else 1.6
-        label = f"{kern} [{best_comp}]"
+    # Sort so champion is plotted last (on top)
+    panel_kernels = sorted(panel_kernels, key=lambda x: x["gflops"])
+
+    line_palette = ["#0284c7", "#7c3aed", "#db2777", "#dc2626"]
+    line_markers = ["s", "^", "D", "v"]
+
+    for idx, k_info in enumerate(panel_kernels):
+        k_df = df[(df["Kernel"] == k_info["kernel"]) & (df["Compiler"] == k_info["compiler"])].sort_values("M")
+        is_champ = k_info["is_champ"]
+        is_scalar = k_info["is_scalar"]
+
+        c = "#059669" if is_champ else ("#d97706" if is_scalar else line_palette[idx % len(line_palette)])
+        m = "o" if is_champ else ("x" if is_scalar else line_markers[idx % len(line_markers)])
+        lw = 2.6 if is_champ else (1.6 if not is_scalar else 1.3)
+        ls = "-" if is_champ else ("--" if not is_scalar else ":")
+        ms = 7 if is_champ else 6
+
+        lbl = f"{k_info['kernel']} [{k_info['compiler']}]"
         if is_champ:
-            label += " ★ (Champion)"
-        elif kern == "ijk":
-            label += " (Scalar Baseline)"
+            lbl = f"★ {lbl} (Champion — Peak: {champ.peak_gflops:.1f} GFLOP/s @ M={champ.peak_m})"
+        elif is_scalar:
+            lbl = f"ijk (Scalar Baseline) [{k_info['compiler']}]"
 
-        c = palette[idx % len(palette)]
-        m = markers[idx % len(markers)]
+        ax1.plot(
+            k_df["M"],
+            k_df["GFLOPS"],
+            label=lbl,
+            color=c,
+            marker=m,
+            markersize=ms,
+            linewidth=lw,
+            linestyle=ls,
+            zorder=4 if is_champ else 3,
+        )
 
-        ax1.plot(line_data["M"], line_data["GFLOPS"], label=label,
-                 color=c, marker=m, linewidth=lw, markersize=6)
+        if is_champ:
+            ax1.fill_between(k_df["M"], 0, k_df["GFLOPS"], color=c, alpha=0.06, zorder=1)
 
     ax1.set_xscale("log", base=2)
     ax1.set_xticks(sorted_sizes)
-    ax1.set_xticklabels([str(s) for s in sorted_sizes])
-    ax1.set_xlabel("Matrix dimension M=N=K")
-    ax1.set_ylabel("Throughput (GFLOP/s)")
+    ax1.set_xticklabels([str(s) for s in sorted_sizes], fontsize=10)
+    ax1.set_xlabel("Matrix dimension M=N=K", fontsize=10.5, fontweight="bold", labelpad=8)
+    ax1.set_ylabel("Throughput (GFLOP/s)", fontsize=10.5, fontweight="bold", labelpad=8)
+    ax1.set_ylim(0, peak_gflops * 1.08)
 
-    # Synchronize right axis (FLOP/cycle = GFLOPS / freq)
-    y1_min, y1_max = ax1.get_ylim()
-    ax1.set_ylim(0, max(y1_max, peak_gflops * 1.05))
-    ax2.set_ylim(0, ax1.get_ylim()[1] / freq)
-    ax2.set_ylabel("Efficiency (DP FLOP / cycle)")
+    # Right axis: Hardware efficiency (% of theoretical peak)
+    ax2.set_ylim(0, 108)
+    ax2.set_yticks([0, 20, 40, 60, 80, 100])
+    ax2.set_yticklabels(["0%", "20%", "40%", "60%", "80%", "100%"], fontsize=10)
+    ax2.set_ylabel("Hardware Efficiency (% of Theoretical Peak)", fontsize=10.5, fontweight="bold", labelpad=8)
 
-    title = f"{champ.spec.name} ({champ.spec.cpu_model}) — {champ.spec.simd} @ {freq:.1f} GHz"
-    subtitle = f"Champion: {champ.kernel} [{champ.compiler}] | Peak: {champ.peak_gflops:.1f} GFLOP/s ({champ.efficiency_pct:.1f}% of Peak)"
-    ax1.set_title(f"{title}\n{subtitle}", fontsize=12)
+    # Legend cleanly placed in center-right where data lines do not collide
+    ax1.legend(
+        loc="center right",
+        framealpha=0.94,
+        edgecolor=BORDER_COLOR,
+        facecolor=CARD_BG,
+        fontsize=9,
+    )
 
-    ax1.legend(loc="upper left", framealpha=0.9)
-    fig.tight_layout()
-    fig.savefig(output_path, format="svg")
+    # Styling
+    ax1.spines["top"].set_visible(False)
+    ax2.spines["top"].set_visible(False)
+    ax1.spines["left"].set_color(BORDER_COLOR)
+    ax2.spines["right"].set_color(BORDER_COLOR)
+    ax1.spines["bottom"].set_color(BORDER_COLOR)
+    ax1.grid(True, color=GRID_COLOR, linestyle="--", alpha=0.9)
+    ax2.grid(False)
+
+    # Title and subtitle
+    title = f"{champ.spec.name} ({champ.spec.cpu_model}) — {champ.spec.simd.upper()} @ {freq:.1f} GHz"
+    subtitle = (
+        f"Champion: {champ.kernel} [{champ.compiler}] | "
+        f"Peak Throughput: {champ.peak_gflops:.1f} GFLOP/s ({champ.efficiency_pct:.1f}% of Peak @ M={champ.peak_m})"
+    )
+    ax1.set_title(f"{title}\n{subtitle}", fontsize=12, fontweight="bold", pad=12)
+
+    plt.subplots_adjust(top=0.89, bottom=0.11, left=0.10, right=0.90)
+    if output_path.suffix == ".png":
+        fig.savefig(output_path, format="png", dpi=150)
+    else:
+        fig.savefig(output_path, format="svg")
     plt.close(fig)
     print(f"Generated: {output_path}")
 
@@ -392,18 +641,19 @@ def plot_uarch_overview(df: pd.DataFrame, champ: UArchChampion, output_path: Pat
 
 def print_summary_table(champions: List[UArchChampion]) -> None:
     """Prints a formatted comparative table in the console."""
-    print("\n" + "=" * 120)
+    print("\n" + "=" * 135)
     print("  GEMMBench — Microarchitectural Performance & Peak Efficiency Summary")
-    print("=" * 120)
+    print("=" * 135)
     header = (
         f"{'SIMD':<8} | {'Microarchitecture':<22} | {'Champion Kernel':<34} | "
-        f"{'Comp':<5} | {'Peak GFLOP/s':<12} | {'FLOP/cyc':<9} | {'% Peak':<8} | {'Expected Match?':<15}"
+        f"{'Comp':<5} | {'Peak GFLOP/s':<12} | {'FLOP/cyc':<9} | {'% Theo':<8} | {'% Meas':<8} | {'Expected Match?':<15}"
     )
     print(header)
-    print("-" * 120)
+    print("-" * 135)
 
     for champ in champions:
         match_str = "✓ MATCH" if champ.matches_expected else f"✗ MISMATCH ({champ.spec.expected_best_kernel})"
+        meas_str = f"{champ.measured_efficiency_pct:.1f}%" if champ.measured_efficiency_pct is not None else "N/A"
         row = (
             f"{champ.spec.simd:<8} | "
             f"{champ.spec.name:<22} | "
@@ -412,10 +662,11 @@ def print_summary_table(champions: List[UArchChampion]) -> None:
             f"{champ.peak_gflops:<12.1f} | "
             f"{champ.peak_flop_per_cycle:<9.2f} | "
             f"{champ.efficiency_pct:<7.1f}% | "
+            f"{meas_str:<8} | "
             f"{match_str}"
         )
         print(row)
-    print("=" * 120 + "\n")
+    print("=" * 135 + "\n")
 
 
 # ==============================================================================

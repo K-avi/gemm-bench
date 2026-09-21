@@ -22,7 +22,6 @@ venv/
 # Active benchmark outputs (preserve reference datasets)
 results/*.csv
 !results/reference/*.csv
-plots/
 test_plots/
 
 # IDE and Editor

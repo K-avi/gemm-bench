@@ -1,33 +1,80 @@
 # GEMM Benchmark Suite across Modern Microarchitectures (MIPPv2)
 
 > [!WARNING]
-> **Work in Progress (WIP)**: This repository is under active development. Microkernels, benchmark drivers, and analysis tools are continuously refined.
+> **Work in Progress (WIP)**: This repository is under active development. Microkernels, benchmark drivers, and analysis tools are actively worked on.
 
 A high-performance General Matrix Multiply (DGEMM) microbenchmark and exploration suite built on top of [MIPPv2](https://github.com/aff3ct/MIPP/tree/develop) (MyIntrinsics++ v2).
 
-This suite systematically evaluates microarchitectural efficiency, vector register tiling strategies, and compiler code generation across **9 distinct CPU microarchitectures** spanning **x86_64** (AVX2, AVX-512), **AArch64** (NEON), and **RISC-V** (RVV 1.0).
+This suite evaluates microarchitectural efficiency, vector register tiling strategies, and compiler code generation across **9 distinct CPU microarchitectures** spanning **x86_64** (AVX2, AVX-512), **AArch64** (NEON), and **RISC-V** (RVV 1.0).
 
 ---
 
 ## Microarchitectural Performance & Peak Efficiency
 
-The benchmark evaluates single-thread, compute-bound double-precision GEMM throughput against the hardware theoretical peak ($\text{FLOP/cycle} \times \text{Frequency}$). Across modern out-of-order execution engines, the tuned microkernels achieve **90% to 99% of theoretical hardware saturation**:
+The benchmark evaluates single-thread, compute-bound double-precision GEMM throughput against the hardware theoretical peak ($\text{FLOP/cycle} \times \text{Frequency}$).
 
-| SIMD | Microarchitecture | CPU / SoC Model | Freq (GHz) | Peak FLOP/cyc | Champion Kernel | Compiler | Peak GFLOP/s | FLOP/cyc | % of Peak |
+> [!IMPORTANT]
+> **Benchmark Specifications & Precision**:
+> - **Datatype**: Strictly **IEEE-754 double precision (`double` / FP64)**, *not* single precision (`float` / FP32).
+> - **Canonical DGEMM Formulation**: All reported performance metrics evaluate the canonical matrix multiply form $C \leftarrow \alpha (A \times B) + \beta C$ with **$\alpha = 1.0$** and **$\beta = 0.0$** ($C \leftarrow A \times B$).
+> - **Non-Canonical Overhead**: Non-canonical configurations ($\beta \neq 0.0$, $\alpha \neq 1.0$) typically incur a performance penalty. The epilogue must load existing $C$ tiles from memory/cache, issue additional scaling and accumulation instructions ($\alpha \cdot \text{acc} + \beta \cdot C$), and write back, consuming additional memory bandwidth and execution cycles.
+> - **Operation Count**: Floating-point throughput is strictly computed as $\text{GFLOP/s} = \frac{2 \times M \times N \times K}{\text{Time (seconds)} \times 10^9}$.
+
+Across all target ISA families (x86_64, ARM NEON, RISC-V Vector), tuned microkernels achieve **>90% of theoretical peak performance** (reaching up to **>98%** on some uarchs):
+
+| SIMD | Microarchitecture | CPU / SoC Model | Freq (GHz) | Peak FLOP/cyc | Champion Kernel | Comp | Peak GFLOP/s | DGEMM FLOP/cyc | % of Peak |
 | :--- | :--- | :--- | :---: | :---: | :--- | :---: | :---: | :---: | :---: |
 | **AVX-512** | **AMD Zen 4** | Ryzen 9 7900X | 5.4 | 16.0 | `mippv2_firestorm_mr4_nr4_fmaddi` | GCC | 85.4 | 15.82 | **98.9 %** |
 | **AVX-512** | **AMD Zen 5 Strix Point** | Ryzen AI 9 HX 370 | 5.1 | 16.0 | `mippv2_firestorm_mr4_nr4_fmaddi` | GCC | 80.4 | 15.77 | **98.6 %** |
-| **NEON** | **Apple M1 Firestorm** | M1 Ultra (P-core) | 3.0 | 16.0 | `mippv2_x60_mr6_nr4_fmaddi` | GCC | 47.5 | 15.83 | **98.9 %** |
-| **NEON** | **Raspberry Pi 5** | Cortex-A76 (BCM2712) | 2.4 | 8.0 | `mippv2_a76_mr6_nr3` | GCC | 18.0 | 7.49 | **93.6 %** |
-| **RVV 1.0** | **SpacemiT X100** | K3 SoC (VLEN=256) | 2.2 | 8.0 | `mippv2_x100_register_blocked_apack4` | Clang | 16.3 | 7.42 | **92.7 %** |
-| **AVX2** | **Intel Meteor Lake** | Redwood Cove P-Core | 5.1 | 16.0 | `mippv2_meteorlake_mr4_nr3` | GCC | 74.8 | 14.66 | **91.6 %** |
+| **AVX2** | **Intel Meteor Lake** | Redwood Cove P-Core | 5.1** | 16.0 | `mippv2_meteorlake_mr4_nr3` | GCC | 74.8 | 14.66 | **91.6 %** |
 | **AVX2** | **Intel Skylake** | Core i5-6200U | 2.3 | 16.0 | `mippv2_meteorlake_mr4_nr3` | Clang | 33.4 | 14.53 | **90.8 %** |
-| **RVV 1.0** | **SpacemiT A100** | K3 SoC (VLEN=1024) | 1.8 | 8.0 | `mippv2_a100_mr7_nr2_lmul2_pipe` | GCC | 11.7 | 6.48 | **81.0 %** |
+| **NEON** | **Apple M1 Firestorm** | M1 Ultra (P-core) | 3.0 | 16.0 | `mippv2_x60_mr6_nr4_fmaddi` | GCC | 47.5 | 15.83 | **98.9 %** |
+| **NEON** | **Cortex-A76** | Raspberry Pi 5 | 2.4 | 8.0 | `mippv2_a76_mr6_nr3` | GCC | 18.0 | 7.49 | **93.6 %** |
+| **RVV 1.0** | **SpacemiT X100** | K3 SoC (VLEN=256) | 2.2* | 8.0 | `mippv2_x100_register_blocked_apack4` | Clang | 16.3 | 7.42 | **92.7 %** |
+| **RVV 1.0** | **SpacemiT A100** | K3 SoC (VLEN=1024) | 1.8* | 8.0 | `mippv2_a100_mr7_nr2_lmul2_pipe` | GCC | 11.7 | 6.48 | **81.0 %** |
 | **RVV 1.0** | **SpacemiT X60** | BPI-F3 SoC (VLEN=256)| 1.6 | 8.0 | `mippv2_a100_mr7_nr4_pipe` | GCC | 6.2 | 3.89 | **48.7 %** |
+
+> [!NOTE]
+> **Roadmap & Perspectives: Empirical Hardware Peak Measurement**:
+> - Currently, all efficiencies are reported against the **Theoretical Peak** ($\text{FLOP/cycle}$), calculated from the architectural port layout (e.g. $2 \times 4 \times 2 = 16\text{ DP FLOP/cycle}$ for AVX2).
+> - **Ongoing Work**: Incorporating an automated cross-platform microarchitectural probe (generalized from `x100_uarch_exp/broadcast_bench.cpp` with $16+$ accumulators in registers) directly into the driver suite to measure the empirical hardware FPU ceiling on each target machine and isolate pure FMA pipeline saturation from L1D load throughput.
+
+> [!IMPORTANT]
+> **Cluster Clock Frequency Constraints (SpacemiT X100 & A100)**:
+> - **SpacemiT X100**: The SoC is hardware-rated up to **2.4 GHz**. On the LIP6 Dalek cluster node (`mono-sip-k3`), it is governed at **2.2 GHz** without root/sudo permissions to modify CPU governors or P-states.
+> - **SpacemiT A100**: The SoC is hardware-rated up to **2.0 GHz**. On the cluster node, it is governed at **1.8 GHz** (with the vector accelerator unlocked via `/proc/set_ai_thread`).
+> 
+> All reported GFLOP/s and FLOP/cycle figures are computed against these operating frequencies.
+
+> [!IMPORTANT]
+> **Intel Meteor Lake Frequency Characteristics (Burst vs. Sustained)**:
+> - **5.10 GHz** is the peak single-core burst/turbo frequency of the Redwood Cove P-core.
+> - Under sustained heavy compute loads, thermal and power limits typically throttle the core frequency to **~4.70 GHz**.
+> - For our reported champion microkernel measurements, we verified via hardware frequency monitoring that the core sustained the full **5.10 GHz** burst clock during the benchmark runs.
 
 > [!NOTE]
 > **Zen 5 Strix Point Datapath Note**:
 > While server/desktop Zen 5 (Turin / Granite Ridge) incorporates dual native 512-bit FMA units ($32\text{ DP FLOP/cycle}$), AMD's mobile Strix Point SoC implements dual 256-bit physical datapaths (*double-pumped* 512-bit FMA, identical to Zen 4), yielding a physical ceiling of **$16\text{ DP FLOP/cycle}$**. At $15.77\text{ FLOP/cycle}$, the execution pipes are fully saturated.
+
+
+---
+
+## Performance Visualizations
+
+### Cross-Microarchitecture Efficiency (% of Theoretical Peak)
+
+![Cross-UArch Efficiency](plots/cross_uarch_efficiency_comparison.svg)
+
+### Representative Architecture Profiles
+
+#### AMD Zen 4 (AVX-512 @ 5.4 GHz) — x86_64
+![Zen 4 Overview](plots/avx512_zen4_overview.svg)
+
+#### Apple M1 Firestorm (NEON @ 3.0 GHz) — AArch64
+![M1 Overview](plots/neon_m1_overview.svg)
+
+#### SpacemiT X100 (RVV 256-bit @ 2.2 GHz) — RISC-V
+![X100 Overview](plots/rvv_x100_overview.svg)
 
 ---
 
@@ -99,7 +146,6 @@ ctest --test-dir build --output-on-failure
 
 ## Running Benchmarks
 
-### Local Execution (`run_benchmarks.sh`)
 Benchmarks are driven by `./run_benchmarks.sh <platform> [options] [compilers...]`.
 
 Always specify `-o <uarch>_<simd>` to ensure non-colliding, standardized result files:
@@ -116,21 +162,6 @@ Always specify `-o <uarch>_<simd>` to ensure non-colliding, standardized result 
 
 # Benchmark SpacemiT X100 with clean rebuild
 ./run_benchmarks.sh rvv_x100 -o x100_rvv --rebuild clang
-```
-
-Result files are saved in `results/gemm_results_<prefix>_<compiler>.csv` (e.g. `results/gemm_results_skylake_avx2_gcc.csv`).
-
-### Remote Slurm Cluster Execution (`tools/run_cluster_benchmarks.sh`)
-When benchmarking across heterogeneous cluster nodes (such as the LIP6 Dalek cluster):
-```bash
-# Run benchmarks on Raspberry Pi 5 and Zen 5 in parallel
-./tools/run_cluster_benchmarks.sh rpi5 zen5
-
-# Run only Catch2 unit tests on all available cluster nodes
-./tools/run_cluster_benchmarks.sh all --tests-only
-
-# Run custom matrix sizes sequentially
-./tools/run_cluster_benchmarks.sh --sequential -s "32 64 96 128" meteorlake zen4
 ```
 
 ---
