@@ -223,3 +223,42 @@ TEST_CASE("Matrix leading dimension respects padding",
 
     alloc.freePacked(m);
 }
+
+TEST_CASE("ColMajor matrix allocation respects padding and layout",
+          "[alloc]")
+{
+    using T = double;
+
+    SimdAlloc<T> alloc(
+        8,
+        1,
+        64
+    );
+
+    constexpr size_t rows = 15;
+    constexpr size_t cols = 23;
+
+    auto m = alloc.allocatePacked<PackedColMajor<T>>(
+        rows,
+        cols,
+        InitMode::Random
+    );
+
+    REQUIRE(m.rows == rows);
+    REQUIRE(m.cols == cols);
+    REQUIRE(m.padded_rows == 64);
+    REQUIRE(m.padded_cols == 64);
+    REQUIRE(m.ld == m.padded_rows);
+
+    const auto address = reinterpret_cast<uintptr_t>(m.data);
+    REQUIRE(address % 64 == 0);
+
+    m(0, 0) = 42.0;
+    m(14, 22) = 84.0;
+    REQUIRE(m(0, 0) == 42.0);
+    REQUIRE(m(14, 22) == 84.0);
+    REQUIRE(m[0][0] == 42.0);
+    REQUIRE(m[22][14] == 84.0);
+
+    alloc.freePacked(m);
+}

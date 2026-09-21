@@ -11,30 +11,6 @@
 
 using namespace GEMMBench;
 
-static constexpr UKernelType kernel_tilesize66[] = {
-    UKernelType::mippv2_x100_register_blocked_lmul1,
-    UKernelType::mippv2_x100_register_blocked_lmul2,
-    UKernelType::mippv2_x100_register_blocked_lmul4,
-#ifdef GEMMBENCH_ENABLE_EXPLO
-    UKernelType::mippv2_x100_register_blocked_lmul8,
-#endif
-    UKernelType::mippv2_x100_register_blocked_apack4,
-    UKernelType::mippv2_panel_x100_lmul1,
-    UKernelType::mippv2_panel_x100_lmul2,
-    UKernelType::mippv2_panel_x100_lmul4,
-#ifdef GEMMBENCH_ENABLE_EXPLO
-    UKernelType::mippv2_panel_x100_lmul8
-#endif
-};
-
-static inline bool isKernelTileSize66(UKernelType kernel) {
-  for (const auto &k : kernel_tilesize66) {
-    if (kernel == k)
-      return true;
-  }
-  return false;
-}
-
 #define BENCH_KERNEL(CALL)                                                     \
   do {                                                                         \
     for (size_t i = 0; i < cfg.warmup; ++i)                                    \
@@ -53,6 +29,15 @@ static inline bool isKernelTileSize66(UKernelType kernel) {
     return duration.count();                                                   \
   } while (false)
 
+#define BENCH_KERNEL_FASTPATH(CALL_FAST, CALL_FULL)                            \
+  do {                                                                         \
+    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {                                 \
+      BENCH_KERNEL(CALL_FAST);                                                 \
+    } else {                                                                   \
+      BENCH_KERNEL(CALL_FULL);                                                 \
+    }                                                                          \
+  } while (false)
+
 template <typename T>
 inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
                      const PackedRowMajor<T> &A, const PackedRowMajor<T> &B,
@@ -67,12 +52,9 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
         gemm.gemm_blocked_register_blocked(A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_skylake_register_blocked:
-    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
-      BENCH_KERNEL(gemm.gemm_mippv2_skylake_register_blocked(A, B, C));
-    } else {
-      BENCH_KERNEL(gemm.gemm_mippv2_skylake_register_blocked(A, B, C, cfg.alpha,
-                                                             cfg.beta));
-    }
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_skylake_register_blocked(A, B, C),
+        gemm.gemm_mippv2_skylake_register_blocked(A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_skylake_lmul_register_blocked:
     BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul_register_blocked<1>(
@@ -87,121 +69,79 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
         A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_meteorlake_mr4_nr3:
-    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
-      BENCH_KERNEL(gemm.gemm_mippv2_meteorlake_mr4_nr3(A, B, C));
-    } else {
-      BENCH_KERNEL(
-          gemm.gemm_mippv2_meteorlake_mr4_nr3(A, B, C, cfg.alpha, cfg.beta));
-    }
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_meteorlake_mr4_nr3(A, B, C),
+        gemm.gemm_mippv2_meteorlake_mr4_nr3(A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_a76_mr6_nr3:
-    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
-      BENCH_KERNEL(gemm.gemm_mippv2_a76_mr6_nr3(A, B, C));
-    } else {
-      BENCH_KERNEL(gemm.gemm_mippv2_a76_mr6_nr3(A, B, C, cfg.alpha, cfg.beta));
-    }
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_a76_mr6_nr3(A, B, C),
+        gemm.gemm_mippv2_a76_mr6_nr3(A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_firestorm_mr4_nr4:
-    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
-      BENCH_KERNEL(gemm.gemm_mippv2_firestorm_mr4_nr4(A, B, C));
-    } else {
-      BENCH_KERNEL(
-          gemm.gemm_mippv2_firestorm_mr4_nr4(A, B, C, cfg.alpha, cfg.beta));
-    }
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_firestorm_mr4_nr4(A, B, C),
+        gemm.gemm_mippv2_firestorm_mr4_nr4(A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_firestorm_mr4_nr4_fmaddi:
-    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
-      BENCH_KERNEL(gemm.gemm_mippv2_firestorm_mr4_nr4_fmaddi(A, B, C));
-    } else {
-      BENCH_KERNEL(gemm.gemm_mippv2_firestorm_mr4_nr4_fmaddi(A, B, C, cfg.alpha,
-                                                             cfg.beta));
-    }
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_firestorm_mr4_nr4_fmaddi(A, B, C),
+        gemm.gemm_mippv2_firestorm_mr4_nr4_fmaddi(A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_firestorm_mr6_nr4:
-    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
-      BENCH_KERNEL(gemm.gemm_mippv2_firestorm_mr6_nr4(A, B, C));
-    } else {
-      BENCH_KERNEL(
-          gemm.gemm_mippv2_firestorm_mr6_nr4(A, B, C, cfg.alpha, cfg.beta));
-    }
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_firestorm_mr6_nr4(A, B, C),
+        gemm.gemm_mippv2_firestorm_mr6_nr4(A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_firestorm_mr6_nr4_fmaddi:
-    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
-      BENCH_KERNEL(gemm.gemm_mippv2_firestorm_mr6_nr4_fmaddi(A, B, C));
-    } else {
-      BENCH_KERNEL(gemm.gemm_mippv2_firestorm_mr6_nr4_fmaddi(A, B, C, cfg.alpha,
-                                                             cfg.beta));
-    }
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_firestorm_mr6_nr4_fmaddi(A, B, C),
+        gemm.gemm_mippv2_firestorm_mr6_nr4_fmaddi(A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_zen4_mr4_nr4:
-    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
-      BENCH_KERNEL(gemm.gemm_mippv2_zen4_mr4_nr4(A, B, C));
-    } else {
-      BENCH_KERNEL(gemm.gemm_mippv2_zen4_mr4_nr4(A, B, C, cfg.alpha, cfg.beta));
-    }
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_zen4_mr4_nr4(A, B, C),
+        gemm.gemm_mippv2_zen4_mr4_nr4(A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_zen4_mr4_nr4_fmaddi:
-    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
-      BENCH_KERNEL(gemm.gemm_mippv2_zen4_mr4_nr4_fmaddi(A, B, C));
-    } else {
-      BENCH_KERNEL(
-          gemm.gemm_mippv2_zen4_mr4_nr4_fmaddi(A, B, C, cfg.alpha, cfg.beta));
-    }
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_zen4_mr4_nr4_fmaddi(A, B, C),
+        gemm.gemm_mippv2_zen4_mr4_nr4_fmaddi(A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_x100_register_blocked_lmul1:
-    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
-      BENCH_KERNEL(gemm.template gemm_mippv2_x100_register_blocked<1>(A, B, C));
-    } else {
-      BENCH_KERNEL(gemm.template gemm_mippv2_x100_register_blocked<1>(
-          A, B, C, cfg.alpha, cfg.beta));
-    }
+    BENCH_KERNEL_FASTPATH(
+        gemm.template gemm_mippv2_x100_register_blocked<1>(A, B, C),
+        gemm.template gemm_mippv2_x100_register_blocked<1>(A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_x100_register_blocked_lmul2:
-    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
-      BENCH_KERNEL(gemm.template gemm_mippv2_x100_register_blocked<2>(A, B, C));
-    } else {
-      BENCH_KERNEL(gemm.template gemm_mippv2_x100_register_blocked<2>(
-          A, B, C, cfg.alpha, cfg.beta));
-    }
+    BENCH_KERNEL_FASTPATH(
+        gemm.template gemm_mippv2_x100_register_blocked<2>(A, B, C),
+        gemm.template gemm_mippv2_x100_register_blocked<2>(A, B, C, cfg.alpha, cfg.beta));
+
   case UKernelType::mippv2_x100_register_blocked_lmul4:
-    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
-      BENCH_KERNEL(gemm.template gemm_mippv2_x100_register_blocked<4>(A, B, C));
-    } else {
-      BENCH_KERNEL(gemm.template gemm_mippv2_x100_register_blocked<4>(
-          A, B, C, cfg.alpha, cfg.beta));
-    }
+    BENCH_KERNEL_FASTPATH(
+        gemm.template gemm_mippv2_x100_register_blocked<4>(A, B, C),
+        gemm.template gemm_mippv2_x100_register_blocked<4>(A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_x100_register_blocked_apack4:
-    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
-      BENCH_KERNEL(gemm.gemm_mippv2_x100_register_blocked_apack4(A, B, C));
-    } else {
-      BENCH_KERNEL(gemm.gemm_mippv2_x100_register_blocked_apack4(
-          A, B, C, cfg.alpha, cfg.beta));
-    }
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_x100_register_blocked_apack4(A, B, C),
+        gemm.gemm_mippv2_x100_register_blocked_apack4(A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_x60_mr6_nr4_fmaddi:
-    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
-      BENCH_KERNEL(gemm.gemm_mippv2_x60_mr6_nr4_fmaddi(A, B, C));
-    } else {
-      BENCH_KERNEL(
-          gemm.gemm_mippv2_x60_mr6_nr4_fmaddi(A, B, C, cfg.alpha, cfg.beta));
-    }
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_x60_mr6_nr4_fmaddi(A, B, C),
+        gemm.gemm_mippv2_x60_mr6_nr4_fmaddi(A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_a100_mr7_nr4_pipe:
-    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
-      BENCH_KERNEL(gemm.gemm_mippv2_a100_mr7_nr4_pipe(A, B, C));
-    } else {
-      BENCH_KERNEL(
-          gemm.gemm_mippv2_a100_mr7_nr4_pipe(A, B, C, cfg.alpha, cfg.beta));
-    }
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_a100_mr7_nr4_pipe(A, B, C),
+        gemm.gemm_mippv2_a100_mr7_nr4_pipe(A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_a100_mr7_nr2_lmul2_pipe:
-    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
-      BENCH_KERNEL(gemm.gemm_mippv2_a100_mr7_nr2_lmul2_pipe(A, B, C));
-    } else {
-      BENCH_KERNEL(gemm.gemm_mippv2_a100_mr7_nr2_lmul2_pipe(A, B, C, cfg.alpha,
-                                                            cfg.beta));
-    }
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_a100_mr7_nr2_lmul2_pipe(A, B, C),
+        gemm.gemm_mippv2_a100_mr7_nr2_lmul2_pipe(A, B, C, cfg.alpha, cfg.beta));
 
 #ifdef GEMMBENCH_ENABLE_EXPLO
   case UKernelType::IKJ:
@@ -318,26 +258,19 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
         A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_panel_x100_lmul1:
-    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
-      BENCH_KERNEL(gemm.template gemm_mippv2_panel_x100<1>(A, B, C));
-    } else {
-      BENCH_KERNEL(
-          gemm.template gemm_mippv2_panel_x100<1>(A, B, C, cfg.alpha, cfg.beta));
-    }
+    BENCH_KERNEL_FASTPATH(
+        gemm.template gemm_mippv2_panel_x100<1>(A, B, C),
+        gemm.template gemm_mippv2_panel_x100<1>(A, B, C, cfg.alpha, cfg.beta));
+
   case UKernelType::mippv2_panel_x100_lmul2:
-    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
-      BENCH_KERNEL(gemm.template gemm_mippv2_panel_x100<2>(A, B, C));
-    } else {
-      BENCH_KERNEL(
-          gemm.template gemm_mippv2_panel_x100<2>(A, B, C, cfg.alpha, cfg.beta));
-    }
+    BENCH_KERNEL_FASTPATH(
+        gemm.template gemm_mippv2_panel_x100<2>(A, B, C),
+        gemm.template gemm_mippv2_panel_x100<2>(A, B, C, cfg.alpha, cfg.beta));
+
   case UKernelType::mippv2_panel_x100_lmul4:
-    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {
-      BENCH_KERNEL(gemm.template gemm_mippv2_panel_x100<4>(A, B, C));
-    } else {
-      BENCH_KERNEL(
-          gemm.template gemm_mippv2_panel_x100<4>(A, B, C, cfg.alpha, cfg.beta));
-    }
+    BENCH_KERNEL_FASTPATH(
+        gemm.template gemm_mippv2_panel_x100<4>(A, B, C),
+        gemm.template gemm_mippv2_panel_x100<4>(A, B, C, cfg.alpha, cfg.beta));
 
 #ifdef GEMMBENCH_ENABLE_EXPLO
   case UKernelType::mippv2_skylake_panel_lmul8:
@@ -381,8 +314,8 @@ template <typename T, typename APacked, typename BPacked, typename CPacked>
 void runBenchmark(const BenchConfig &cfg) {
   GemmUKernel<T> gemm;
 
-  const size_t tile = isKernelTileSize66(cfg.kernel) ? 66 : 64;
-  SimdAlloc<T> alloc(cfg.packet_size, cfg.lmul, cfg.alignment, cfg.seed, tile);
+  const auto &desc = getKernelDescriptor(cfg.kernel);
+  SimdAlloc<T> alloc(cfg.packet_size, cfg.lmul, cfg.alignment, cfg.seed, desc.defaultTileSize);
 
   auto A =
       alloc.template allocatePacked<APacked>(cfg.M, cfg.K, InitMode::Random);
@@ -435,9 +368,14 @@ void dispatchBenchmark(const BenchConfig &cfg) {
   }
 }
 int main(int argc, char **argv) {
-  auto cfg = parseArgs(argc, argv);
+  try {
+    auto cfg = parseArgs(argc, argv);
 
-  dispatchBenchmark(cfg);
+    dispatchBenchmark(cfg);
+  } catch (const std::exception &e) {
+    std::cerr << "Error: " << e.what() << '\n';
+    return EXIT_FAILURE;
+  }
 
   return 0;
 }

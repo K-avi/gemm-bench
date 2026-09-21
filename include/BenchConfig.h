@@ -71,7 +71,27 @@ inline void parseArgs(int argc,
             return std::stod(next());
         };
 
-        if(arg == "--m")
+        if(arg == "--help" || arg == "-h")
+        {
+            std::cout << "Usage: GemmBench [options]\n"
+                      << "Options:\n"
+                      << "  --m <N>             M dimension (default: 32)\n"
+                      << "  --n <N>             N dimension (default: 32)\n"
+                      << "  --k <N>             K dimension (default: 32)\n"
+                      << "  --alpha, -a <val>   Alpha parameter (default: 1.0)\n"
+                      << "  --beta, -b <val>    Beta parameter (default: 0.0)\n"
+                      << "  --kernel <name>     Kernel name (default: ijk)\n"
+                      << "  --iterations <N>    Benchmark iterations (default: 100)\n"
+                      << "  --warmup <N>        Warmup iterations (default: 10)\n"
+                      << "  --packet-size <N>   SIMD packet size (default: 4)\n"
+                      << "  --lmul <N>          RVV/MIPP LMUL factor (default: 1)\n"
+                      << "  --alignment <N>     Memory alignment in bytes (default: 32)\n"
+                      << "  --seed <N>          Random seed (default: 12)\n"
+                      << "  --csv               Output in CSV format\n"
+                      << "  --help, -h          Show this help message\n";
+            std::exit(EXIT_SUCCESS);
+        }
+        else if(arg == "--m")
             cfg.M = next_ulong();
         else if(arg == "--n")
             cfg.N = next_ulong();

@@ -150,10 +150,9 @@ public:
     {
         assert(packet_size_ > 0);
         assert(lmul_ > 0);
-        assert(alignment_ >= sizeof(void*));
-
-        // One SIMD packet occupies exactly one hardware register.
-        assert(packet_size_ * sizeof(T) == alignment_);
+        // Alignment must be compatible with SIMD packet size (e.g. 64-byte cache line with 32-byte AVX2 register)
+        assert(alignment_ % (packet_size_ * sizeof(T)) == 0 ||
+               (packet_size_ * sizeof(T)) % alignment_ == 0);
     }
 
     size_t tileSize() const
@@ -277,7 +276,7 @@ private:
 
     T* allocate(size_t count) const
     {
-        const size_t bytes = count * sizeof(T);
+        const size_t bytes = roundUp(count * sizeof(T), alignment_);
 
         T* ptr =
             static_cast<T*>(

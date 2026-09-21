@@ -272,9 +272,21 @@ template <typename T> static void testGemmSuiteCRR() {
   TEST_KERNEL("MIPPv2 Skylake panel LMUL4",
               gemm.template gemm_mippv2_skylake_panel_lmul<4>(A, B, C_test));
 
+  TEST_KERNEL("MIPPv2 panel x100 LMUL1",
+              gemm.template gemm_mippv2_panel_x100<1>(A, B, C_test));
+
+  TEST_KERNEL("MIPPv2 panel x100 LMUL2",
+              gemm.template gemm_mippv2_panel_x100<2>(A, B, C_test));
+
+  TEST_KERNEL("MIPPv2 panel x100 LMUL4",
+              gemm.template gemm_mippv2_panel_x100<4>(A, B, C_test));
+
 #ifdef GEMMBENCH_ENABLE_EXPLO
   TEST_KERNEL("MIPPv2 Skylake panel LMUL8",
               gemm.template gemm_mippv2_skylake_panel_lmul<8>(A, B, C_test));
+
+  TEST_KERNEL("MIPPv2 panel x100 LMUL8",
+              gemm.template gemm_mippv2_panel_x100<8>(A, B, C_test));
 #endif
 
 #undef TEST_KERNEL
@@ -537,6 +549,18 @@ template <typename T> static void testAlphaBetaSuiteCRR() {
         gemm.template gemm_mippv2_panel_x100<1>(A, B, C_test, p.alpha, p.beta);
         checkMatrixEqual(C_ref, C_test);
       }
+
+      SECTION("mippv2_panel_x100_lmul2") {
+        resetMatrix(C_test, C_init);
+        gemm.template gemm_mippv2_panel_x100<2>(A, B, C_test, p.alpha, p.beta);
+        checkMatrixEqual(C_ref, C_test);
+      }
+
+      SECTION("mippv2_panel_x100_lmul4") {
+        resetMatrix(C_test, C_init);
+        gemm.template gemm_mippv2_panel_x100<4>(A, B, C_test, p.alpha, p.beta);
+        checkMatrixEqual(C_ref, C_test);
+      }
     }
   }
 
@@ -558,4 +582,57 @@ TEST_CASE("GEMM CRR kernels", "[gemm]") { testGemmSuiteCRR<double>(); }
 TEST_CASE("GEMM Alpha Beta scaling and accumulation", "[gemm]") {
   testAlphaBetaSuite<double>();
   testAlphaBetaSuiteCRR<double>();
+}
+
+template <typename T> static void testGemmNonSquare() {
+  constexpr size_t M = 48;
+  constexpr size_t N = 64;
+  constexpr size_t K = 32;
+
+  auto &cfg = GEMMBench::config();
+  SimdAlloc<T> alloc(cfg.packet_size, cfg.lmul, cfg.alignment, cfg.seed);
+
+  auto A = alloc.template allocatePacked<PackedRowMajor<T>>(M, K, InitMode::Random);
+  auto B = alloc.template allocatePacked<PackedRowMajor<T>>(K, N, InitMode::Random);
+  auto C_ref = alloc.template allocatePacked<PackedRowMajor<T>>(M, N, InitMode::Zero);
+  auto C_test = alloc.template allocatePacked<PackedRowMajor<T>>(M, N, InitMode::Zero);
+
+  GemmUKernel<T> gemm;
+  gemm.gemm_ijk(A, B, C_ref);
+
+#define TEST_KERNEL(NAME, CALL)                                                \
+  SECTION(NAME) {                                                              \
+    std::fill_n(C_test.data, C_test.padded_rows * C_test.padded_cols, T{});    \
+    CALL;                                                                      \
+    checkMatrixEqual(C_ref, C_test);                                           \
+  }
+
+  TEST_KERNEL("Blocked register blocked",
+              gemm.gemm_blocked_register_blocked(A, B, C_test));
+  TEST_KERNEL("MIPPv2 Skylake register blocked",
+              gemm.gemm_mippv2_skylake_register_blocked(A, B, C_test));
+  TEST_KERNEL("MIPPv2 Meteorlake MR4 NR3",
+              gemm.gemm_mippv2_meteorlake_mr4_nr3(A, B, C_test));
+  TEST_KERNEL("MIPPv2 Cortex-A76 MR6 NR3",
+              gemm.gemm_mippv2_a76_mr6_nr3(A, B, C_test));
+  TEST_KERNEL("MIPPv2 Firestorm MR4 NR4",
+              gemm.gemm_mippv2_firestorm_mr4_nr4(A, B, C_test));
+  TEST_KERNEL("MIPPv2 Zen 4 MR4 NR4",
+              gemm.gemm_mippv2_zen4_mr4_nr4(A, B, C_test));
+  TEST_KERNEL("MIPPv2 x100 register blocked LMUL1",
+              gemm.template gemm_mippv2_x100_register_blocked<1>(A, B, C_test));
+  TEST_KERNEL("MIPPv2 x60 MR6 NR4 fmaddi",
+              gemm.gemm_mippv2_x60_mr6_nr4_fmaddi(A, B, C_test));
+  TEST_KERNEL("MIPPv2 A100 MR7 NR4 pipe",
+              gemm.gemm_mippv2_a100_mr7_nr4_pipe(A, B, C_test));
+#undef TEST_KERNEL
+
+  alloc.freePacked(A);
+  alloc.freePacked(B);
+  alloc.freePacked(C_ref);
+  alloc.freePacked(C_test);
+}
+
+TEST_CASE("GEMM Non-square dimensions (M!=N!=K)", "[gemm]") {
+  testGemmNonSquare<double>();
 }
