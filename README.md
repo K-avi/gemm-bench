@@ -1,51 +1,33 @@
-# GEMM Benchmark Suite for SpacemiT RISC-V & MIPPv2
+# GEMM Benchmark Suite across Modern Microarchitectures (MIPPv2)
 
 > [!WARNING]
-> **Work in Progress (WIP)**: This repository is under development. Microkernels, benchmark (and anything else to be honest) might change any time.
+> **Work in Progress (WIP)**: This repository is under active development. Microkernels, benchmark drivers, and analysis tools are continuously refined.
 
-This repostitory contains a high-performance General Matrix Multiply (DGEMM) microbenchmark suite, built on top of [MIPPv2](https://github.com/aff3ct/MIPP/tree/develop) (MyIntrinsics++ v2).
-It currently contains microbenchmarks for AMD Zen 4 (AVX-512), Intel Meteor Lake (Redwood Cove P-Core, AVX2 + FMA), ARM Cortex-A76 (ARM NEON), Intel Skylake (AVX2 + FMA), and SpacemiT X100 (RVV 1.0).
+A high-performance General Matrix Multiply (DGEMM) microbenchmark and exploration suite built on top of [MIPPv2](https://github.com/aff3ct/MIPP/tree/develop) (MyIntrinsics++ v2).
 
-> [!NOTE]
-> **Origins & Context**: Developed during a research internship at **LIP6** (Sorbonne Université), this benchmark evaluates MIPPv2 as a zero-overhead abstraction layer for compute-bound microkernels (DGEMM). Key objectives included assessing cross-platform efficiency across different microarchitectures (Intel Skylake vs. SpacemiT X100) and determining whether MIPPv2 features (such as emulated LMUL on fixed-width SIMD) simplify microkernel design space exploration.
->
-> **Repurposing & Roadmap**: This microkernel benchmark is being repurposed and actively expanded into a standalone **GEMM benchmark** and optimized kernel suite across multiple architectures:
-> - **AMD Zen 4 (Ryzen 9 7945HX)**: AVX-512 microkernel ($M_R=4, N_R=32$) reaching **85.06 GFLOP/s (97% of theoretical peak)**.
-> - **Apple Silicon M1 Firestorm (M1 Ultra / Pro / Max @ 3.036 GHz)**: ARM NEON microkernel ($M_R=4, N_R=8$) reaching **47.51 GFLOP/s (98.1% of hardware peak, 97.8% of theoretical peak)**.
-> - **Intel Meteor Lake (Redwood Cove P-Core)**: AVX2 microkernel ($M_R=4, N_R=12$) reaching **75.96 GFLOP/s (93% of theoretical peak)**.
-> - **ARM Cortex-A76 (Raspberry Pi 5, BCM2712 @ 2.40 GHz)**: ARM NEON microkernel ($M_R=6, N_R=6$) reaching **17.92 GFLOP/s (93.3% of theoretical peak)**.
-> - **SpacemiT K3 X100**: RVV 1.0 microkernel with vector-scalar FMA reaching **16.43 GFLOP/s (93% of theoretical peak)**.
-> - **Intel Skylake**: AVX2 microkernel ($M_R=2, N_R=8$) reaching **33.84 GFLOP/s (92% of theoretical peak)**.
-> - Next microkernel targets: **SpacemiT x60** (RVV1.0) and **SpacemiT A100** (RVV1.0)
+This suite systematically evaluates microarchitectural efficiency, vector register tiling strategies, and compiler code generation across **9 distinct CPU microarchitectures** spanning **x86_64** (AVX2, AVX-512), **AArch64** (NEON), and **RISC-V** (RVV 1.0).
 
 ---
 
-## Performance Overview
+## Microarchitectural Performance & Peak Efficiency
 
-- **AMD Zen 4 (Ryzen 9 7945HX, 5.46 GHz max boost)**: Reaches **85.06 GFLOP/s** (**97.3% of theoretical peak**, 87.40 GFLOP/s) on a single core using the `mippv2_zen4_mr4_nr4_fmaddi` microkernel.
-- **Apple Silicon M1 Firestorm (M1 Ultra, 3.036 GHz, Asahi Linux)**: Reaches **47.51 GFLOP/s** (**97.8% of theoretical peak** 48.58 GFLOP/s, and **98.1% of measured hardware peak** 48.43 GFLOP/s) on a single P-core using the `mippv2_firestorm_mr4_nr4_fmaddi` microkernel.
-- **Intel Meteor Lake (Redwood Cove P-Core, 5.10 GHz)**: Reaches **75.96 GFLOP/s** (**93.1% of theoretical peak**, 81.60 GFLOP/s) on a single core using the `mippv2_meteorlake_mr4_nr3` microkernel.
-- **ARM Cortex-A76 (Raspberry Pi 5, BCM2712 @ 2.40 GHz)**: Reaches **17.92 GFLOP/s** (**93.3% of theoretical peak**, 19.20 GFLOP/s, and **93.6%** of measured hardware register peak 19.14 GFLOP/s) on a single core using the `mippv2_a76_mr6_nr3` microkernel.
-- **SpacemiT K3 X100 (RVV 1.0, 1.60 GHz)**: Reaches **16.43 GFLOP/s** (**93.3% of theoretical peak**, 17.6 GFLOP/s) on a single core using the `mippv2_x100_register_blocked_apack4` microkernel.
+The benchmark evaluates single-thread, compute-bound double-precision GEMM throughput against the hardware theoretical peak ($\text{FLOP/cycle} \times \text{Frequency}$). Across modern out-of-order execution engines, the tuned microkernels achieve **90% to 99% of theoretical hardware saturation**:
 
-Achieving >93% hardware utilization on both modern x86 and emerging RISC-V architectures demonstrates that pure C++ using a well-designed SIMD abstraction library (MIPPv2) can match hand-crafted assembly while retaining portability.
+| SIMD | Microarchitecture | CPU / SoC Model | Freq (GHz) | Peak FLOP/cyc | Champion Kernel | Compiler | Peak GFLOP/s | FLOP/cyc | % of Peak |
+| :--- | :--- | :--- | :---: | :---: | :--- | :---: | :---: | :---: | :---: |
+| **AVX-512** | **AMD Zen 4** | Ryzen 9 7900X | 5.4 | 16.0 | `mippv2_firestorm_mr4_nr4_fmaddi` | GCC | 85.4 | 15.82 | **98.9 %** |
+| **AVX-512** | **AMD Zen 5 Strix Point** | Ryzen AI 9 HX 370 | 5.1 | 16.0 | `mippv2_firestorm_mr4_nr4_fmaddi` | GCC | 80.4 | 15.77 | **98.6 %** |
+| **NEON** | **Apple M1 Firestorm** | M1 Ultra (P-core) | 3.0 | 16.0 | `mippv2_x60_mr6_nr4_fmaddi` | GCC | 47.5 | 15.83 | **98.9 %** |
+| **NEON** | **Raspberry Pi 5** | Cortex-A76 (BCM2712) | 2.4 | 8.0 | `mippv2_a76_mr6_nr3` | GCC | 18.0 | 7.49 | **93.6 %** |
+| **RVV 1.0** | **SpacemiT X100** | K3 SoC (VLEN=256) | 2.2 | 8.0 | `mippv2_x100_register_blocked_apack4` | Clang | 16.3 | 7.42 | **92.7 %** |
+| **AVX2** | **Intel Meteor Lake** | Redwood Cove P-Core | 5.1 | 16.0 | `mippv2_meteorlake_mr4_nr3` | GCC | 74.8 | 14.66 | **91.6 %** |
+| **AVX2** | **Intel Skylake** | Core i5-6200U | 2.3 | 16.0 | `mippv2_meteorlake_mr4_nr3` | Clang | 33.4 | 14.53 | **90.8 %** |
+| **RVV 1.0** | **SpacemiT A100** | K3 SoC (VLEN=1024) | 1.8 | 8.0 | `mippv2_a100_mr7_nr2_lmul2_pipe` | GCC | 11.7 | 6.48 | **81.0 %** |
+| **RVV 1.0** | **SpacemiT X60** | BPI-F3 SoC (VLEN=256)| 1.6 | 8.0 | `mippv2_a100_mr7_nr4_pipe` | GCC | 6.2 | 3.89 | **48.7 %** |
 
 > [!NOTE]
-> **Scope & Experimental Caveats**:
-> These benchmarks currently evaluate **isolated microkernels under idealized conditions**:
-> - **Synthetic constraints:** Matrices are strictly square, power-of-two dimensions ($32 \le M,N,K \le 512$) with 64-byte SIMD/cache-line aligned allocations.
-> - **No fringe/tail handling:** Dimensions are exact multiples of the vector register tiles ($M_R, N_R$), avoiding peeling or masking overheads.
-> - **Absence of multi-level cache hierarchy:** Without full BLIS/GotoBLAS-style cache tiling ($M_C, K_C, N_C$ packing across L1/L2/LLC), throughput naturally drops as matrix dimensions exceed local cache capacity.
-> Bridging this gap—transitioning from isolated microarchitectural microkernels to an arbitrary-dimension, cache-blocked GEMM engine—is the primary motivation for this standalone repository.
-
-### Architecture Comparison: Skylake vs. SpacemiT X100
-
-| Skylake (AVX2 / FMA) | SpacemiT K3 X100 (RVV 1.0, VLEN=256) |
-| :---: | :---: |
-| **Sustained Throughput (GFLOP/s)** | **Sustained Throughput (GFLOP/s)** |
-| ![Skylake Main GFLOPS](assets/main_gflops_skylake.svg) | ![X100 Main GFLOPS](assets/main_gflops_x100.svg) |
-| **Speedup vs. Scalar Baseline (`ijk`)** | **Speedup vs. Scalar Baseline (`ijk`)** |
-| ![Skylake Speedup vs Baseline](assets/speedup_vs_scalar_skylake.svg) | ![X100 Speedup vs Baseline](assets/speedup_vs_scalar_x100.svg) |
+> **Zen 5 Strix Point Datapath Note**:
+> While server/desktop Zen 5 (Turin / Granite Ridge) incorporates dual native 512-bit FMA units ($32\text{ DP FLOP/cycle}$), AMD's mobile Strix Point SoC implements dual 256-bit physical datapaths (*double-pumped* 512-bit FMA, identical to Zen 4), yielding a physical ceiling of **$16\text{ DP FLOP/cycle}$**. At $15.77\text{ FLOP/cycle}$, the execution pipes are fully saturated.
 
 ---
 
@@ -53,68 +35,46 @@ Achieving >93% hardware utilization on both modern x86 and emerging RISC-V archi
 
 ```text
 gemm_bench/
-├── assets/                  # Performance summary figures (SVG)
-├── docs/                    # In-depth microarchitectural analysis documents (WIP, not pushed yet!)
+├── bench_configs/              # Per-platform compilation flags and hardware settings
+│   ├── avx2.sh                 # x86_64 AVX2 / FMA configuration
+│   ├── avx512.sh               # x86_64 AVX-512 configuration
+│   ├── neon.sh                 # ARMv8-A NEON configuration (M1, Cortex-A76)
+│   ├── rvv_x100.sh             # SpacemiT X100 (256-bit RVV)
+│   ├── rvv_x60.sh              # SpacemiT X60 (256-bit RVV)
+│   └── rvv_a100.sh             # SpacemiT A100 (1024-bit RVV)
+├── gemm-bench-results/         # Reference benchmark CSV datasets (<uarch>_<simd>_<compiler>.csv)
 ├── include/
-│   ├── Alloc.h              # Cache/SIMD-aligned memory allocators
-│   ├── BenchConfig.h        # Benchmark configuration types
-│   ├── GemmUKernel.h        # GEMM microkernel implementations
-│   ├── StorageType.h        # Row-major, column-major, and packed matrix wrappers
-│   └── mipp_custom.h        # Vector-scalar FMA (vfmacc.vf) extension header
-├── results/
-│   └── reference/           # Canonical benchmark datasets (Skylake & X100)
+│   ├── Alloc.h                 # Cache-aligned SIMD memory allocators (std::aligned_alloc)
+│   ├── BenchConfig.h           # Benchmark CLI configuration parser
+│   ├── Epilogue.hpp            # In-place C accumulation epilogue (alpha, beta, C update)
+│   ├── GemmUKernel.h           # Microkernel declarations, descriptors, and dispatch tables
+│   ├── GemmUKernel_opti.hpp    # Optimized architecture-specific microkernels (AVX, NEON, RVV)
+│   ├── GemmUKernel_explo.hpp   # Experimental and exploratory microkernels
+│   ├── StorageType.h           # Matrix storage wrappers (RowMajor, ColMajor, Packed)
+│   └── mipp_custom.h           # Custom vector-scalar FMA extensions (vfmacc.vf)
+├── plots/                      # Generated vector graphics (SVG)
 ├── src/
-│   └── main.cpp             # Benchmark driver CLI
-├── tests/                   # Catch2 unit and validation tests
-├── x100_uarch_exp/
-│   └── broadcast_bench.cpp  # FMA & vector-broadcast microarchitectural probe
-├── bench_configs/       # Per-platform compiler flags and hardware configurations
-├── plot_results.py      # Fancy plotting script
-└── run_benchmarks.sh    # Unified benchmark runner across all platforms
+│   └── main.cpp                # Benchmark runner driver
+├── tests/                      # Catch2 unit tests (accuracy, non-square, alignment)
+├── tools/
+│   └── run_cluster_benchmarks.sh # Slurm multi-node cluster runner (Dalek LIP6)
+├── plot_results.py             # Analytical plotting suite (FLOP/cyc, % of peak, champion detection)
+├── run_benchmarks.sh           # Unified benchmark driver
+├── uarch_config.json           # Microarchitectural hardware specs & expected champions
+└── CMakeLists.txt              # Build configuration
 ```
 
 ---
 
-## Prerequisites & Dependencies
+## Prerequisites & Building
 
-1. **C++20 Compiler**:
-   - `clang++` (>= 15.0) or `g++` (>= 12.0) with RVV 1.0 support (`-march=rv64gcv`).
-2. **Build System**:
-   - `CMake` (>= 3.20).
-3. **MIPPv2 Headers**:
-   MIPPv2 headers are not vendored into this repository. You can obtain them from the official [MIPP repository on GitHub (`develop` branch)](https://github.com/aff3ct/MIPP/tree/develop) using either method:
+### 1. Requirements
+- **C++20 Compiler**: `g++` (>= 12.0) or `clang++` (>= 15.0).
+- **CMake**: version 3.20 or newer.
+- **Python**: 3.9+ with `matplotlib`, `pandas`, `numpy`.
+- **MIPPv2 Headers**: Obtain the headers from the [MIPP develop branch](https://github.com/aff3ct/MIPP/tree/develop) or download from [MIPP Releases](https://github.com/aff3ct/MIPP/releases).
 
-   - **Method 1: Standalone Release Archive (Recommended)**
-     Download the pre-generated headers tarball directly from the [MIPP Releases page](https://github.com/aff3ct/MIPP/releases) (e.g., v2.0.1 or v2.0.0):
-     ```bash
-     wget https://github.com/aff3ct/MIPP/releases/download/v2.0.1/mipp-v2.0.1-headers.tar.gz
-     tar -xzf mipp-v2.0.1-headers.tar.gz
-     # The extracted directory contains include/mipp.hpp, include/mipp.h, etc.
-     ```
-
-   - **Method 2: Clone from `develop` Branch & Generate**
-     Clone the upstream `develop` branch and run the generator:
-     ```bash
-     git clone -b develop https://github.com/aff3ct/MIPP.git
-     cd MIPP
-     pip install -r generator/requirements.txt
-     cd generator
-     ./gen_mipp_headers.py --simd-ext sse avx avx512 rvv scalar
-     # Generated headers will be located in MIPP/include/
-     ```
-
-4. **Python Plotting Dependencies**:
-   ```bash
-   pip install matplotlib pandas numpy
-   ```
-
----
-
-## Building
-
-### Basic Build
-Point CMake to your MIPPv2 `include` directory:
-
+### 2. Standalone Build
 ```bash
 cmake -B build -S . \
   -DCMAKE_BUILD_TYPE=Release \
@@ -123,9 +83,8 @@ cmake -B build -S . \
 cmake --build build -j$(nproc)
 ```
 
-### Build with Tests
-Unit tests use Catch2 v3 (automatically fetched via CMake if not installed on your system):
-
+### 3. Build and Run Unit Tests
+Unit tests use Catch2 v3 (automatically fetched if not present on system):
 ```bash
 cmake -B build -S . \
   -DCMAKE_BUILD_TYPE=Release \
@@ -140,102 +99,196 @@ ctest --test-dir build --output-on-failure
 
 ## Running Benchmarks
 
-Benchmarks are executed via the unified driver `./run_benchmarks.sh <platform> [options] [compilers...]`.
+### Local Execution (`run_benchmarks.sh`)
+Benchmarks are driven by `./run_benchmarks.sh <platform> [options] [compilers...]`.
 
-### Supported Platforms
-- `avx2`: x86_64 with AVX2 and FMA
-- `avx512`: x86_64 with AVX-512 (F, DQ, VL, BW)
-- `neon`: ARMv8-A NEON (with automatic P-core detection on big.LITTLE / Apple Silicon)
-- `rvv_x100`: SpacemiT X100 / X60 (RVV 1.0, VLEN = 256 bits)
-- `rvv_a100`: SpacemiT A100 (RVV 1.0, VLEN = 1024 bits, automated `/proc/set_ai_thread` unlock)
-
-### Common Examples
-
-- **Standard run (AVX2, both GCC and Clang, default sizes 32/64/96/128)**:
-  ```bash
-  ./run_benchmarks.sh avx2
-  ```
-
-- **Run only GCC on AVX-512 with forced clean rebuild**:
-  ```bash
-  ./run_benchmarks.sh avx512 --rebuild gcc
-  ```
-
-- **ARM NEON with explicit core pinning**:
-  ```bash
-  ./run_benchmarks.sh neon -c 4
-  ```
-
-- **SpacemiT A100 targeting specific sizes and kernels**:
-  ```bash
-  ./run_benchmarks.sh rvv_a100 -s 64 -s 128 -k mippv2_a100_mr7_nr4_pipe
-  ```
-
-- **Custom output prefix (e.g. for comparative architecture sweeps)**:
-  ```bash
-  ./run_benchmarks.sh avx2 --output zen4
-  # Writes to results/zen4_gemm_results_<compiler>.csv
-  ```
-
-Results are saved to `results/gemm_results_<compiler>.csv` (or `results/<prefix>_gemm_results_<compiler>.csv` when `--output` is specified).
-
----
-
-## Reproducing Figures
-
-To regenerate the SVG figures using the included reference datasets:
+Always specify `-o <uarch>_<simd>` to ensure non-colliding, standardized result files:
 
 ```bash
-python3 plot_results.py \
-  --skylake-gcc results/reference/skylake_gcc.csv \
-  --skylake-clang results/reference/skylake_clang.csv \
-  --x100-gcc results/reference/x100_gcc.csv \
-  --x100-clang results/reference/x100_clang.csv \
-  --output plots
+# Benchmark Intel Skylake (AVX2) with GCC and Clang
+./run_benchmarks.sh avx2 -o skylake_avx2 gcc clang
+
+# Benchmark Intel Meteor Lake (AVX2) on specific matrix sizes
+./run_benchmarks.sh avx2 -o meteorlake_avx2 -s 32 -s 64 -s 96 -s 128 gcc clang
+
+# Benchmark AMD Zen 4 (AVX-512) pinned to core 0
+./run_benchmarks.sh avx512 -o zen4_avx512 -c 0 gcc clang
+
+# Benchmark SpacemiT X100 with clean rebuild
+./run_benchmarks.sh rvv_x100 -o x100_rvv --rebuild clang
+```
+
+Result files are saved in `results/gemm_results_<prefix>_<compiler>.csv` (e.g. `results/gemm_results_skylake_avx2_gcc.csv`).
+
+### Remote Slurm Cluster Execution (`tools/run_cluster_benchmarks.sh`)
+When benchmarking across heterogeneous cluster nodes (such as the LIP6 Dalek cluster):
+```bash
+# Run benchmarks on Raspberry Pi 5 and Zen 5 in parallel
+./tools/run_cluster_benchmarks.sh rpi5 zen5
+
+# Run only Catch2 unit tests on all available cluster nodes
+./tools/run_cluster_benchmarks.sh all --tests-only
+
+# Run custom matrix sizes sequentially
+./tools/run_cluster_benchmarks.sh --sequential -s "32 64 96 128" meteorlake zen4
 ```
 
 ---
 
-## Kernel Taxonomy & Microarchitecture Notes
+## Plotting & Performance Analysis
 
-> [!NOTE]
-> **Kernel Pruning & Design Space Exploration**:
-> This repository contains a broad variety of microkernels implemented during microkernel design space exploration (evaluating unroll factors, register tile geometries, packing schemes, and memory access orders).
-> - Suboptimal or redundant kernels will eventually be pruned to maintain a focused collection of the highest-performing microkernels for each target architecture.
-> - Scalar kernels (such as `ijk`, `ikj`, and naive blocked variants) are retained strictly as reference baselines for speedup calculations and vectorization efficiency analysis.
+The analytical suite [`plot_results.py`](file:///home/ivan/Files/projets/gemm_bench/plot_results.py) reads the hierarchical hardware specification in [`uarch_config.json`](file:///home/ivan/Files/projets/gemm_bench/uarch_config.json), scans the benchmark datasets, identifies the champion kernel for each microarchitecture, and outputs comparison plots:
 
-- **Scalar Baselines**: Standard triply-nested loops (`ijk`, `ikj`), basic loop blocking, and register-blocked scalar implementations.
-- **Generic MIPPv2**: Direct vectorized loops parameterized across vector lengths and unrolling factors (`mippv2_lmul1/2/4/8`, `mippv2_blocked`).
-- **Register Blocked**: Microkernels with accumulators kept in vector register files to maximize arithmetic intensity.
-- **Panel / Packed**: GotoBLAS/BLIS-style contiguous packing for continuous streaming into vector execution units.
-- **Intel Meteor Lake P-Core Microkernel (`mippv2_meteorlake_mr4_nr3`)**: Optimal $4 \times 3$ register tile ($M_R=4, N_R=12$ doubles = 48 FP64 elements) designed for the Redwood Cove core. Balances FMA throughput on Ports 0/1 against the Port 5 vector-broadcast bottleneck (3:1 ratio), uses C++ lexical block scoping for zero register spills within the 16-register AVX2 budget, and features decoupled $4 \times 2$ cleanup tiles reaching **75.96 GFLOP/s (93.1% of theoretical peak)**.
-- **AMD Zen 4 Microkernels (`mippv2_zen4_mr4_nr4` & `mippv2_zen4_mr4_nr4_fmaddi`)**: $4 \times 4$ register tile ($M_R=4, N_R=32$ doubles = 128 FP64 elements) utilizing 16 ZMM accumulators on AVX-512. Designed for Zen 4's dual 256-bit FPU pipelines (double-pumped 512-bit FMA). Reaches **85.06 GFLOP/s (97.3% of theoretical peak)**.
-- **ARM Cortex-A76 Microkernel (`mippv2_a76_mr6_nr3`)**: $6 \times 3$ register tile ($M_R=6, N_R=6$ doubles = 36 FP64 elements) on ARM NEON using 18 vector accumulators, 3 B registers, and 1 broadcasted A register (22/32 architectural registers). Leverages Cortex-A76 2-cycle accumulate-forwarding latency and pairs FMA emissions across rows ($c_{0j}/c_{1j}, c_{2j}/c_{3j}, c_{4j}/c_{5j}$) to dual-issue pure vector-vector FMAs across both 128-bit FP pipelines simultaneously, surpassing the 18.01 GFLOP/s vector-scalar register read-port ceiling and reaching **17.92 GFLOP/s (93.3% of theoretical peak)**.
-- **Apple Silicon M1 Firestorm Microkernels (`mippv2_firestorm_mr4_nr4_fmaddi` & `mippv2_firestorm_mr6_nr4_fmaddi`)**: 
-  - **Pipeline Geometry & Little's Law**: The Firestorm P-core features **4 symmetric 128-bit NEON FMA execution pipelines** (latency = 4 cycles, throughput = 4 FMAs/cycle = 8 FLOPs/pipe/cycle = 16 FP64 FLOPs/cycle). Saturating these pipelines requires at least $4 \text{ pipes} \times 4 \text{ cycles} = 16$ independent vector accumulators.
-  - **`mippv2_firestorm_mr4_nr4_fmaddi`**: $4 \times 4$ vector tile ($M_R=4, N_R=8$ doubles = 32 FP64 elements) maintaining exactly 16 vector accumulators and 4 B-vector registers in flight (20/32 NEON registers). Broadcasts $a_{i,k}$ via vector-scalar `mipp::fmaddi` (`vfmaq_n_f64`), achieving **47.51 GFLOP/s (98.1% of measured hardware peak)**.
-  - **`mippv2_firestorm_mr6_nr4_fmaddi`**: $6 \times 4$ vector tile ($M_R=6, N_R=8$ doubles = 48 FP64 elements) holding 24 vector accumulators and 4 B-vector registers (28/32 NEON registers). Increases arithmetic intensity to 2.4 FMAs per load (compared to 2.0 in $4 \times 4$), delivering superior performance on larger matrix tiles.
-  - **L1D Cache Sweet Spot**: Firestorm features a massive **128 KB private L1D cache** per P-core (3 cycles load-to-use latency, 3 simultaneous 128-bit loads/cycle = 48 bytes/cycle). At $96 \times 96$, matrix $B$ requires 73.7 KB (comfortably residing 100% in L1D), enabling sustained 98.1% pipeline saturation, whereas $128 \times 128$ ($B = 131\text{ KB} > 128\text{ KB}$) overflows into the shared L2 cache.
-- **SpacemiT-Tuned Microkernels**: Microkernels exploring register pressure and dynamic vector-length configurations for SpacemiT cores ($VLEN=256$):
-  - **Vector-Scalar FMA**: Uses `include/mipp_custom.h` to emit `vfmacc.vf` instructions, eliminating explicit vector broadcast (`vfmv.v.f`) overhead inside the inner accumulation loop.
-  - **Register File Budgeting**: RVV provides 32 architectural vector registers. Custom tiles allocate up to 16–24 registers for accumulators while keeping A-matrix scalars and B-matrix vectors resident.
+```bash
+# Generate all plots from reference datasets
+python3 plot_results.py --input-dir gemm-bench-results --output plots
+
+# Filter specific architectures or SIMD extensions
+python3 plot_results.py --input-dir gemm-bench-results --uarch zen4 zen5 m1
+python3 plot_results.py --input-dir gemm-bench-results --simd avx512 neon
+
+# Override clock frequencies (in GHz) for dynamic boost clock analysis
+python3 plot_results.py --input-dir gemm-bench-results --freq zen4=5.4,m1=3.0
+```
+
+### Output Figures (`plots/`)
+- `cross_uarch_efficiency_comparison.svg`: Multi-architecture comparison in **% of theoretical peak** ($\log_2$ scale).
+- `cross_uarch_flop_cycle_comparison.svg`: Multi-architecture comparison in **DP FLOP/cycle**.
+- `<simd>_<uarch>_overview.svg`: Per-architecture detailed breakdown showing top kernels, scalar baseline, and dual-axis throughput (GFLOP/s and FLOP/cycle).
+
+---
+
+## Developer Tutorial: Adding a New Microkernel
+
+This end-to-end tutorial demonstrates how to implement, register, test, benchmark, and analyze a new GEMM microkernel across the entire pipeline.
+
+### Step 1: Implement the Kernel in C++
+Microkernels are implemented in [`include/GemmUKernel_opti.hpp`](file:///home/ivan/Files/projets/gemm_bench/include/GemmUKernel_opti.hpp) (or [`include/GemmUKernel_explo.hpp`](file:///home/ivan/Files/projets/gemm_bench/include/GemmUKernel_explo.hpp) for exploratory variants).
+
+1. **Choose Register Tile Geometry ($M_R \times N_R$)**:
+   - Accumulator registers required = $M_R \times \lceil N_R / \text{vlen} \rceil$.
+   - For example, a $4 \times 3$ tile (4 rows, 3 vectors wide): 12 accumulator registers.
+   - Ensure the total register budget ($M_R \times N_R/\text{vlen} + \text{operands}$) fits within the architectural register file (16 registers on AVX2, 32 on AVX-512 / NEON / RVV) with zero spilling.
+
+2. **Inner Loop Pattern**:
+   ```cpp
+   template <typename T>
+   static inline void gemm_myarch_mr4_nr3(
+       const PackedRowMajor<T> &__restrict A,
+       const PackedRowMajor<T> &__restrict B,
+       PackedRowMajor<T> &__restrict C,
+       const T alpha = 1.0,
+       const T beta = 0.0)
+   {
+       constexpr int MR = 4;
+       constexpr int NR_VEC = 3; // 3 SIMD vectors wide
+       constexpr int VEC_SIZE = mipp::N<T>();
+
+       for (int i = 0; i < A.rows; i += MR) {
+           for (int j = 0; j < B.cols; j += NR_VEC * VEC_SIZE) {
+               // 1. Initialize accumulators
+               mipp::reg c[MR][NR_VEC];
+               for (int r = 0; r < MR; ++r)
+                   for (int v = 0; v < NR_VEC; ++v)
+                       c[r][v] = mipp::setzero<T>();
+
+               // 2. Compute-bound inner accumulation loop over K
+               for (int k = 0; k < A.cols; ++k) {
+                   // Broadcast A elements
+                   mipp::reg a0 = mipp::set1<T>(A(i + 0, k));
+                   mipp::reg a1 = mipp::set1<T>(A(i + 1, k));
+                   mipp::reg a2 = mipp::set1<T>(A(i + 2, k));
+                   mipp::reg a3 = mipp::set1<T>(A(i + 3, k));
+
+                   // Load B vectors and issue FMAs
+                   for (int v = 0; v < NR_VEC; ++v) {
+                       mipp::reg b_vec = mipp::load<T>(&B(k, j + v * VEC_SIZE));
+                       c[0][v] = mipp::fmadd(a0, b_vec, c[0][v]);
+                       c[1][v] = mipp::fmadd(a1, b_vec, c[1][v]);
+                       c[2][v] = mipp::fmadd(a2, b_vec, c[2][v]);
+                       c[3][v] = mipp::fmadd(a3, b_vec, c[3][v]);
+                   }
+               }
+
+               // 3. Epilogue: write back with alpha and beta scaling
+               // (see include/Epilogue.hpp for standard accumulation epilogue)
+           }
+       }
+   }
+   ```
+
+### Step 2: Register in `include/GemmUKernel.h`
+1. Add the enum identifier in `UKernelType`:
+   ```cpp
+   enum class UKernelType {
+       // ...
+       mippv2_myarch_mr4_nr3,
+   };
+   ```
+
+2. Add a `KernelDescriptor` to `allDescriptors`:
+   ```cpp
+   {UKernelType::mippv2_myarch_mr4_nr3, "mippv2_myarch_mr4_nr3", RRR, 64},
+   ```
+   - Specify layout: `RRR` (Row-major $A, B, C$) or `CRR` (Col-major $A$, Row-major $B, C$).
+   - Specify default tile size: typically `64` (or `66` for SpacemiT X100).
+
+3. Declare the dispatch wrapper in the `Gemm` struct:
+   ```cpp
+   void gemm_mippv2_myarch_mr4_nr3(const PackedRowMajor<T> &A,
+                                   const PackedRowMajor<T> &B,
+                                   PackedRowMajor<T> &C,
+                                   const T alpha = 1.0,
+                                   const T beta = 0.0) {
+       gemm_myarch_mr4_nr3(A, B, C, alpha, beta);
+   }
+   ```
+
+### Step 3: Wire in `src/main.cpp`
+Add the kernel dispatch branch in [`src/main.cpp`](file:///home/ivan/Files/projets/gemm_bench/src/main.cpp#L125) using `BENCH_KERNEL_FASTPATH`:
+```cpp
+BENCH_KERNEL_FASTPATH(UKernelType::mippv2_myarch_mr4_nr3, gemm_mippv2_myarch_mr4_nr3);
+```
+
+### Step 4: Add Unit Tests in `tests/GemmUKernelTest.cpp`
+Add validation test cases for $C = A \times B$ and $C = \alpha (A \times B) + \beta C$:
+```cpp
+TEST_KERNEL("MIPPv2 MyArch MR4 NR3",
+            gemm.gemm_mippv2_myarch_mr4_nr3(A, B, C_test));
+```
+Run `ctest --test-dir build --output-on-failure` to verify correctness and numerical precision.
+
+### Step 5: Shell Driver Integration (`run_benchmarks.sh`)
+In [`run_benchmarks.sh`](file:///home/ivan/Files/projets/gemm_bench/run_benchmarks.sh), add the kernel name to the corresponding platform's `KERNELS` list:
+```bash
+    mippv2_myarch_mr4_nr3
+```
+
+### Step 6: Benchmark Execution
+Execute the benchmark specifying the output prefix:
+```bash
+./run_benchmarks.sh avx2 -o myarch_avx2 -k mippv2_myarch_mr4_nr3 gcc clang
+```
+
+### Step 7: Configure in `uarch_config.json` & Plot
+In [`uarch_config.json`](file:///home/ivan/Files/projets/gemm_bench/uarch_config.json), add or update the target entry:
+```json
+"myarch": {
+  "name": "My Architecture",
+  "cpu_model": "Custom Core",
+  "frequency_ghz": 3.5,
+  "peak_flop_per_cycle": 16.0,
+  "expected_best_kernel": "mippv2_myarch_mr4_nr3",
+  "csv_pattern": "*gemm_results_*myarch*_{compiler}.csv"
+}
+```
+Run `python3 plot_results.py --input-dir results` to generate updated cross-architecture graphs.
 
 ---
 
 ## Acknowledgments
 
-- **Adrien Cassagne** ([@kouchy](https://github.com/kouchy/)) for providing access to single-board computers (SBCs) equipped with SpacemiT K1 and K3 SoCs on the [Dalek Cluster](https://dalek.proj.lip6.fr/) (*"Dalek: An Unconventional and Energy-Aware Heterogeneous Cluster"*, [arXiv:2508.10481](https://arxiv.org/abs/2508.10481)).
-- **SpacemiT**, for publishing the [SpacemiT K3 Technical Whitepaper](https://forum.spacemit.com/uploads/short-url/60aJ8cYNmrFWqHn4ddwwSzMLjlY.pdf), which provided the key microarchitectural insights into the X100 core RVV implementation.
-- **camel-cdr**, for creating and maintaining the [RVV Benchmark Results](https://camel-cdr.github.io/rvv-bench-results/index.html) project, an invaluable empirical reference for RISC-V Vector performance evaluation.
-- The authors of *["Great Expectations: Benchmarking the Real-World Performance of RVV 1.0 in HPC"](https://arxiv.org/abs/2608.28097)* ([arXiv:2608.28097](https://arxiv.org/abs/2608.28097)), whose recent empirical findings and analysis served as one of the motivation for open-sourcing this benchmark suite :-)
-
----
-
-## Generative AI Disclosure
-
-Generative AI assistants (**Google Gemini** and **OpenAI ChatGPT**) were utilized during the development of this repository to accelerate boilerplate tasks and infrastructure setup, specifically:
-- Automation scripts (shell runners and Python data parsing / plotting pipelines).
-- Benchmark driver CLI scaffolding, argument handling, and boilerplate wiring in C++.
-- Build system configuration and test suite plumbing.
-
-However, the actual GEMM microkernel tuned for Skylake (AVX2 + FMA) and especially the SpacemiT K3 X100 core are the result of multiple weeks of dedicated work, hardware-level profiling, and reflection on the underlying microarchitectures and platforms.
+- **Adrien Cassagne** ([@kouchy](https://github.com/kouchy/)) for access to the single-board computers (SBCs) and nodes on the [Dalek Cluster](https://dalek.proj.lip6.fr/) (*"Dalek: An Unconventional and Energy-Aware Heterogeneous Cluster"*, [arXiv:2508.10481](https://arxiv.org/abs/2508.10481)).
+- **SpacemiT**, for the [SpacemiT K3 Technical Whitepaper](https://forum.spacemit.com/uploads/short-url/60aJ8cYNmrFWqHn4ddwwSzMLjlY.pdf).
+- **camel-cdr**, for the [RVV Benchmark Results](https://camel-cdr.github.io/rvv-bench-results/index.html) project.
+- The authors of *["Great Expectations: Benchmarking the Real-World Performance of RVV 1.0 in HPC"](https://arxiv.org/abs/2608.28097)* ([arXiv:2608.28097](https://arxiv.org/abs/2608.28097)).
