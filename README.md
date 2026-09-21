@@ -7,6 +7,18 @@ A high-performance General Matrix Multiply (DGEMM) microbenchmark and exploratio
 
 This suite evaluates microarchitectural efficiency, vector register tiling strategies, and compiler code generation across **9 distinct CPU microarchitectures** spanning **x86_64** (AVX2, AVX-512), **AArch64** (NEON), and **RISC-V** (RVV 1.0).
 
+> [!NOTE]
+> **Origins & Context**: This benchmark was originally written as part of a research internship at **LIP6** (Sorbonne Université), focusing on the design, implementation, and benchmarking of **RISC-V Vector 1.0 (RVV)** support for **MIPPv2**.
+>
+> **Current Focus & Roadmap (Prioritized TODO)**:
+> 1. **Comparison against Production BLAS (BLIS & OpenBLAS)\***: Benchmark MIPPv2 microkernels against production BLAS libraries across all platforms.
+> 1. **Single-Precision Support (SGEMM / FP32)**: Extend 
+the benchmark suite to evaluate FP32 compute density, throughput scaling, and execution port pressure.
+> 2. **Comparison with Hand-Written Native Intrinsics**: Implement pure architectural intrinsics baselines (native RVV `riscv_vector.h`, AVX-512 `immintrin.h`, NEON `arm_neon.h`) to measure the exact abstraction overhead introduced by MIPPv2.
+> 3. **Cross-SIMD Abstraction Comparisons**: Benchmark against alternative SIMD abstraction frameworks, notably **Google Highway**, **EVE**, and **`std::simd`**.
+>
+> \**Note on BLIS/OpenBLAS for RVV*: Ongoing vendor and community work on RVV-optimized BLAS kernels reportedly outperforms current upstream public releases of BLIS and OpenBLAS, but these patches are not yet fully merged/streamlined in mainline distributions. Benchmarking methodology should evaluate both upstream releases and patched branches.
+
 ---
 
 ## Microarchitectural Performance & Peak Efficiency
@@ -22,17 +34,17 @@ The benchmark evaluates single-thread, compute-bound double-precision GEMM throu
 
 Across all target ISA families (x86_64, ARM NEON, RISC-V Vector), tuned microkernels achieve **>90% of theoretical peak performance** (reaching up to **>98%** on some uarchs):
 
-| SIMD | Microarchitecture | CPU / SoC Model | Freq (GHz) | Peak FLOP/cyc | Champion Kernel | Comp | Peak GFLOP/s | DGEMM FLOP/cyc | % of Peak |
-| :--- | :--- | :--- | :---: | :---: | :--- | :---: | :---: | :---: | :---: |
-| **AVX-512** | **AMD Zen 4** | Ryzen 9 7900X | 5.4 | 16.0 | `mippv2_firestorm_mr4_nr4_fmaddi` | GCC | 85.4 | 15.82 | **98.9 %** |
-| **AVX-512** | **AMD Zen 5 Strix Point** | Ryzen AI 9 HX 370 | 5.1 | 16.0 | `mippv2_firestorm_mr4_nr4_fmaddi` | GCC | 80.4 | 15.77 | **98.6 %** |
-| **AVX2** | **Intel Meteor Lake** | Redwood Cove P-Core | 5.1** | 16.0 | `mippv2_meteorlake_mr4_nr3` | GCC | 74.8 | 14.66 | **91.6 %** |
-| **AVX2** | **Intel Skylake** | Core i5-6200U | 2.3 | 16.0 | `mippv2_meteorlake_mr4_nr3` | Clang | 33.4 | 14.53 | **90.8 %** |
-| **NEON** | **Apple M1 Firestorm** | M1 Ultra (P-core) | 3.0 | 16.0 | `mippv2_x60_mr6_nr4_fmaddi` | GCC | 47.5 | 15.83 | **98.9 %** |
-| **NEON** | **Cortex-A76** | Raspberry Pi 5 | 2.4 | 8.0 | `mippv2_a76_mr6_nr3` | GCC | 18.0 | 7.49 | **93.6 %** |
-| **RVV 1.0** | **SpacemiT X100** | K3 SoC (VLEN=256) | 2.2* | 8.0 | `mippv2_x100_register_blocked_apack4` | Clang | 16.3 | 7.42 | **92.7 %** |
-| **RVV 1.0** | **SpacemiT A100** | K3 SoC (VLEN=1024) | 1.8* | 8.0 | `mippv2_a100_mr7_nr2_lmul2_pipe` | GCC | 11.7 | 6.48 | **81.0 %** |
-| **RVV 1.0** | **SpacemiT X60** | BPI-F3 SoC (VLEN=256)| 1.6 | 8.0 | `mippv2_a100_mr7_nr4_pipe` | GCC | 6.2 | 3.89 | **48.7 %** |
+| SIMD | Microarchitecture | CPU / SoC Model | Freq (GHz) | Peak FLOP/cyc | Comp | Peak GFLOP/s | DGEMM FLOP/cyc | % of Peak |
+| :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **AVX-512** | **AMD Zen 4** | Ryzen 9 7900X | 5.4 | 16.0 | GCC | 85.4 | 15.82 | **98.9 %** |
+| **AVX-512** | **AMD Zen 5 Strix Point** | Ryzen AI 9 HX 370 | 5.1 | 16.0 | GCC | 80.4 | 15.77 | **98.6 %** |
+| **AVX2** | **Intel Meteor Lake** | Redwood Cove P-Core | 5.1** | 16.0 | GCC | 74.8 | 14.66 | **91.6 %** |
+| **AVX2** | **Intel Skylake** | Core i5-6200U | 2.3 | 16.0 | Clang | 33.4 | 14.53 | **90.8 %** |
+| **NEON** | **Apple M1 Firestorm** | M1 Ultra (P-core) | 3.0 | 16.0 | GCC | 47.5 | 15.83 | **98.9 %** |
+| **NEON** | **Cortex-A76** | Raspberry Pi 5 | 2.4 | 8.0 | GCC | 18.0 | 7.49 | **93.6 %** |
+| **RVV 1.0** | **SpacemiT X100** | K3 SoC (VLEN=256) | 2.2* | 8.0 | Clang | 16.3 | 7.42 | **92.7 %** |
+| **RVV 1.0** | **SpacemiT A100** | K3 SoC (VLEN=1024) | 1.8* | 8.0 | GCC | 11.7 | 6.48 | **81.0 %** |
+| **RVV 1.0** | **SpacemiT X60** | BPI-F3 SoC (VLEN=256)| 1.6 | 8.0 | GCC | 6.2 | 3.89 | **48.7 %** |
 
 > [!NOTE]
 > **Roadmap & Perspectives: Empirical Hardware Peak Measurement**:
