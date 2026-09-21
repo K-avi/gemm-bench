@@ -365,7 +365,7 @@ Generative AI assistants (**Google Gemini** and **OpenAI ChatGPT**) were utilize
 
 The foundational DGEMM microkernel designs tuned for **Intel Skylake** (AVX2 + FMA) and the **SpacemiT K3 X100** core are the result of multiple weeks of work and reflection on the underlying microarchitectures and platforms. And the best **X100** microkernels are, I think, some of the best results of my internship.
 
-For subsequent target microarchitectures, the methodology was empirical: the exploration workflow held established algorithmic invariants constant:
+For subsequent target microarchitectures, the methodology was empirical: the exploration workflow relied on pre-established invariants:
 - **Consistent Layout**: Favoring the $RRR$ packing format (Row-major $A, B, C$). I've messed with CRR & CRC when I was getting desperate on the X60. It didn't amount to much...
 - **Inner-Loop Access Patterns**: Preserving either the scalar broadcast pattern (`mipp::set1` + `mipp::fmadd`) or the indexed FMA pattern (`mipp::fmaddi`) on matrix $A$.
 
