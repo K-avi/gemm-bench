@@ -5,7 +5,7 @@
       "cpu_model": "i5-6200U",
       "frequency_ghz": 2.3,
       "peak_flop_per_cycle": 16.0,
-      "expected_best_kernel": "mippv2_skylake_register_blocked",
+      "expected_best_kernel": "mippv2_meteorlake_mr4_nr3",
       "csv_pattern": "*gemm_results_*skylake*_{compiler}.csv"
     },
     "meteorlake": {
@@ -23,7 +23,7 @@
       "cpu_model": "Ryzen 9 7900X",
       "frequency_ghz": 5.4,
       "peak_flop_per_cycle": 16.0,
-      "expected_best_kernel": "mippv2_zen4_mr4_nr4_fmaddi",
+      "expected_best_kernel": "mippv2_firestorm_mr4_nr4_fmaddi",
       "csv_pattern": "*gemm_results_*zen4*_{compiler}.csv"
     },
     "zen5": {
@@ -31,7 +31,7 @@
       "cpu_model": "Ryzen AI 9 HX 370",
       "frequency_ghz": 5.1,
       "peak_flop_per_cycle": 16.0,
-      "expected_best_kernel": "mippv2_zen4_mr4_nr4_fmaddi",
+      "expected_best_kernel": "mippv2_firestorm_mr4_nr4_fmaddi",
       "csv_pattern": "*gemm_results_*zen5*_{compiler}.csv"
     }
   },
@@ -41,7 +41,7 @@
       "cpu_model": "Firestorm",
       "frequency_ghz": 3.0,
       "peak_flop_per_cycle": 16.0,
-      "expected_best_kernel": "mippv2_firestorm_mr6_nr4_fmaddi",
+      "expected_best_kernel": "mippv2_x60_mr6_nr4_fmaddi",
       "csv_pattern": "*gemm_results_*m1*_{compiler}.csv"
     },
     "rpi5": {
@@ -75,7 +75,7 @@
       "cpu_model": "SpacemiT A100",
       "frequency_ghz": 1.8,
       "peak_flop_per_cycle": 8.0,
-      "expected_best_kernel": "mippv2_a100_mr7_nr4_pipe",
+      "expected_best_kernel": "mippv2_a100_mr7_nr2_lmul2_pipe",
       "csv_pattern": "*gemm_results_*a100*_{compiler}.csv"
     }
   }
