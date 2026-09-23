@@ -34,21 +34,14 @@ Across all target ISA families (x86_64 AVX2 & AVX-512, ARM NEON, RISC-V Vector),
 | **AVX2** | **Intel Skylake** | Core i5-6200U | 2.3 | 16.0 | Clang | 33.4 | 14.53 | **90.8 %** |
 | **NEON** | **Apple M1 Firestorm** | M1 Ultra (P-core) | 3.0 | 16.0 | GCC | 47.5 | 15.83 | **98.9 %** |
 | **NEON** | **Cortex-A76** | Raspberry Pi 5 | 2.4 | 8.0 | GCC | 18.0 | 7.49 | **93.6 %** |
-| **RVV 1.0** | **SpacemiT X100** | K3 SoC (VLEN=256) | 2.2* | 8.0 | Clang | 16.3 | 7.42 | **92.7 %** |
-| **RVV 1.0** | **SpacemiT A100** | K3 SoC (VLEN=1024) | 1.8* | 8.0 | GCC | 11.7 | 6.48 | **81.0 %** |
+| **RVV 1.0** | **SpacemiT X100** | K3 SoC (VLEN=256) | 2.4 | 8.0 | Clang | 17.8 | 7.42 | **92.8 %** |
+| **RVV 1.0** | **SpacemiT A100** | K3 SoC (VLEN=1024) | 2.0 | 8.0 | GCC | 13.0 | 6.48 | **81.0 %** |
 | **RVV 1.0** | **SpacemiT X60** | BPI-F3 SoC (VLEN=256)| 1.6 | 8.0 | GCC | 6.2 | 3.89 | **48.7 %** |
 
 > [!NOTE]
 > **Roadmap & perspectives: empirical hardware peak measurement**:
 > - Currently, all efficiencies are reported against the **theoretical peak** ($\text{FLOP/cycle}$), calculated from the architectural port layout (e.g. $2 \times 4 \times 2 = 16\text{ DP FLOP/cycle}$ for AVX2).
 > - **Ongoing work**: Incorporating a benchmark (generalized from `x100_uarch_exp/broadcast_bench.cpp`) directly into the driver suite to measure the empirical hardware FPU ceiling on each target machine and isolate pure FMA pipeline saturation.
-
-> [!IMPORTANT]
-> **Cluster clock frequency constraints (SpacemiT X100 & A100)**:
-> - **SpacemiT X100**: The SBC is hardware-rated up to **2.4 GHz**. On the LIP6 Dalek cluster node, it is governed at **2.2 GHz** I don't have sudo permissions to modify CPU governors.
-> - **SpacemiT A100**: The SBC is hardware-rated up to **2.0 GHz**. On the cluster node, it is governed at **1.8 GHz**.
-> 
-> All reported GFLOP/s and FLOP/cycle figures are computed against these operating frequencies.
 
 > [!IMPORTANT]
 > **Intel Meteor Lake frequency characteristics (burst vs. sustained)**:

@@ -64,7 +64,7 @@
     "x100": {
       "name": "SpacemiT X100",
       "cpu_model": "SpacemiT X100",
-      "frequency_ghz": 2.2,
+      "frequency_ghz": 2.4,
       "hardware_max_frequency_ghz": 2.4,
       "peak_flop_per_cycle": 8.0,
       "measured_peak_flop_per_cycle": 7.47,
@@ -84,7 +84,7 @@
     "a100": {
       "name": "SpacemiT A100",
       "cpu_model": "SpacemiT A100",
-      "frequency_ghz": 1.8,
+      "frequency_ghz": 2.0,
       "hardware_max_frequency_ghz": 2.0,
       "peak_flop_per_cycle": 8.0,
       "measured_peak_flop_per_cycle": 7.20,

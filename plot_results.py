@@ -432,31 +432,69 @@ def plot_cross_uarch_flop_per_cycle(champions: List[UArchChampion], output_path:
 
     max_val = max(c.peak_flop_per_cycle for c in sorted_champs)
 
-    # Dock text cleanly on the left border inside the bar:
+    # Simplified label: only FLOP/cyc inside the bar (no champion kernel name, no matrix size, no GFLOP/s)
     for idx, (champ, bar) in enumerate(zip(sorted_champs, bars)):
         val = champ.peak_flop_per_cycle
-        theo = champ.spec.peak_flop_per_cycle
-        eff = champ.efficiency_pct
-        gflops = champ.peak_gflops
-        m_dim = champ.peak_m
-        text_label = f" {val:.2f} / {theo:.0f} FLOP/cyc  ({eff:.1f}% peak | {gflops:.1f} GFLOP/s @ M={m_dim})"
+        text_label = f" {val:.2f} FLOP/cyc"
         ax.text(
-            max_val * 0.015,
+            0.2,
             idx,
             text_label,
             va="center",
             ha="left",
             color="#ffffff",
             fontweight="bold",
-            fontsize=9.5,
+            fontsize=10,
             zorder=5,
+        )
+
+    # Theoretical ceiling bars/lines: 8 FLOP/cyc and 16 FLOP/cyc groups
+    idx_8 = [i for i, c in enumerate(sorted_champs) if np.isclose(c.spec.peak_flop_per_cycle, 8.0)]
+    idx_16 = [i for i, c in enumerate(sorted_champs) if np.isclose(c.spec.peak_flop_per_cycle, 16.0)]
+
+    if idx_8 and idx_16:
+        split_y = (max(idx_8) + min(idx_16)) / 2.0
+        ax.axhline(split_y, color=BORDER_COLOR, linestyle=":", linewidth=1.0, zorder=2)
+
+    if idx_8:
+        ymin_8 = min(idx_8) - 0.45
+        ymax_8 = max(idx_8) + 0.45
+        ax.vlines(8.0, ymin_8, ymax_8, color="#334155", linestyle="--", linewidth=1.8, zorder=4)
+        ax.text(
+            8.15,
+            (ymin_8 + ymax_8) / 2.0,
+            "Theoretical Peak: 8 FLOP/cyc",
+            ha="left",
+            va="center",
+            fontsize=9.5,
+            fontweight="bold",
+            color="#334155",
+            zorder=4,
+        )
+
+    if idx_16:
+        ymin_16 = min(idx_16) - 0.45
+        ymax_16 = max(idx_16) + 0.45
+        ax.vlines(16.0, ymin_16, ymax_16, color="#334155", linestyle="--", linewidth=1.8, zorder=4)
+        ax.text(
+            16.0,
+            ymax_16 + 0.15,
+            "Theoretical Peak: 16 FLOP/cyc",
+            ha="right",
+            va="bottom",
+            fontsize=9.5,
+            fontweight="bold",
+            color="#334155",
+            zorder=4,
         )
 
     y_labels = [format_uarch_axis_label(c) for c in sorted_champs]
     ax.set_yticks(y_positions)
     ax.set_yticklabels(y_labels, fontsize=9.5)
 
-    ax.set_xlim(0, max_val * 1.08)
+    ax.set_xlim(0, 17.5)
+    ax.set_xticks(range(0, 19, 2))
+    ax.set_ylim(-0.6, len(sorted_champs) - 0.4 + 0.6)
     ax.set_xlabel("Compute Density (DP FLOP / cycle)", fontsize=11, fontweight="bold", labelpad=10)
 
     fig.text(
@@ -469,28 +507,30 @@ def plot_cross_uarch_flop_per_cycle(champions: List[UArchChampion], output_path:
     )
     fig.text(
         0.04, 0.935,
-        "Higher is better | Evaluated across M=N=K ∈ {32, 64, 96, 128} | Theoretical ceiling defined by datapath width & execution ports",
+        "Higher is better | Evaluated across M=N=K ∈ {32, 64, 96, 128} | FP64 canonical DGEMM (α=1, β=0)",
         fontsize=9.5,
         color=TEXT_SECONDARY,
         ha="left",
     )
 
+    from matplotlib.lines import Line2D
     from matplotlib.patches import Patch
     legend_elements = [
         Patch(facecolor=SIMD_FAMILY_COLORS["avx512"], edgecolor=BORDER_COLOR, label="AVX-512"),
         Patch(facecolor=SIMD_FAMILY_COLORS["avx2"], edgecolor=BORDER_COLOR, label="AVX2"),
         Patch(facecolor=SIMD_FAMILY_COLORS["neon"], edgecolor=BORDER_COLOR, label="NEON"),
         Patch(facecolor=SIMD_FAMILY_COLORS["rvv"], edgecolor=BORDER_COLOR, label="RVV 1.0"),
+        Line2D([0], [0], color="#334155", linestyle="--", linewidth=1.8, label="Theoretical Peak"),
     ]
-    fig.legend(
+    ax.legend(
         handles=legend_elements,
-        loc="upper right",
-        bbox_to_anchor=(0.96, 0.97),
-        ncol=4,
-        framealpha=0.92,
+        loc="lower right",
+        bbox_to_anchor=(0.98, 0.05),
+        ncol=2,
+        framealpha=0.95,
         edgecolor=BORDER_COLOR,
         facecolor=CARD_BG,
-        fontsize=9,
+        fontsize=9.5,
     )
 
     ax.spines["top"].set_visible(False)
