@@ -19,6 +19,7 @@ add_executable(GemmBenchTests
     TestMain.cpp
     GemmUKernelTest.cpp
     AllocTest.cpp
+    MacroKernelTest.cpp
 )
 
 target_compile_options(GemmBenchTests

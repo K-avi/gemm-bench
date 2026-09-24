@@ -28,6 +28,8 @@ test_plots/
 .vscode/
 .idea/
 .cache/
+.clangd
+c_cpp_properties.json
 *.swp
 *.swo
 *~
@@ -47,3 +49,4 @@ k3-6.pdf
 results_zen5/
 logs/
 gemm-bench-results-backup/
+notes.md

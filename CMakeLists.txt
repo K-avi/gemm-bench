@@ -46,6 +46,8 @@ add_library(gemmbench INTERFACE)
 target_include_directories(gemmbench
     INTERFACE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/microkernels
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/macrokernel
         ${MIPPV2_INCLUDE_DIR}
 )
 
