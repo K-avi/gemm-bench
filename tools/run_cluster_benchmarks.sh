@@ -338,7 +338,7 @@ mkdir -p "$LOG_DIR"
 
 if [[ "$SEQUENTIAL" == "true" || ${#SELECTED_TARGETS[@]} -eq 1 ]]; then
     for target in "${SELECTED_TARGETS[@]}"; do
-        local champ_desc="champions: $(get_target_champions "$target")"
+        champ_desc="champions: $(get_target_champions "$target")"
         [[ "$RUN_ALL_FLAG" == "true" ]] && champ_desc="all kernels"
         [[ ${#CUSTOM_KERNELS[@]} -gt 0 ]] && champ_desc="${CUSTOM_KERNELS[*]}"
         echo -e "${BOLD}--------------------------------------------------------------------------------${NC}"
@@ -367,7 +367,7 @@ else
         status_file="${LOG_DIR}/${target}.status"
         rm -f "$status_file"
 
-        local champ_desc="champions: $(get_target_champions "$target")"
+        champ_desc="champions: $(get_target_champions "$target")"
         [[ "$RUN_ALL_FLAG" == "true" ]] && champ_desc="all kernels"
         [[ ${#CUSTOM_KERNELS[@]} -gt 0 ]] && champ_desc="${CUSTOM_KERNELS[*]}"
 
