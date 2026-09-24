@@ -7,11 +7,14 @@ DEFAULT_PIN_CORE="8"
 
 DEFAULT_KERNELS=(
     mippv2_a100_mr7_nr2_lmul2_pipe
+    mippv2_a100_mr7_nr2_lmul2_pipe_crr
 )
 
 ALL_KERNELS=(
     mippv2_a100_mr7_nr2_lmul2_pipe
+    mippv2_a100_mr7_nr2_lmul2_pipe_crr
     mippv2_a100_mr7_nr4_pipe
+    mippv2_a100_mr7_nr4_pipe_crr
 )
 
 COMMON_FLAGS="

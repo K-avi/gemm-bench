@@ -6,10 +6,12 @@ DEFAULT_PIN_CORE="0"
 
 DEFAULT_KERNELS=(
     mippv2_meteorlake_mr4_nr3
+    mippv2_meteorlake_mr4_nr3_crr
 )
 
 ALL_KERNELS=(
     mippv2_meteorlake_mr4_nr3
+    mippv2_meteorlake_mr4_nr3_crr
     mippv2_skylake_register_blocked
     mippv2_skylake_lmul_register_blocked
     mippv2_skylake_lmul2_register_blocked

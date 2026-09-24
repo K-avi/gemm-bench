@@ -6,12 +6,16 @@ DEFAULT_VERSION="rvv"
 
 DEFAULT_KERNELS=(
     mippv2_a100_mr7_nr4_pipe
+    mippv2_a100_mr7_nr4_pipe_crr
 )
 
 ALL_KERNELS=(
     mippv2_a100_mr7_nr4_pipe
+    mippv2_a100_mr7_nr4_pipe_crr
     mippv2_x60_mr6_nr4_fmaddi
+    mippv2_x60_mr6_nr4_fmaddi_crr
     mippv2_x100_register_blocked_apack4
+    mippv2_x100_register_blocked_apack4_crr
 )
 
 COMMON_FLAGS="

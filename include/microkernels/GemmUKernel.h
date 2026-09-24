@@ -16,7 +16,7 @@ enum class UKernelType {
   // Production / Champion kernels (always compiled)
   IJK,
 
-  // Champions
+  // Champions (RRR)
   mippv2_meteorlake_mr4_nr3,
   mippv2_a76_mr6_nr3,
   mippv2_zen4_mr4_nr4_fmaddi,
@@ -26,6 +26,17 @@ enum class UKernelType {
   mippv2_x100_register_blocked_apack4,
   mippv2_a100_mr7_nr4_pipe,
   mippv2_a100_mr7_nr2_lmul2_pipe,
+
+  // Champions (CRR)
+  mippv2_meteorlake_mr4_nr3_crr,
+  mippv2_a76_mr6_nr3_crr,
+  mippv2_zen4_mr4_nr4_fmaddi_crr,
+  mippv2_firestorm_mr4_nr4_fmaddi_crr,
+  mippv2_firestorm_mr6_nr4_fmaddi_crr,
+  mippv2_x60_mr6_nr4_fmaddi_crr,
+  mippv2_x100_register_blocked_apack4_crr,
+  mippv2_a100_mr7_nr4_pipe_crr,
+  mippv2_a100_mr7_nr2_lmul2_pipe_crr,
 
 #ifdef GEMMBENCH_ENABLE_EXPLO
   // Exploratory kernels (guarded by GEMMBENCH_ENABLE_EXPLO)
@@ -125,6 +136,17 @@ inline constexpr KernelDescriptor kernelTable[] = {
     {UKernelType::mippv2_x100_register_blocked_apack4, "mippv2_x100_register_blocked_apack4", RRR, 66},
     {UKernelType::mippv2_a100_mr7_nr4_pipe, "mippv2_a100_mr7_nr4_pipe", RRR, 64},
     {UKernelType::mippv2_a100_mr7_nr2_lmul2_pipe, "mippv2_a100_mr7_nr2_lmul2_pipe", RRR, 64},
+
+    // Champions (CRR)
+    {UKernelType::mippv2_meteorlake_mr4_nr3_crr, "mippv2_meteorlake_mr4_nr3_crr", CRR, 64},
+    {UKernelType::mippv2_a76_mr6_nr3_crr, "mippv2_a76_mr6_nr3_crr", CRR, 64},
+    {UKernelType::mippv2_zen4_mr4_nr4_fmaddi_crr, "mippv2_zen4_mr4_nr4_fmaddi_crr", CRR, 64},
+    {UKernelType::mippv2_firestorm_mr4_nr4_fmaddi_crr, "mippv2_firestorm_mr4_nr4_fmaddi_crr", CRR, 64},
+    {UKernelType::mippv2_firestorm_mr6_nr4_fmaddi_crr, "mippv2_firestorm_mr6_nr4_fmaddi_crr", CRR, 64},
+    {UKernelType::mippv2_x60_mr6_nr4_fmaddi_crr, "mippv2_x60_mr6_nr4_fmaddi_crr", CRR, 64},
+    {UKernelType::mippv2_x100_register_blocked_apack4_crr, "mippv2_x100_register_blocked_apack4_crr", CRR, 66},
+    {UKernelType::mippv2_a100_mr7_nr4_pipe_crr, "mippv2_a100_mr7_nr4_pipe_crr", CRR, 64},
+    {UKernelType::mippv2_a100_mr7_nr2_lmul2_pipe_crr, "mippv2_a100_mr7_nr2_lmul2_pipe_crr", CRR, 64},
 
 #ifdef GEMMBENCH_ENABLE_EXPLO
     // Exploratory kernels

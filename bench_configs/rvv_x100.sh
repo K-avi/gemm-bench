@@ -7,10 +7,12 @@ DEFAULT_PIN_CORE="0"
 
 DEFAULT_KERNELS=(
     mippv2_x100_register_blocked_apack4
+    mippv2_x100_register_blocked_apack4_crr
 )
 
 ALL_KERNELS=(
     mippv2_x100_register_blocked_apack4
+    mippv2_x100_register_blocked_apack4_crr
     mippv2_x100_register_blocked_lmul1
     mippv2_x100_register_blocked_lmul2
     mippv2_x100_register_blocked_lmul4

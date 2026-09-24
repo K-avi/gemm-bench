@@ -204,9 +204,9 @@ static void testGemmSuite() {
 }
 
 template <typename T> static void testGemmSuiteCRR() {
-  constexpr size_t M = 13;
-  constexpr size_t N = 17;
-  constexpr size_t K = 11;
+  constexpr size_t M = 32;
+  constexpr size_t N = 32;
+  constexpr size_t K = 32;
 
   auto &cfg = GEMMBench::config();
 
@@ -253,6 +253,26 @@ template <typename T> static void testGemmSuiteCRR() {
                                                                                \
     checkMatrixEqual(C_test, C_ref);                                           \
   }
+
+  // CRR Champion kernels
+  TEST_KERNEL("MIPPv2 Meteorlake MR4 NR3 CRR",
+              gemm.gemm_mippv2_meteorlake_mr4_nr3_crr(A, B, C_test));
+  TEST_KERNEL("MIPPv2 Cortex-A76 MR6 NR3 CRR",
+              gemm.gemm_mippv2_a76_mr6_nr3_crr(A, B, C_test));
+  TEST_KERNEL("MIPPv2 Zen 4 MR4 NR4 FMADDI CRR",
+              gemm.gemm_mippv2_zen4_mr4_nr4_fmaddi_crr(A, B, C_test));
+  TEST_KERNEL("MIPPv2 Firestorm MR4 NR4 FMADDI CRR",
+              gemm.gemm_mippv2_firestorm_mr4_nr4_fmaddi_crr(A, B, C_test));
+  TEST_KERNEL("MIPPv2 Firestorm MR6 NR4 FMADDI CRR",
+              gemm.gemm_mippv2_firestorm_mr6_nr4_fmaddi_crr(A, B, C_test));
+  TEST_KERNEL("MIPPv2 X60 MR6 NR4 FMADDI CRR",
+              gemm.gemm_mippv2_x60_mr6_nr4_fmaddi_crr(A, B, C_test));
+  TEST_KERNEL("MIPPv2 X100 Register Blocked Apack4 CRR",
+              gemm.gemm_mippv2_x100_register_blocked_apack4_crr(A, B, C_test));
+  TEST_KERNEL("MIPPv2 A100 MR7 NR4 Pipe CRR",
+              gemm.gemm_mippv2_a100_mr7_nr4_pipe_crr(A, B, C_test));
+  TEST_KERNEL("MIPPv2 A100 MR7 NR2 LMUL2 Pipe CRR",
+              gemm.gemm_mippv2_a100_mr7_nr2_lmul2_pipe_crr(A, B, C_test));
 
 #ifdef GEMMBENCH_ENABLE_EXPLO
   TEST_KERNEL("MIPPv2 Skylake panel",
@@ -522,6 +542,53 @@ template <typename T> static void testAlphaBetaSuiteCRR() {
       resetMatrix(C_test, C_init);
 
       gemm.gemm_ijk(A_ref, B, C_ref, p.alpha, p.beta);
+
+      // CRR Champion kernels
+      SECTION("mippv2_meteorlake_mr4_nr3_crr") {
+        resetMatrix(C_test, C_init);
+        gemm.gemm_mippv2_meteorlake_mr4_nr3_crr(A, B, C_test, p.alpha, p.beta);
+        checkMatrixEqual(C_ref, C_test);
+      }
+      SECTION("mippv2_a76_mr6_nr3_crr") {
+        resetMatrix(C_test, C_init);
+        gemm.gemm_mippv2_a76_mr6_nr3_crr(A, B, C_test, p.alpha, p.beta);
+        checkMatrixEqual(C_ref, C_test);
+      }
+      SECTION("mippv2_zen4_mr4_nr4_fmaddi_crr") {
+        resetMatrix(C_test, C_init);
+        gemm.gemm_mippv2_zen4_mr4_nr4_fmaddi_crr(A, B, C_test, p.alpha, p.beta);
+        checkMatrixEqual(C_ref, C_test);
+      }
+      SECTION("mippv2_firestorm_mr4_nr4_fmaddi_crr") {
+        resetMatrix(C_test, C_init);
+        gemm.gemm_mippv2_firestorm_mr4_nr4_fmaddi_crr(A, B, C_test, p.alpha, p.beta);
+        checkMatrixEqual(C_ref, C_test);
+      }
+      SECTION("mippv2_firestorm_mr6_nr4_fmaddi_crr") {
+        resetMatrix(C_test, C_init);
+        gemm.gemm_mippv2_firestorm_mr6_nr4_fmaddi_crr(A, B, C_test, p.alpha, p.beta);
+        checkMatrixEqual(C_ref, C_test);
+      }
+      SECTION("mippv2_x60_mr6_nr4_fmaddi_crr") {
+        resetMatrix(C_test, C_init);
+        gemm.gemm_mippv2_x60_mr6_nr4_fmaddi_crr(A, B, C_test, p.alpha, p.beta);
+        checkMatrixEqual(C_ref, C_test);
+      }
+      SECTION("mippv2_x100_register_blocked_apack4_crr") {
+        resetMatrix(C_test, C_init);
+        gemm.gemm_mippv2_x100_register_blocked_apack4_crr(A, B, C_test, p.alpha, p.beta);
+        checkMatrixEqual(C_ref, C_test);
+      }
+      SECTION("mippv2_a100_mr7_nr4_pipe_crr") {
+        resetMatrix(C_test, C_init);
+        gemm.gemm_mippv2_a100_mr7_nr4_pipe_crr(A, B, C_test, p.alpha, p.beta);
+        checkMatrixEqual(C_ref, C_test);
+      }
+      SECTION("mippv2_a100_mr7_nr2_lmul2_pipe_crr") {
+        resetMatrix(C_test, C_init);
+        gemm.gemm_mippv2_a100_mr7_nr2_lmul2_pipe_crr(A, B, C_test, p.alpha, p.beta);
+        checkMatrixEqual(C_ref, C_test);
+      }
 
 #ifdef GEMMBENCH_ENABLE_EXPLO
       SECTION("mippv2_skylake_panel") {

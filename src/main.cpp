@@ -241,6 +241,51 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
                      const PackedColMajor<T> &A, const PackedRowMajor<T> &B,
                      PackedRowMajor<T> &C) {
   switch (cfg.kernel) {
+  case UKernelType::mippv2_meteorlake_mr4_nr3_crr:
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_meteorlake_mr4_nr3_crr(A, B, C),
+        gemm.gemm_mippv2_meteorlake_mr4_nr3_crr(A, B, C, cfg.alpha, cfg.beta));
+
+  case UKernelType::mippv2_a76_mr6_nr3_crr:
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_a76_mr6_nr3_crr(A, B, C),
+        gemm.gemm_mippv2_a76_mr6_nr3_crr(A, B, C, cfg.alpha, cfg.beta));
+
+  case UKernelType::mippv2_zen4_mr4_nr4_fmaddi_crr:
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_zen4_mr4_nr4_fmaddi_crr(A, B, C),
+        gemm.gemm_mippv2_zen4_mr4_nr4_fmaddi_crr(A, B, C, cfg.alpha, cfg.beta));
+
+  case UKernelType::mippv2_firestorm_mr4_nr4_fmaddi_crr:
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_firestorm_mr4_nr4_fmaddi_crr(A, B, C),
+        gemm.gemm_mippv2_firestorm_mr4_nr4_fmaddi_crr(A, B, C, cfg.alpha, cfg.beta));
+
+  case UKernelType::mippv2_firestorm_mr6_nr4_fmaddi_crr:
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_firestorm_mr6_nr4_fmaddi_crr(A, B, C),
+        gemm.gemm_mippv2_firestorm_mr6_nr4_fmaddi_crr(A, B, C, cfg.alpha, cfg.beta));
+
+  case UKernelType::mippv2_x60_mr6_nr4_fmaddi_crr:
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_x60_mr6_nr4_fmaddi_crr(A, B, C),
+        gemm.gemm_mippv2_x60_mr6_nr4_fmaddi_crr(A, B, C, cfg.alpha, cfg.beta));
+
+  case UKernelType::mippv2_x100_register_blocked_apack4_crr:
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_x100_register_blocked_apack4_crr(A, B, C),
+        gemm.gemm_mippv2_x100_register_blocked_apack4_crr(A, B, C, cfg.alpha, cfg.beta));
+
+  case UKernelType::mippv2_a100_mr7_nr4_pipe_crr:
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_a100_mr7_nr4_pipe_crr(A, B, C),
+        gemm.gemm_mippv2_a100_mr7_nr4_pipe_crr(A, B, C, cfg.alpha, cfg.beta));
+
+  case UKernelType::mippv2_a100_mr7_nr2_lmul2_pipe_crr:
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_a100_mr7_nr2_lmul2_pipe_crr(A, B, C),
+        gemm.gemm_mippv2_a100_mr7_nr2_lmul2_pipe_crr(A, B, C, cfg.alpha, cfg.beta));
+
 #ifdef GEMMBENCH_ENABLE_EXPLO
   case UKernelType::mippv2_skylake_panel:
     BENCH_KERNEL(gemm.gemm_mippv2_skylake_panel(A, B, C, cfg.alpha, cfg.beta));

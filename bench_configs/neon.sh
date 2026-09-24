@@ -6,6 +6,7 @@ if [[ "$(hostname)" == *"m1"* || "${PLATFORM_TAG:-}" == "m1" ]]; then
     DEFAULT_PIN_CORE="3"
     DEFAULT_KERNELS=(
         mippv2_x60_mr6_nr4_fmaddi
+        mippv2_x60_mr6_nr4_fmaddi_crr
     )
 elif [[ "$(hostname)" == *"rpi"* || "${PLATFORM_TAG:-}" == "rpi5" ]]; then
     PLATFORM_NAME="Raspberry Pi 5 (NEON)"
@@ -13,6 +14,7 @@ elif [[ "$(hostname)" == *"rpi"* || "${PLATFORM_TAG:-}" == "rpi5" ]]; then
     CSV_PREFIX="gemm_results_neon_rpi5"
     DEFAULT_KERNELS=(
         mippv2_a76_mr6_nr3
+        mippv2_a76_mr6_nr3_crr
     )
 else
     PLATFORM_NAME="ARMv8-A (NEON)"
@@ -20,15 +22,21 @@ else
     CSV_PREFIX="gemm_results_neon"
     DEFAULT_KERNELS=(
         mippv2_a76_mr6_nr3
+        mippv2_a76_mr6_nr3_crr
         mippv2_x60_mr6_nr4_fmaddi
+        mippv2_x60_mr6_nr4_fmaddi_crr
     )
 fi
 
 ALL_KERNELS=(
     mippv2_a76_mr6_nr3
+    mippv2_a76_mr6_nr3_crr
     mippv2_x60_mr6_nr4_fmaddi
+    mippv2_x60_mr6_nr4_fmaddi_crr
     mippv2_firestorm_mr4_nr4_fmaddi
+    mippv2_firestorm_mr4_nr4_fmaddi_crr
     mippv2_firestorm_mr6_nr4_fmaddi
+    mippv2_firestorm_mr6_nr4_fmaddi_crr
     mippv2_firestorm_mr4_nr4
     mippv2_firestorm_mr6_nr4
 )

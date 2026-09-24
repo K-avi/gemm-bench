@@ -22,28 +22,28 @@ BOLD='\033[1m'
 NC='\033[0m'
 
 declare -A TARGET_CHAMPIONS=(
-    [x100]="mippv2_x100_register_blocked_apack4"
-    [a100]="mippv2_a100_mr7_nr2_lmul2_pipe"
-    [x60]="mippv2_a100_mr7_nr4_pipe"
-    [rpi5]="mippv2_a76_mr6_nr3"
-    [m1]="mippv2_x60_mr6_nr4_fmaddi"
-    [zen4]="mippv2_firestorm_mr4_nr4_fmaddi"
-    [zen5]="mippv2_firestorm_mr4_nr4_fmaddi"
-    [meteorlake]="mippv2_meteorlake_mr4_nr3"
+    [x100]="mippv2_x100_register_blocked_apack4 mippv2_x100_register_blocked_apack4_crr"
+    [a100]="mippv2_a100_mr7_nr2_lmul2_pipe mippv2_a100_mr7_nr2_lmul2_pipe_crr"
+    [x60]="mippv2_a100_mr7_nr4_pipe mippv2_a100_mr7_nr4_pipe_crr"
+    [rpi5]="mippv2_a76_mr6_nr3 mippv2_a76_mr6_nr3_crr"
+    [m1]="mippv2_x60_mr6_nr4_fmaddi mippv2_x60_mr6_nr4_fmaddi_crr"
+    [zen4]="mippv2_firestorm_mr4_nr4_fmaddi mippv2_firestorm_mr4_nr4_fmaddi_crr"
+    [zen5]="mippv2_firestorm_mr4_nr4_fmaddi mippv2_firestorm_mr4_nr4_fmaddi_crr"
+    [meteorlake]="mippv2_meteorlake_mr4_nr3 mippv2_meteorlake_mr4_nr3_crr"
 )
 
 show_help() {
     echo -e "${BOLD}Usage:${NC} $0 [options] [cibles...]
 
 ${BOLD}Cibles disponibles :${NC}
-  x100         SpacemiT X100 (mono-sip-k3, RVV 256-bit) -> mippv2_x100_register_blocked_apack4
-  a100         SpacemiT A100 (mono-sip-k3, RVV 1024-bit, via ai) -> mippv2_a100_mr7_nr2_lmul2_pipe
-  x60          SpacemiT X60 (mono-bpi-f3, RVV 256-bit) -> mippv2_a100_mr7_nr4_pipe
-  rpi5         Raspberry Pi 5 (mono-rpi-5b, Cortex-A76 NEON) -> mippv2_a76_mr6_nr3
-  m1           Apple M1 (m1u, Firestorm NEON, core 3) -> mippv2_x60_mr6_nr4_fmaddi
-  zen4         AMD Zen 4 (az4-a7900-3, AVX-512) -> mippv2_firestorm_mr4_nr4_fmaddi
-  zen5         AMD Zen 5 (az5-a890m-0, AVX-512) -> mippv2_firestorm_mr4_nr4_fmaddi
-  meteorlake   Intel Meteor Lake (iml-ia770-3, AVX2, core 0) -> mippv2_meteorlake_mr4_nr3
+  x100         SpacemiT X100 (mono-sip-k3, RVV 256-bit) -> mippv2_x100_register_blocked_apack4 (+ _crr)
+  a100         SpacemiT A100 (mono-sip-k3, RVV 1024-bit, via ai) -> mippv2_a100_mr7_nr2_lmul2_pipe (+ _crr)
+  x60          SpacemiT X60 (mono-bpi-f3, RVV 256-bit) -> mippv2_a100_mr7_nr4_pipe (+ _crr)
+  rpi5         Raspberry Pi 5 (mono-rpi-5b, Cortex-A76 NEON) -> mippv2_a76_mr6_nr3 (+ _crr)
+  m1           Apple M1 (m1u, Firestorm NEON, core 3) -> mippv2_x60_mr6_nr4_fmaddi (+ _crr)
+  zen4         AMD Zen 4 (az4-a7900-3, AVX-512) -> mippv2_firestorm_mr4_nr4_fmaddi (+ _crr)
+  zen5         AMD Zen 5 (az5-a890m-0, AVX-512) -> mippv2_firestorm_mr4_nr4_fmaddi (+ _crr)
+  meteorlake   Intel Meteor Lake (iml-ia770-3, AVX2, core 0) -> mippv2_meteorlake_mr4_nr3 (+ _crr)
   all          Toutes les cibles ci-dessus (défaut)
 
 ${BOLD}Options :${NC}
@@ -273,7 +273,9 @@ run_target() {
             bench_flags+="-k ${ck} "
         done
     elif [[ -n "$target_champion" ]]; then
-        bench_flags+="-k ${target_champion} "
+        for ck in $target_champion; do
+            bench_flags+="-k ${ck} "
+        done
     fi
 
     local bench_cmd="${pre_cmd} PLATFORM_TAG=${target} ./run_benchmarks.sh ${platform} ${bench_flags} ${compilers}"
@@ -324,7 +326,7 @@ else
         status_file="${LOG_DIR}/${target}.status"
         rm -f "$status_file"
 
-        local champ_desc="champion: ${TARGET_CHAMPIONS[$target]:-}"
+        local champ_desc="champions: ${TARGET_CHAMPIONS[$target]:-}"
         [[ "$RUN_ALL_FLAG" == "true" ]] && champ_desc="all kernels"
         [[ ${#CUSTOM_KERNELS[@]} -gt 0 ]] && champ_desc="${CUSTOM_KERNELS[*]}"
 
