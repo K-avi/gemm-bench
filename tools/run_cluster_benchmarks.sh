@@ -32,6 +32,30 @@ declare -A TARGET_CHAMPIONS=(
     [meteorlake]="mippv2_meteorlake_mr4_nr3 mippv2_meteorlake_mr4_nr3_crr"
 )
 
+get_target_champions() {
+    local target="$1"
+    local raw="${TARGET_CHAMPIONS[$target]:-}"
+    if [[ "$CRR_ONLY" == "true" ]]; then
+        local filtered=""
+        for k in $raw; do
+            if [[ "$k" == *_crr ]]; then
+                filtered+="$k "
+            fi
+        done
+        echo "${filtered% }"
+    elif [[ "$RRR_ONLY" == "true" ]]; then
+        local filtered=""
+        for k in $raw; do
+            if [[ "$k" != *_crr ]]; then
+                filtered+="$k "
+            fi
+        done
+        echo "${filtered% }"
+    else
+        echo "$raw"
+    fi
+}
+
 show_help() {
     echo -e "${BOLD}Usage:${NC} $0 [options] [cibles...]
 
@@ -52,6 +76,8 @@ ${BOLD}Options :${NC}
   --bench-only      Exécuter uniquement les benchmarks (pas de tests préliminaires)
   --sequential      Exécuter les cibles séquentiellement (par défaut : parallèle)
   --rebuild         Forcer la recompilation complète sur les nœuds
+  --crr-only        Exécuter uniquement les variantes CRR des champions
+  --rrr-only        Exécuter uniquement les variantes RRR des champions
   -k, --kernel <n>  Exécuter un kernel spécifique (répétable, remplace le champion par défaut)
   --run-all         Exécuter tous les kernels (champions + exploration) et la version scalaire
   -s, --sizes \"...\" Tailles de matrices pour les benchmarks (ex: \"32 64 96 128\")
@@ -71,6 +97,8 @@ TESTS_ONLY=false
 BENCH_ONLY=false
 SEQUENTIAL=false
 RUN_ALL_FLAG=false
+CRR_ONLY=false
+RRR_ONLY=false
 REBUILD_FLAG=""
 CUSTOM_SIZES=""
 CUSTOM_KERNELS=()
@@ -104,6 +132,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --run-all)
             RUN_ALL_FLAG=true
+            shift
+            ;;
+        --crr-only)
+            CRR_ONLY=true
+            shift
+            ;;
+        --rrr-only)
+            RRR_ONLY=true
             shift
             ;;
         -k|--kernel)
@@ -148,8 +184,12 @@ if [[ "$RUN_ALL_FLAG" == "true" ]]; then
     echo -e "Mode     : ${YELLOW}Complet (--run-all : scalaires + champions + exploration)${NC}"
 elif [[ ${#CUSTOM_KERNELS[@]} -gt 0 ]]; then
     echo -e "Mode     : ${YELLOW}Personnalisé (${CUSTOM_KERNELS[*]})${NC}"
+elif [[ "$CRR_ONLY" == "true" ]]; then
+    echo -e "Mode     : ${GREEN}Champions CRR uniquement (--crr-only)${NC}"
+elif [[ "$RRR_ONLY" == "true" ]]; then
+    echo -e "Mode     : ${GREEN}Champions RRR uniquement (--rrr-only)${NC}"
 else
-    echo -e "Mode     : ${GREEN}Champions uniquement (baseline scalaire exclue)${NC}"
+    echo -e "Mode     : ${GREEN}Champions RRR + CRR (baseline scalaire exclue)${NC}"
 fi
 echo
 
@@ -251,7 +291,8 @@ run_target() {
             ;;
     esac
 
-    local target_champion="${TARGET_CHAMPIONS[$target]:-}"
+
+    local target_champion="$(get_target_champions "$target")"
 
     local bench_flags=""
     [[ -n "$out_prefix" ]] && bench_flags+="-o ${out_prefix} "
@@ -297,7 +338,7 @@ mkdir -p "$LOG_DIR"
 
 if [[ "$SEQUENTIAL" == "true" || ${#SELECTED_TARGETS[@]} -eq 1 ]]; then
     for target in "${SELECTED_TARGETS[@]}"; do
-        local champ_desc="${TARGET_CHAMPIONS[$target]:-}"
+        local champ_desc="champions: $(get_target_champions "$target")"
         [[ "$RUN_ALL_FLAG" == "true" ]] && champ_desc="all kernels"
         [[ ${#CUSTOM_KERNELS[@]} -gt 0 ]] && champ_desc="${CUSTOM_KERNELS[*]}"
         echo -e "${BOLD}--------------------------------------------------------------------------------${NC}"
@@ -326,7 +367,7 @@ else
         status_file="${LOG_DIR}/${target}.status"
         rm -f "$status_file"
 
-        local champ_desc="champions: ${TARGET_CHAMPIONS[$target]:-}"
+        local champ_desc="champions: $(get_target_champions "$target")"
         [[ "$RUN_ALL_FLAG" == "true" ]] && champ_desc="all kernels"
         [[ ${#CUSTOM_KERNELS[@]} -gt 0 ]] && champ_desc="${CUSTOM_KERNELS[*]}"
 
