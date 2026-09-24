@@ -1,0 +1,106 @@
+================================================================================
+GEMMBench — Feuille de Route & Objectifs Techniques
+================================================================================
+
+1. Finalisation du MacroKernel (GotoBLAS / BLIS 5-Loop Nest)
+   ----------------------------------------------------------
+   - Implémentation de pack_B :
+     * Découpage du panneau B(kc_cur, nc_cur) en micro-panneaux contigus KC x NR (Row-Major).
+     * Gestion du zero-padding lorsque nc_cur < NC ou kc_cur < KC.
+   - Implémentation de pack_A :
+     * Découpage du panneau A(mc_cur, kc_cur) en micro-panneaux MR x KC, avec repliement du facteur scalaire alpha.
+     * Gestion du zero-padding lorsque mc_cur < MC ou kc_cur < KC.
+   - Implémentation de writeback_edge_tile :
+     * Gestion des bords de matrices lorsque M, N ou K ne sont pas des multiples exacts de MR, NR ou KC.
+     * Exécution du micro-noyau sur un tampon temporaire complet MR x NR puis réécriture sélective dans C.
+   - Validation unitaire dans tests/MacroKernelTest.cpp :
+     * Vérification de l'exactitude numérique contre une implémentation de référence sur des tailles arbitraires (matrices non alignées, dimensions premières/impaires, etc.).
+   - Parallélisation multi-cœurs (OpenMP) du MacroKernel :
+     * Stratégie de partitionnement sur les boucles externes (boucle 5 J_C sur N et boucle 3 I_C sur M, ou boucle 2 J_R).
+     * Gestion des tampons de packing thread-locaux (allocation thread-safe de A_pack et B_pack pour éliminer la contention et le faux partage de cache).
+     * Exploitation du cache L3 partagé (partage de B_pack entre threads traitant des blocs M_C distincts selon le modèle hiérarchique GotoBLAS/BLIS).
+     * Contrôle d'affinité OpenMP (OMP_PLACES=cores, OMP_PROC_BIND=close/spread).
+   - Évaluation du passage à l'échelle sur grands GEMM :
+     * Benchmarks sur tailles M=N=K in {256, 512, 1024, 2048, 4096} en mono-cœur et multi-cœurs.
+     * Analyse de l'efficacité crête et de la scalabilité parallèle (speedup vs nombre de threads).
+
+2. Optimisation des Micro-Noyaux CRR (Format BLAS-like / GotoBLAS)
+   ---------------------------------------------------------------
+   - Résolution systématique du register spilling sur toutes les microarchitectures :
+     * Application du scoping lexical { } sur les diffusions de A (prouvé critique sur AVX2 et NEON/GCC pour tenir dans les registres physiques).
+   - Exploitation du format compacté GotoBLAS (ld = MR) :
+     * Passage d'un saut de colonne ld = M à un saut contigu ld = MR dans la boucle interne k.
+   - Campagne de tuning microarchitectural ciblée sur le cluster Dalek :
+     * Tuning dédié pour Meteor Lake, Skylake, Zen 4, Zen 5, Apple M1, Raspberry Pi 5, SpacemiT X100, X60 et A100.
+     * Ajustement des ratios de tuiles (MR x NR) et du déroulage sur K (K=2, 4) pour saturer les unités FMA.
+
+3. Intégration des Micro-Noyaux CRR dans le Framework MacroKernel
+   --------------------------------------------------------------
+   - Adaptation de pack_A pour produire des micro-panneaux contigus Column-Major (largeur MR, pas MR).
+   - Déclaration des politiques d'adaptation correspondantes (ex. UArchChampionCRRPolicy) dans MicroKernelAdapter.h.
+   - Comparaison directe des performances sur grands GEMM : MacroKernel RRR vs MacroKernel CRR en mono et multi-cœurs.
+
+4. Évaluation du Code en Précision Simple (FP32)
+   ----------------------------------------------
+   - Exploitation du templating C++ générique (template <typename T>) déjà en place dans GemmUKernel et MacroKernel.
+   - Extension des scripts de benchmark (run_benchmarks.sh, bench_configs/*.sh) et du CLI (src/main.cpp) pour supporter le flag --type float|double.
+   - Mesures initiales des performances FP32 avec les géométries existantes adaptées au doublement de la largeur vectorielle VL (ex. 8 floats en AVX2, 16 floats en AVX-512, 4 floats en NEON).
+
+5. Ajout de Micro-Noyaux Tunés Spécifiques FP32 (si nécessaire)
+   -----------------------------------------------------------
+   - Analyse des goulots d'étranglement FP32 par microarchitecture.
+   - Conception et tuning de géométries de registres MR x NR dédiées au FP32 pour les cibles où la géométrie FP64 sous-utilise le débit arithmétique ou sature les registres.
+
+6. Ajout de la Plateforme Orange Pi 6 (Support ARM SVE)
+   -----------------------------------------------------
+   - Intégration de la configuration cible dans bench_configs/sve_opi6.sh et ajout dans tools/run_cluster_benchmarks.sh.
+   - Développement et validation de micro-noyaux ARM SVE vector-length agnostic (VLA) via MIPPv2.
+   - Analyse microarchitecturale des performances SVE sur le cœur de l'Orange Pi 6.
+
+7. Micro-Noyaux Génériques & Évolutions Futures de MIPPv2
+   -------------------------------------------------------
+   - Suivi et intégration des nouvelles primitives de métaprogrammation vectorielle dans MIPPv2.
+   - Refactorisation des boucles de tuilage 2D sous forme de templates génériques d'ordre supérieur (réduction de la duplication de code sans perte d'assemblage optimal).
+
+8. Intégration de Micro-Noyaux dans BLIS (BLAS-like Library Instantiation Software)
+   ---------------------------------------------------------------------------------
+   - Implémentation du wrapper conforme à l'interface bli_gemm_ukr_t :
+     * Signature : void (*)(dim_t k, const void* alpha, const void* a, const void* b, const void* beta, void* c, inc_t rs_c, inc_t cs_c, const auxinfo_t* data, const cntx_t* cntx).
+     * Support direct des formats de micro-panneaux packed natifs de BLIS (panneau A en Column-Major MR x KC, panneau B en Row-Major KC x NR).
+     * Prise en compte du scaling beta et des pas génériques de C (rs_c, cs_c) pour l'écriture en mémoire.
+   - Déclaration d'une architecture/contexte BLIS personnalisé (ex. bli_family_mippv2 ou configs dédiées) injectant nos micro-noyaux C++ MIPPv2.
+   - Validation de la conformité et de l'exactitude numérique via la suite de tests BLIS (testsuite/).
+
+9. Campagne de Benchmarking Comparatif Multi-Cœurs vs BLIS et OpenBLAS
+   -------------------------------------------------------------------
+   - Conception d'un banc de mesure comparatif multi-cœurs unifié :
+     * Balayage du nombre de threads T de 1 jusqu'au maximum de cœurs physiques de chaque nœud du cluster Dalek.
+     * Contrôle rigoureux de l'affinité CPU et placement des threads (taskset, pthread_setaffinity_np, OMP_PROC_BIND=close, OMP_PLACES=cores) pour éliminer les pénalités de migration inter-cœurs et NUMA.
+   - Comparaison directe face aux bibliothèques de référence multi-threadées :
+     * BLIS multithreadé (BLIS_NUM_THREADS=T).
+     * OpenBLAS multithreadé (OPENBLAS_NUM_THREADS=T).
+   - Protocoles de mesure et métriques :
+     * Scaling fort : matrice fixée de grande taille (ex. M=N=K=2048 et 4096) avec T croissant.
+     * Scaling faible : charge par cœur constante avec T croissant.
+     * Balayage de géométries rectangulaires variées (GEMV, M grand / N petit, M petit / N grand, formes LLM/Transformers).
+     * Métriques rapportées : GFLOP/s agrégés, % de la crête multi-cœurs théorique et mesurée, efficacité parallèle (Speedup(T) / T).
+   - Analyse microarchitecturale des goulots d'étranglement multi-cœurs :
+     * Saturation de la bande passante mémoire DRAM (Roofline multi-cœurs).
+     * Contention et efficacité de réutilisation du cache L3 partagé.
+     * Surcoûts de synchronisation et barrières de threads OpenMP vs BLIS runtime.
+     * Comparaison des micro-noyaux C++ MIPPv2 vs micro-noyaux assembleur écrits à la main d'OpenBLAS et BLIS en régime saturé multi-cœurs.
+
+10. Évaluation Comparative des Abstractions SIMD (MIPPv2 vs Intrinsèques, SIMDe, Highway, VCL)
+    -----------------------------------------------------------------------------------------
+    - Implémentation de micro-noyaux GEMM représentatifs (sur la géométrie championne MR x NR) avec différentes couches d'abstraction :
+      * Intrinsèques matériels bruts (Intel AVX2/AVX-512, ARM NEON/SVE, RISC-V RVV) : borne haute sans surcoût d'abstraction C++.
+      * Google Highway : abstraction vectorielle portable moderne C++ avec dispatch dynamique et support VLA (SVE/RVV).
+      * Agner Fog VCL (Vector Class Library) : référence historique C++ pour architectures x86/x86_64.
+      * SIMDe (SIMD Everywhere) : émulation et redirection d'intrinsèques pour la portabilité inter-architectures.
+    - Analyse de la qualité du code assembleur généré (GCC vs Clang) :
+      * Allocation de registres et présence de registres déversés (spills sur la pile).
+      * Efficacité du pattern de fusion FMA et du pipelining des chargements/diffusions mémoire.
+      * Inlining et overhead des constructeurs/wrappers C++.
+    - Benchmarking de performance crête et quantification des surcoûts :
+      * Comparaison du débit arithmétique (FLOP/cycle, GFLOP/s, % crête) sur l'ensemble des cibles du cluster Dalek.
+      * Mesure précise du "coût d'abstraction" de MIPPv2 par rapport aux intrinsèques natifs et bibliothèques tierces.

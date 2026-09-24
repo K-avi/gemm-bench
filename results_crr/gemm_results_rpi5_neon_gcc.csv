@@ -1,0 +1,5 @@
+Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS
+native,mippv2_a76_mr6_nr3_crr,32,32,32,1,0,4.23989e-06,15.457
+native,mippv2_a76_mr6_nr3_crr,64,64,64,1,0,3.34867e-05,15.6566
+native,mippv2_a76_mr6_nr3_crr,96,96,96,1,0,0.000158913,11.1349
+native,mippv2_a76_mr6_nr3_crr,128,128,128,1,0,0.000379032,11.0658

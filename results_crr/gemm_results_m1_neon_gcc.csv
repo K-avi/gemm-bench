@@ -1,0 +1,5 @@
+Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS
+native,mippv2_x60_mr6_nr4_fmaddi_crr,32,32,32,1,0,2.51565e-06,26.0513
+native,mippv2_x60_mr6_nr4_fmaddi_crr,64,64,64,1,0,2.04821e-05,25.5974
+native,mippv2_x60_mr6_nr4_fmaddi_crr,96,96,96,1,0,6.7934e-05,26.0469
+native,mippv2_x60_mr6_nr4_fmaddi_crr,128,128,128,1,0,0.000160347,26.1576
