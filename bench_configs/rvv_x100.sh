@@ -5,6 +5,26 @@ CSV_PREFIX="gemm_results_rvv_x100"
 DEFAULT_VERSION="rvv"
 DEFAULT_PIN_CORE="0"
 
+DEFAULT_KERNELS=(
+    mippv2_x100_register_blocked_apack4
+)
+
+ALL_KERNELS=(
+    mippv2_x100_register_blocked_apack4
+    mippv2_x100_register_blocked_lmul1
+    mippv2_x100_register_blocked_lmul2
+    mippv2_x100_register_blocked_lmul4
+    mippv2_x100_register_blocked_lmul8
+    mippv2_panel_x100_lmul1
+    mippv2_panel_x100_lmul2
+    mippv2_panel_x100_lmul4
+    mippv2_panel_x100_lmul8
+    mippv2_x100_lmul1
+    mippv2_x100_lmul2
+    mippv2_x100_lmul4
+    mippv2_x100_lmul8
+)
+
 COMMON_FLAGS="
 -O3
 -ffast-math

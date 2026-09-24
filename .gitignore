@@ -39,7 +39,6 @@ libs/
 third_party/
 
 # Cluster runner scripts (LIP6 Dalek specific)
-tools/run_cluster_benchmarks.sh
 tools/install_cluster_catch2.sh
 
 # Local artifacts and disassembly dumps

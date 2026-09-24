@@ -4,15 +4,34 @@ if [[ "$(hostname)" == *"m1"* || "${PLATFORM_TAG:-}" == "m1" ]]; then
     BUILD_DIR_PREFIX="build_neon_m1"
     CSV_PREFIX="gemm_results_neon_m1"
     DEFAULT_PIN_CORE="3"
+    DEFAULT_KERNELS=(
+        mippv2_x60_mr6_nr4_fmaddi
+    )
 elif [[ "$(hostname)" == *"rpi"* || "${PLATFORM_TAG:-}" == "rpi5" ]]; then
     PLATFORM_NAME="Raspberry Pi 5 (NEON)"
     BUILD_DIR_PREFIX="build_neon_rpi5"
     CSV_PREFIX="gemm_results_neon_rpi5"
+    DEFAULT_KERNELS=(
+        mippv2_a76_mr6_nr3
+    )
 else
     PLATFORM_NAME="ARMv8-A (NEON)"
     BUILD_DIR_PREFIX="build_neon"
     CSV_PREFIX="gemm_results_neon"
+    DEFAULT_KERNELS=(
+        mippv2_a76_mr6_nr3
+        mippv2_x60_mr6_nr4_fmaddi
+    )
 fi
+
+ALL_KERNELS=(
+    mippv2_a76_mr6_nr3
+    mippv2_x60_mr6_nr4_fmaddi
+    mippv2_firestorm_mr4_nr4_fmaddi
+    mippv2_firestorm_mr6_nr4_fmaddi
+    mippv2_firestorm_mr4_nr4
+    mippv2_firestorm_mr6_nr4
+)
 
 COMMON_FLAGS="
 -O3

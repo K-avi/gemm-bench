@@ -2,6 +2,27 @@
 PLATFORM_NAME="x86_64 (AVX-512)"
 BUILD_DIR_PREFIX="build_avx512"
 CSV_PREFIX="gemm_results_avx512"
+ 
+DEFAULT_KERNELS=(
+    mippv2_firestorm_mr4_nr4_fmaddi
+)
+
+ALL_KERNELS=(
+    mippv2_firestorm_mr4_nr4_fmaddi
+    mippv2_zen4_mr4_nr4_fmaddi
+    mippv2_zen4_mr4_nr4
+    mippv2_meteorlake_mr4_nr3
+    mippv2_skylake_register_blocked
+    mippv2_skylake_lmul_register_blocked
+    mippv2_skylake_lmul2_register_blocked
+    mippv2_skylake_lmul4_register_blocked
+    mippv2_skylake_lmul8_register_blocked
+    mippv2_skylake_panel
+    mippv2_skylake_panel_lmul
+    mippv2_skylake_panel_lmul2
+    mippv2_skylake_panel_lmul4
+    mippv2_skylake_panel_lmul8
+)
 
 COMMON_FLAGS="
 -O3

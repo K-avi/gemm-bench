@@ -5,6 +5,15 @@ CSV_PREFIX="gemm_results_a100"
 DEFAULT_VERSION="rvv"
 DEFAULT_PIN_CORE="8"
 
+DEFAULT_KERNELS=(
+    mippv2_a100_mr7_nr2_lmul2_pipe
+)
+
+ALL_KERNELS=(
+    mippv2_a100_mr7_nr2_lmul2_pipe
+    mippv2_a100_mr7_nr4_pipe
+)
+
 COMMON_FLAGS="
 -O3
 -ffast-math

@@ -13,8 +13,22 @@
 namespace GEMMBench {
 
 enum class UKernelType {
-  // Production / Optimized kernels (always compiled)
+  // Production / Champion kernels (always compiled)
   IJK,
+
+  // Champions
+  mippv2_meteorlake_mr4_nr3,
+  mippv2_a76_mr6_nr3,
+  mippv2_zen4_mr4_nr4_fmaddi,
+  mippv2_firestorm_mr4_nr4_fmaddi,
+  mippv2_firestorm_mr6_nr4_fmaddi,
+  mippv2_x60_mr6_nr4_fmaddi,
+  mippv2_x100_register_blocked_apack4,
+  mippv2_a100_mr7_nr4_pipe,
+  mippv2_a100_mr7_nr2_lmul2_pipe,
+
+#ifdef GEMMBENCH_ENABLE_EXPLO
+  // Exploratory kernels (guarded by GEMMBENCH_ENABLE_EXPLO)
   blocked_register_blocked,
 
   // Skylake kernels
@@ -28,42 +42,22 @@ enum class UKernelType {
   mippv2_skylake_panel_lmul2,
   mippv2_skylake_panel_lmul4,
 
-  // Meteor Lake kernels
-  mippv2_meteorlake_mr4_nr3,
-
-  // Cortex-A76 NEON kernels
-  mippv2_a76_mr6_nr3,
-
-  // Apple Firestorm NEON kernels
+  // Firestorm exploratory
   mippv2_firestorm_mr4_nr4,
-  mippv2_firestorm_mr4_nr4_fmaddi,
   mippv2_firestorm_mr6_nr4,
-  mippv2_firestorm_mr6_nr4_fmaddi,
 
-  // Zen 4 AVX-512 kernels
+  // Zen 4 exploratory
   mippv2_zen4_mr4_nr4,
-  mippv2_zen4_mr4_nr4_fmaddi,
 
-  // X100 RVV kernels
+  // X100 RVV exploratory
   mippv2_x100_register_blocked_lmul1,
   mippv2_x100_register_blocked_lmul2,
   mippv2_x100_register_blocked_lmul4,
-  mippv2_x100_register_blocked_apack4,
 
   mippv2_panel_x100_lmul1,
   mippv2_panel_x100_lmul2,
   mippv2_panel_x100_lmul4,
 
-  // X60 RVV kernel
-  mippv2_x60_mr6_nr4_fmaddi,
-
-  // A100 RVV kernels
-  mippv2_a100_mr7_nr4_pipe,
-  mippv2_a100_mr7_nr2_lmul2_pipe,
-
-
-#ifdef GEMMBENCH_ENABLE_EXPLO
-  // Exploratory kernels (guarded by GEMMBENCH_ENABLE_EXPLO)
   IKJ,
   IJK_RC,
   IKJ_RC,
@@ -116,10 +110,24 @@ constexpr KernelPacking RCR = {PLayout::Row, PLayout::Col, PLayout::Row};
 constexpr KernelPacking CRR = {PLayout::Col, PLayout::Row, PLayout::Row};
 
 inline constexpr KernelDescriptor kernelTable[] = {
-    // Production / Optimized kernels
+    // Production / Champion kernels
 
-    // Scalar baselines
+    // Scalar baseline
     {UKernelType::IJK, "ijk", RRR, 64},
+
+    // Champions
+    {UKernelType::mippv2_meteorlake_mr4_nr3, "mippv2_meteorlake_mr4_nr3", RRR, 64},
+    {UKernelType::mippv2_a76_mr6_nr3, "mippv2_a76_mr6_nr3", RRR, 64},
+    {UKernelType::mippv2_zen4_mr4_nr4_fmaddi, "mippv2_zen4_mr4_nr4_fmaddi", RRR, 64},
+    {UKernelType::mippv2_firestorm_mr4_nr4_fmaddi, "mippv2_firestorm_mr4_nr4_fmaddi", RRR, 64},
+    {UKernelType::mippv2_firestorm_mr6_nr4_fmaddi, "mippv2_firestorm_mr6_nr4_fmaddi", RRR, 64},
+    {UKernelType::mippv2_x60_mr6_nr4_fmaddi, "mippv2_x60_mr6_nr4_fmaddi", RRR, 64},
+    {UKernelType::mippv2_x100_register_blocked_apack4, "mippv2_x100_register_blocked_apack4", RRR, 66},
+    {UKernelType::mippv2_a100_mr7_nr4_pipe, "mippv2_a100_mr7_nr4_pipe", RRR, 64},
+    {UKernelType::mippv2_a100_mr7_nr2_lmul2_pipe, "mippv2_a100_mr7_nr2_lmul2_pipe", RRR, 64},
+
+#ifdef GEMMBENCH_ENABLE_EXPLO
+    // Exploratory kernels
     {UKernelType::blocked_register_blocked, "blocked_register_blocked", RRR, 64},
 
     // Skylake register blocked
@@ -134,42 +142,23 @@ inline constexpr KernelDescriptor kernelTable[] = {
     {UKernelType::mippv2_skylake_panel_lmul2, "mippv2_skylake_panel_lmul2", CRR, 64},
     {UKernelType::mippv2_skylake_panel_lmul4, "mippv2_skylake_panel_lmul4", CRR, 64},
 
-    // Meteor Lake kernels
-    {UKernelType::mippv2_meteorlake_mr4_nr3, "mippv2_meteorlake_mr4_nr3", RRR, 64},
-
-    // Cortex-A76 NEON kernels
-    {UKernelType::mippv2_a76_mr6_nr3, "mippv2_a76_mr6_nr3", RRR, 64},
-
-    // Apple Firestorm NEON kernels
+    // Firestorm exploratory
     {UKernelType::mippv2_firestorm_mr4_nr4, "mippv2_firestorm_mr4_nr4", RRR, 64},
-    {UKernelType::mippv2_firestorm_mr4_nr4_fmaddi, "mippv2_firestorm_mr4_nr4_fmaddi", RRR, 64},
     {UKernelType::mippv2_firestorm_mr6_nr4, "mippv2_firestorm_mr6_nr4", RRR, 64},
-    {UKernelType::mippv2_firestorm_mr6_nr4_fmaddi, "mippv2_firestorm_mr6_nr4_fmaddi", RRR, 64},
 
-    // Zen 4 AVX-512 kernels
+    // Zen 4 exploratory
     {UKernelType::mippv2_zen4_mr4_nr4, "mippv2_zen4_mr4_nr4", RRR, 64},
-    {UKernelType::mippv2_zen4_mr4_nr4_fmaddi, "mippv2_zen4_mr4_nr4_fmaddi", RRR, 64},
 
-    // X100 RVV register blocked
+    // X100 RVV register blocked exploratory
     {UKernelType::mippv2_x100_register_blocked_lmul1, "mippv2_x100_register_blocked_lmul1", RRR, 66},
     {UKernelType::mippv2_x100_register_blocked_lmul2, "mippv2_x100_register_blocked_lmul2", RRR, 66},
     {UKernelType::mippv2_x100_register_blocked_lmul4, "mippv2_x100_register_blocked_lmul4", RRR, 66},
-    {UKernelType::mippv2_x100_register_blocked_apack4, "mippv2_x100_register_blocked_apack4", RRR, 66},
 
     // X100 RVV panel
     {UKernelType::mippv2_panel_x100_lmul1, "mippv2_panel_x100_lmul1", CRR, 66},
     {UKernelType::mippv2_panel_x100_lmul2, "mippv2_panel_x100_lmul2", CRR, 66},
     {UKernelType::mippv2_panel_x100_lmul4, "mippv2_panel_x100_lmul4", CRR, 66},
 
-    // X60 RVV
-    {UKernelType::mippv2_x60_mr6_nr4_fmaddi, "mippv2_x60_mr6_nr4_fmaddi", RRR, 64},
-
-    // A100 RVV
-    {UKernelType::mippv2_a100_mr7_nr4_pipe, "mippv2_a100_mr7_nr4_pipe", RRR, 64},
-    {UKernelType::mippv2_a100_mr7_nr2_lmul2_pipe, "mippv2_a100_mr7_nr2_lmul2_pipe", RRR, 64},
-
-#ifdef GEMMBENCH_ENABLE_EXPLO
-    // Exploratory kernels
     {UKernelType::IKJ, "ikj", RRR, 64},
     {UKernelType::IJK_RC, "ijk_rc", RCR, 64},
     {UKernelType::IKJ_RC, "ikj_rc", RCR, 64},

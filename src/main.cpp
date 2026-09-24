@@ -43,10 +43,56 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
                      const PackedRowMajor<T> &A, const PackedRowMajor<T> &B,
                      PackedRowMajor<T> &C) {
   switch (cfg.kernel) {
-  // Production / Optimized kernels
+  // Production / Champion kernels
   case UKernelType::IJK:
     BENCH_KERNEL(gemm.gemm_ijk(A, B, C, cfg.alpha, cfg.beta));
 
+  case UKernelType::mippv2_meteorlake_mr4_nr3:
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_meteorlake_mr4_nr3(A, B, C),
+        gemm.gemm_mippv2_meteorlake_mr4_nr3(A, B, C, cfg.alpha, cfg.beta));
+
+  case UKernelType::mippv2_a76_mr6_nr3:
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_a76_mr6_nr3(A, B, C),
+        gemm.gemm_mippv2_a76_mr6_nr3(A, B, C, cfg.alpha, cfg.beta));
+
+  case UKernelType::mippv2_zen4_mr4_nr4_fmaddi:
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_zen4_mr4_nr4_fmaddi(A, B, C),
+        gemm.gemm_mippv2_zen4_mr4_nr4_fmaddi(A, B, C, cfg.alpha, cfg.beta));
+
+  case UKernelType::mippv2_firestorm_mr4_nr4_fmaddi:
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_firestorm_mr4_nr4_fmaddi(A, B, C),
+        gemm.gemm_mippv2_firestorm_mr4_nr4_fmaddi(A, B, C, cfg.alpha, cfg.beta));
+
+  case UKernelType::mippv2_firestorm_mr6_nr4_fmaddi:
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_firestorm_mr6_nr4_fmaddi(A, B, C),
+        gemm.gemm_mippv2_firestorm_mr6_nr4_fmaddi(A, B, C, cfg.alpha, cfg.beta));
+
+  case UKernelType::mippv2_x60_mr6_nr4_fmaddi:
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_x60_mr6_nr4_fmaddi(A, B, C),
+        gemm.gemm_mippv2_x60_mr6_nr4_fmaddi(A, B, C, cfg.alpha, cfg.beta));
+
+  case UKernelType::mippv2_x100_register_blocked_apack4:
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_x100_register_blocked_apack4(A, B, C),
+        gemm.gemm_mippv2_x100_register_blocked_apack4(A, B, C, cfg.alpha, cfg.beta));
+
+  case UKernelType::mippv2_a100_mr7_nr4_pipe:
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_a100_mr7_nr4_pipe(A, B, C),
+        gemm.gemm_mippv2_a100_mr7_nr4_pipe(A, B, C, cfg.alpha, cfg.beta));
+
+  case UKernelType::mippv2_a100_mr7_nr2_lmul2_pipe:
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_a100_mr7_nr2_lmul2_pipe(A, B, C),
+        gemm.gemm_mippv2_a100_mr7_nr2_lmul2_pipe(A, B, C, cfg.alpha, cfg.beta));
+
+#ifdef GEMMBENCH_ENABLE_EXPLO
   case UKernelType::blocked_register_blocked:
     BENCH_KERNEL(
         gemm.gemm_blocked_register_blocked(A, B, C, cfg.alpha, cfg.beta));
@@ -68,45 +114,20 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
     BENCH_KERNEL(gemm.template gemm_mippv2_skylake_lmul_register_blocked<4>(
         A, B, C, cfg.alpha, cfg.beta));
 
-  case UKernelType::mippv2_meteorlake_mr4_nr3:
-    BENCH_KERNEL_FASTPATH(
-        gemm.gemm_mippv2_meteorlake_mr4_nr3(A, B, C),
-        gemm.gemm_mippv2_meteorlake_mr4_nr3(A, B, C, cfg.alpha, cfg.beta));
-
-  case UKernelType::mippv2_a76_mr6_nr3:
-    BENCH_KERNEL_FASTPATH(
-        gemm.gemm_mippv2_a76_mr6_nr3(A, B, C),
-        gemm.gemm_mippv2_a76_mr6_nr3(A, B, C, cfg.alpha, cfg.beta));
-
   case UKernelType::mippv2_firestorm_mr4_nr4:
     BENCH_KERNEL_FASTPATH(
         gemm.gemm_mippv2_firestorm_mr4_nr4(A, B, C),
         gemm.gemm_mippv2_firestorm_mr4_nr4(A, B, C, cfg.alpha, cfg.beta));
-
-  case UKernelType::mippv2_firestorm_mr4_nr4_fmaddi:
-    BENCH_KERNEL_FASTPATH(
-        gemm.gemm_mippv2_firestorm_mr4_nr4_fmaddi(A, B, C),
-        gemm.gemm_mippv2_firestorm_mr4_nr4_fmaddi(A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_firestorm_mr6_nr4:
     BENCH_KERNEL_FASTPATH(
         gemm.gemm_mippv2_firestorm_mr6_nr4(A, B, C),
         gemm.gemm_mippv2_firestorm_mr6_nr4(A, B, C, cfg.alpha, cfg.beta));
 
-  case UKernelType::mippv2_firestorm_mr6_nr4_fmaddi:
-    BENCH_KERNEL_FASTPATH(
-        gemm.gemm_mippv2_firestorm_mr6_nr4_fmaddi(A, B, C),
-        gemm.gemm_mippv2_firestorm_mr6_nr4_fmaddi(A, B, C, cfg.alpha, cfg.beta));
-
   case UKernelType::mippv2_zen4_mr4_nr4:
     BENCH_KERNEL_FASTPATH(
         gemm.gemm_mippv2_zen4_mr4_nr4(A, B, C),
         gemm.gemm_mippv2_zen4_mr4_nr4(A, B, C, cfg.alpha, cfg.beta));
-
-  case UKernelType::mippv2_zen4_mr4_nr4_fmaddi:
-    BENCH_KERNEL_FASTPATH(
-        gemm.gemm_mippv2_zen4_mr4_nr4_fmaddi(A, B, C),
-        gemm.gemm_mippv2_zen4_mr4_nr4_fmaddi(A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_x100_register_blocked_lmul1:
     BENCH_KERNEL_FASTPATH(
@@ -122,28 +143,6 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
     BENCH_KERNEL_FASTPATH(
         gemm.template gemm_mippv2_x100_register_blocked<4>(A, B, C),
         gemm.template gemm_mippv2_x100_register_blocked<4>(A, B, C, cfg.alpha, cfg.beta));
-
-  case UKernelType::mippv2_x100_register_blocked_apack4:
-    BENCH_KERNEL_FASTPATH(
-        gemm.gemm_mippv2_x100_register_blocked_apack4(A, B, C),
-        gemm.gemm_mippv2_x100_register_blocked_apack4(A, B, C, cfg.alpha, cfg.beta));
-
-  case UKernelType::mippv2_x60_mr6_nr4_fmaddi:
-    BENCH_KERNEL_FASTPATH(
-        gemm.gemm_mippv2_x60_mr6_nr4_fmaddi(A, B, C),
-        gemm.gemm_mippv2_x60_mr6_nr4_fmaddi(A, B, C, cfg.alpha, cfg.beta));
-
-  case UKernelType::mippv2_a100_mr7_nr4_pipe:
-    BENCH_KERNEL_FASTPATH(
-        gemm.gemm_mippv2_a100_mr7_nr4_pipe(A, B, C),
-        gemm.gemm_mippv2_a100_mr7_nr4_pipe(A, B, C, cfg.alpha, cfg.beta));
-
-  case UKernelType::mippv2_a100_mr7_nr2_lmul2_pipe:
-    BENCH_KERNEL_FASTPATH(
-        gemm.gemm_mippv2_a100_mr7_nr2_lmul2_pipe(A, B, C),
-        gemm.gemm_mippv2_a100_mr7_nr2_lmul2_pipe(A, B, C, cfg.alpha, cfg.beta));
-
-#ifdef GEMMBENCH_ENABLE_EXPLO
   case UKernelType::IKJ:
     BENCH_KERNEL(gemm.gemm_ikj(A, B, C));
 
@@ -242,7 +241,7 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
                      const PackedColMajor<T> &A, const PackedRowMajor<T> &B,
                      PackedRowMajor<T> &C) {
   switch (cfg.kernel) {
-  // Production / Optimized kernels
+#ifdef GEMMBENCH_ENABLE_EXPLO
   case UKernelType::mippv2_skylake_panel:
     BENCH_KERNEL(gemm.gemm_mippv2_skylake_panel(A, B, C, cfg.alpha, cfg.beta));
 
@@ -272,7 +271,6 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
         gemm.template gemm_mippv2_panel_x100<4>(A, B, C),
         gemm.template gemm_mippv2_panel_x100<4>(A, B, C, cfg.alpha, cfg.beta));
 
-#ifdef GEMMBENCH_ENABLE_EXPLO
   case UKernelType::mippv2_skylake_panel_lmul8:
     BENCH_KERNEL(gemm.template gemm_mippv2_skylake_panel_lmul<8>(A, B, C));
 

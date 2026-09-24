@@ -18,7 +18,8 @@ Platforms:
   rvv_a100   SpacemiT A100 (RVV 1024-bit)
 
 Options:
-  --run-all               Run all versions (including scalar) and extended exploration kernels/sizes
+  --run-all               Run all versions (including scalar) and exploratory kernels/sizes
+  --explo                 Enable exploratory kernels (-DGEMMBENCH_ENABLE_EXPLO=ON)
   --rebuild               Force clean re-compilation even if binary exists
   -c, --core <N>          Pin execution to specific CPU core via taskset
   --no-pin                Disable CPU pinning
@@ -89,6 +90,7 @@ source "$CONFIG_FILE"
 ################################################################################
 
 RUN_ALL=false
+ENABLE_EXPLO_FLAG=false
 RUN_TESTS=false
 TESTS_ONLY=false
 FORCE_REBUILD=false
@@ -117,6 +119,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --run-all)
             RUN_ALL=true
+            shift
+            ;;
+        --explo)
+            ENABLE_EXPLO_FLAG=true
             shift
             ;;
         --rebuild)
@@ -352,9 +358,29 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
     mkdir -p "$(dirname "$CSV")"
     echo "Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS" > "$CSV"
 
+    # Determine whether exploratory kernels are required
+    NEED_EXPLO=false
+    if [[ "$RUN_ALL" == "true" || "$ENABLE_EXPLO_FLAG" == "true" ]]; then
+        NEED_EXPLO=true
+    elif [[ ${#CUSTOM_KERNELS[@]} -gt 0 ]]; then
+        for ck in "${CUSTOM_KERNELS[@]}"; do
+            case "$ck" in
+                mippv2_meteorlake_mr4_nr3|mippv2_a76_mr6_nr3|mippv2_zen4_mr4_nr4_fmaddi|\
+                mippv2_firestorm_mr4_nr4_fmaddi|mippv2_firestorm_mr6_nr4_fmaddi|\
+                mippv2_x60_mr6_nr4_fmaddi|mippv2_x100_register_blocked_apack4|\
+                mippv2_a100_mr7_nr4_pipe|mippv2_a100_mr7_nr2_lmul2_pipe|ijk)
+                    ;;
+                *)
+                    NEED_EXPLO=true
+                    break
+                    ;;
+            esac
+        done
+    fi
+
     # Build phase
     for VERSION in "${VERSIONS[@]}"; do
-        if [[ "$RUN_ALL" == "true" ]]; then
+        if [[ "$NEED_EXPLO" == "true" ]]; then
             BUILD_DIR="${BUILD_DIR_PREFIX}_${COMPILER_TAG}_${VERSION}_all"
             EXPLO_FLAG="-DGEMMBENCH_ENABLE_EXPLO=ON"
         else
@@ -426,7 +452,7 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
 
     # Run phase
     for VERSION in "${VERSIONS[@]}"; do
-        if [[ "$RUN_ALL" == "true" ]]; then
+        if [[ "$NEED_EXPLO" == "true" ]]; then
             BUILD_DIR="${BUILD_DIR_PREFIX}_${COMPILER_TAG}_${VERSION}_all"
         else
             BUILD_DIR="${BUILD_DIR_PREFIX}_${COMPILER_TAG}_${VERSION}"
@@ -448,9 +474,17 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
         elif [[ "$VERSION" == "scalar" ]]; then
             RUN_KERNELS=("${SCALAR_KERNELS[@]}")
         elif [[ "$RUN_ALL" == "true" ]]; then
-            RUN_KERNELS=("${UNIVERSAL_KERNELS[@]}" "${MIPP_EXPLO_KERNELS[@]}")
+            if [[ -n "${ALL_KERNELS+x}" && ${#ALL_KERNELS[@]} -gt 0 ]]; then
+                RUN_KERNELS=("${ALL_KERNELS[@]}")
+            else
+                RUN_KERNELS=("${UNIVERSAL_KERNELS[@]}" "${MIPP_EXPLO_KERNELS[@]}")
+            fi
         else
-            RUN_KERNELS=("${UNIVERSAL_KERNELS[@]}")
+            if [[ -n "${DEFAULT_KERNELS+x}" && ${#DEFAULT_KERNELS[@]} -gt 0 ]]; then
+                RUN_KERNELS=("${DEFAULT_KERNELS[@]}")
+            else
+                RUN_KERNELS=("${UNIVERSAL_KERNELS[@]}")
+            fi
         fi
 
         for KERNEL in "${RUN_KERNELS[@]}"; do
