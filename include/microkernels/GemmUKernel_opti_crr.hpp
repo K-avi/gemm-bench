@@ -1469,42 +1469,60 @@
         b_k += b_ld;
 
         {
-          const T a0 = *a_k++;
+          T a0 = *a_k++;
+#if defined(__ARM_NEON)
+          asm ("" : "+w"(a0));
+#endif
           c00 = fmaddi(b0, a0, c00);
           c01 = fmaddi(b1, a0, c01);
           c02 = fmaddi(b2, a0, c02);
           c03 = fmaddi(b3, a0, c03);
         }
         {
-          const T a1 = *a_k++;
+          T a1 = *a_k++;
+#if defined(__ARM_NEON)
+          asm ("" : "+w"(a1));
+#endif
           c10 = fmaddi(b0, a1, c10);
           c11 = fmaddi(b1, a1, c11);
           c12 = fmaddi(b2, a1, c12);
           c13 = fmaddi(b3, a1, c13);
         }
         {
-          const T a2 = *a_k++;
+          T a2 = *a_k++;
+#if defined(__ARM_NEON)
+          asm ("" : "+w"(a2));
+#endif
           c20 = fmaddi(b0, a2, c20);
           c21 = fmaddi(b1, a2, c21);
           c22 = fmaddi(b2, a2, c22);
           c23 = fmaddi(b3, a2, c23);
         }
         {
-          const T a3 = *a_k++;
+          T a3 = *a_k++;
+#if defined(__ARM_NEON)
+          asm ("" : "+w"(a3));
+#endif
           c30 = fmaddi(b0, a3, c30);
           c31 = fmaddi(b1, a3, c31);
           c32 = fmaddi(b2, a3, c32);
           c33 = fmaddi(b3, a3, c33);
         }
         {
-          const T a4 = *a_k++;
+          T a4 = *a_k++;
+#if defined(__ARM_NEON)
+          asm ("" : "+w"(a4));
+#endif
           c40 = fmaddi(b0, a4, c40);
           c41 = fmaddi(b1, a4, c41);
           c42 = fmaddi(b2, a4, c42);
           c43 = fmaddi(b3, a4, c43);
         }
         {
-          const T a5 = *a_k++;
+          T a5 = *a_k++;
+#if defined(__ARM_NEON)
+          asm ("" : "+w"(a5));
+#endif
           c50 = fmaddi(b0, a5, c50);
           c51 = fmaddi(b1, a5, c51);
           c52 = fmaddi(b2, a5, c52);
@@ -1586,42 +1604,60 @@
           b_k += b_ld;
 
           {
-            const T a0 = *a_k++;
+            T a0 = *a_k++;
+#if defined(__ARM_NEON)
+            asm ("" : "+w"(a0));
+#endif
             c00 = fmaddi(b0, a0, c00);
             c01 = fmaddi(b1, a0, c01);
             c02 = fmaddi(b2, a0, c02);
             c03 = fmaddi(b3, a0, c03);
           }
           {
-            const T a1 = *a_k++;
+            T a1 = *a_k++;
+#if defined(__ARM_NEON)
+            asm ("" : "+w"(a1));
+#endif
             c10 = fmaddi(b0, a1, c10);
             c11 = fmaddi(b1, a1, c11);
             c12 = fmaddi(b2, a1, c12);
             c13 = fmaddi(b3, a1, c13);
           }
           {
-            const T a2 = *a_k++;
+            T a2 = *a_k++;
+#if defined(__ARM_NEON)
+            asm ("" : "+w"(a2));
+#endif
             c20 = fmaddi(b0, a2, c20);
             c21 = fmaddi(b1, a2, c21);
             c22 = fmaddi(b2, a2, c22);
             c23 = fmaddi(b3, a2, c23);
           }
           {
-            const T a3 = *a_k++;
+            T a3 = *a_k++;
+#if defined(__ARM_NEON)
+            asm ("" : "+w"(a3));
+#endif
             c30 = fmaddi(b0, a3, c30);
             c31 = fmaddi(b1, a3, c31);
             c32 = fmaddi(b2, a3, c32);
             c33 = fmaddi(b3, a3, c33);
           }
           {
-            const T a4 = *a_k++;
+            T a4 = *a_k++;
+#if defined(__ARM_NEON)
+            asm ("" : "+w"(a4));
+#endif
             c40 = fmaddi(b0, a4, c40);
             c41 = fmaddi(b1, a4, c41);
             c42 = fmaddi(b2, a4, c42);
             c43 = fmaddi(b3, a4, c43);
           }
           {
-            const T a5 = *a_k++;
+            T a5 = *a_k++;
+#if defined(__ARM_NEON)
+            asm ("" : "+w"(a5));
+#endif
             c50 = fmaddi(b0, a5, c50);
             c51 = fmaddi(b1, a5, c51);
             c52 = fmaddi(b2, a5, c52);
