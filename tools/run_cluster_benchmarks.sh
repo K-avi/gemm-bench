@@ -197,11 +197,12 @@ echo
 # 1. Étape de Synchronisation unique sur le NFS via la frontale
 # -----------------------------------------------------------------------------
 if [[ "$DO_PULL" == "true" ]]; then
-    echo -e "${BLUE}[1/3] Synchronisation du dépôt NFS via ${FRONT_HOST}...${NC}"
-    if ssh "$FRONT_HOST" "cd ${REMOTE_DIR} && git pull"; then
-        echo -e "${GREEN}✓ Dépôt synchronisé avec succès sur le NFS partagé.${NC}\n"
+    local_branch="$(git rev-parse --abbrev-ref HEAD)"
+    echo -e "${BLUE}[1/3] Synchronisation du dépôt NFS via ${FRONT_HOST} (branche: ${local_branch})...${NC}"
+    if ssh "$FRONT_HOST" "cd ${REMOTE_DIR} && git fetch origin && git checkout ${local_branch} && git pull origin ${local_branch}"; then
+        echo -e "${GREEN}✓ Dépôt synchronisé sur la branche '${local_branch}' sur le NFS partagé.${NC}\n"
     else
-        echo -e "${RED}✗ Échec du git pull sur ${FRONT_HOST}.${NC}"
+        echo -e "${RED}✗ Échec de la synchronisation de la branche '${local_branch}' sur ${FRONT_HOST}.${NC}"
         exit 1
     fi
 else
