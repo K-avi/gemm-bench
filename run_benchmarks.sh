@@ -312,11 +312,11 @@ if [[ "$CRR_ONLY" == "true" && ${#CUSTOM_SIZES[@]} -eq 0 ]]; then
     # In CRR BLIS mode: sweep K across realistic cache hierarchy depths
     SIZES=(
         "32 100000 10000"
-        "64 50000 5000"
-        "128 50000 5000"
-        "256 20000 2000"
-        "512 10000 1000"
-        "1024 5000 500"
+        "64 100000 10000"
+        "128 100000 10000"
+        "256 100000 10000"
+        "512 100000 20000"
+        "1024 100000 20000"
     )
 elif [[ ${#CUSTOM_SIZES[@]} -gt 0 ]]; then
     SIZES=()
