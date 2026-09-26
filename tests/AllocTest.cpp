@@ -262,3 +262,75 @@ TEST_CASE("ColMajor matrix allocation respects padding and layout",
 
     alloc.freePacked(m);
 }
+
+TEST_CASE("allocatePackedTile provides compact BLIS dimensions without tile padding",
+          "[alloc]")
+{
+    using T = double;
+
+    constexpr size_t packet_size = 4;
+    constexpr size_t lmul = 1;
+    constexpr size_t alignment = 64;
+
+    SimdAlloc<T> alloc(
+        packet_size,
+        lmul,
+        alignment
+    );
+
+    // Test Column-Major packed tile (e.g. A matrix in CRR: MR=4, K=128)
+    {
+        constexpr size_t MR = 4;
+        constexpr size_t K = 128;
+
+        auto tile_a = alloc.allocatePackedTile<PackedColMajor<T>>(
+            MR,
+            K,
+            InitMode::Random
+        );
+
+        REQUIRE(tile_a.rows == MR);
+        REQUIRE(tile_a.cols == K);
+        REQUIRE(tile_a.padded_rows == MR);
+        REQUIRE(tile_a.padded_cols == K);
+        REQUIRE(tile_a.ld == MR);
+
+        const auto address = reinterpret_cast<uintptr_t>(tile_a.data);
+        REQUIRE(address % alignment == 0);
+
+        tile_a(0, 0) = 1.23;
+        tile_a(MR - 1, K - 1) = 4.56;
+        REQUIRE(tile_a(0, 0) == 1.23);
+        REQUIRE(tile_a(MR - 1, K - 1) == 4.56);
+
+        alloc.freePacked(tile_a);
+    }
+
+    // Test Row-Major packed tile (e.g. B matrix in CRR: K=128, NR=12)
+    {
+        constexpr size_t K = 128;
+        constexpr size_t NR = 12;
+
+        auto tile_b = alloc.allocatePackedTile<PackedRowMajor<T>>(
+            K,
+            NR,
+            InitMode::Random
+        );
+
+        REQUIRE(tile_b.rows == K);
+        REQUIRE(tile_b.cols == NR);
+        REQUIRE(tile_b.padded_rows == K);
+        REQUIRE(tile_b.padded_cols == NR);
+        REQUIRE(tile_b.ld == NR);
+
+        const auto address = reinterpret_cast<uintptr_t>(tile_b.data);
+        REQUIRE(address % alignment == 0);
+
+        tile_b(0, 0) = 7.89;
+        tile_b(K - 1, NR - 1) = 10.11;
+        REQUIRE(tile_b(0, 0) == 7.89);
+        REQUIRE(tile_b(K - 1, NR - 1) == 10.11);
+
+        alloc.freePacked(tile_b);
+    }
+}
