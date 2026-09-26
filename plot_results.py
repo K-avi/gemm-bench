@@ -151,18 +151,25 @@ def find_csv_files(input_dir: Path, spec: UArchSpec) -> List[Tuple[Path, str]]:
             if fnmatch.fnmatch(p.name, pattern):
                 matched.append((p, compiler))
             elif fnmatch.fnmatch(p.name, f"*gemm_results_{spec.uarch_id}_{compiler}.csv") or \
-                 fnmatch.fnmatch(p.name, f"*gemm_results_{spec.uarch_id}_{spec.simd}_{compiler}.csv"):
+                 fnmatch.fnmatch(p.name, f"*gemm_results_{spec.uarch_id}_{spec.simd}_{compiler}.csv") or \
+                 fnmatch.fnmatch(p.name, f"*gemm_results_{spec.uarch_id}_*_{compiler}.csv") or \
+                 fnmatch.fnmatch(p.name, f"*gemm_results_{spec.uarch_id}_{spec.simd}_*_{compiler}.csv"):
                 if (p, compiler) not in matched:
                     matched.append((p, compiler))
             # Legacy fallbacks for datasets where architecture wasn't prefixed
-            elif spec.uarch_id == "meteorlake" and fnmatch.fnmatch(p.name, f"*gemm_results_avx2_{compiler}.csv"):
+            elif spec.uarch_id in ["meteorlake", "skylake"] and (
+                 fnmatch.fnmatch(p.name, f"*gemm_results_avx2_{compiler}.csv") or
+                 fnmatch.fnmatch(p.name, f"*gemm_results_avx2_*_{compiler}.csv")):
                 if (p, compiler) not in matched:
                     matched.append((p, compiler))
-            elif spec.uarch_id == "zen4" and fnmatch.fnmatch(p.name, f"*gemm_results_avx512_{compiler}.csv"):
+            elif spec.uarch_id == "zen4" and (
+                 fnmatch.fnmatch(p.name, f"*gemm_results_avx512_{compiler}.csv") or
+                 fnmatch.fnmatch(p.name, f"*gemm_results_avx512_*_{compiler}.csv")):
                 if (p, compiler) not in matched:
                     matched.append((p, compiler))
 
     return matched
+
 
 
 def load_dataset_for_uarch(input_dir: Path, spec: UArchSpec) -> pd.DataFrame:
