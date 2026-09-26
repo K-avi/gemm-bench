@@ -298,6 +298,8 @@ run_target() {
     [[ -n "$out_prefix" ]] && bench_flags+="-o ${out_prefix} "
     [[ -n "$REBUILD_FLAG" ]] && bench_flags+="${REBUILD_FLAG} "
     [[ -n "$CUSTOM_SIZES" ]] && bench_flags+="${CUSTOM_SIZES} "
+    [[ "$CRR_ONLY" == "true" ]] && bench_flags+="--crr-only "
+    [[ "$RRR_ONLY" == "true" ]] && bench_flags+="--rrr-only "
 
     if [[ "$BENCH_ONLY" == "true" ]]; then
         :

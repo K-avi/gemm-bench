@@ -2,6 +2,7 @@
 build*/
 build/
 bin/
+tmp/
 
 # CMake generated files
 CMakeCache.txt

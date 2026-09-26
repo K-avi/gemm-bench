@@ -354,25 +354,42 @@ void printResults(const BenchConfig &cfg,
 }
 
 template <typename T, typename APacked, typename BPacked, typename CPacked>
-void runBenchmark(const BenchConfig &cfg) {
+void runBenchmark(BenchConfig &cfg) {
   GemmUKernel<T> gemm;
 
   const auto &desc = getKernelDescriptor(cfg.kernel);
+  const size_t simd_width = cfg.packet_size * cfg.lmul;
+
+  if (!cfg.legacy_mode) {
+    if (cfg.M == 0) cfg.M = desc.MR;
+    if (cfg.N == 0) cfg.N = desc.NR_vec * simd_width;
+    if (cfg.K == 0) cfg.K = 128;
+  } else {
+    if (cfg.M == 0) cfg.M = 32;
+    if (cfg.N == 0) cfg.N = 32;
+    if (cfg.K == 0) cfg.K = 32;
+  }
+
   SimdAlloc<T> alloc(cfg.packet_size, cfg.lmul, cfg.alignment, cfg.seed, desc.defaultTileSize);
 
-  auto A =
-      alloc.template allocatePacked<APacked>(cfg.M, cfg.K, InitMode::Random);
+  auto A = cfg.legacy_mode
+               ? alloc.template allocatePacked<APacked>(cfg.M, cfg.K, InitMode::Random)
+               : alloc.template allocatePackedTile<APacked>(cfg.M, cfg.K, InitMode::Random);
 
-  auto B =
-      alloc.template allocatePacked<BPacked>(cfg.K, cfg.N, InitMode::Random);
+  auto B = cfg.legacy_mode
+               ? alloc.template allocatePacked<BPacked>(cfg.K, cfg.N, InitMode::Random)
+               : alloc.template allocatePackedTile<BPacked>(cfg.K, cfg.N, InitMode::Random);
 
-  auto C = (cfg.beta != 0.0)
-               ? alloc.template allocatePacked<CPacked>(cfg.M, cfg.N,
-                                                        InitMode::Random)
-               : alloc.template allocatePacked<CPacked>(cfg.M, cfg.N,
-                                                        InitMode::Zero);
+  auto C = cfg.legacy_mode
+               ? ((cfg.beta != 0.0)
+                      ? alloc.template allocatePacked<CPacked>(cfg.M, cfg.N, InitMode::Random)
+                      : alloc.template allocatePacked<CPacked>(cfg.M, cfg.N, InitMode::Zero))
+               : ((cfg.beta != 0.0)
+                      ? alloc.template allocatePackedTile<CPacked>(cfg.M, cfg.N, InitMode::Random)
+                      : alloc.template allocatePackedTile<CPacked>(cfg.M, cfg.N, InitMode::Zero));
 
   if (!cfg.csv_mode) {
+    std::cout << "Mode: " << (cfg.legacy_mode ? "Legacy (strided/padded)" : "BLIS Tile (compacted)") << "\n";
     std::cout << "A.ld = " << A.ld << "\n";
     std::cout << "B.ld = " << B.ld << "\n";
     std::cout << "C.ld = " << C.ld << "\n";
@@ -387,7 +404,7 @@ void runBenchmark(const BenchConfig &cfg) {
   alloc.freePacked(C);
 }
 
-void dispatchBenchmark(const BenchConfig &cfg) {
+void dispatchBenchmark(BenchConfig &cfg) {
   const auto &desc = getKernelDescriptor(cfg.kernel);
 
   if (desc.defaultPacking.A == PLayout::Row &&

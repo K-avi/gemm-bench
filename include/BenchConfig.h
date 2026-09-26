@@ -15,9 +15,9 @@ namespace GEMMBench
     
 struct BenchConfig
 {
-    size_t M = 32;
-    size_t N = 32;
-    size_t K = 32;
+    size_t M = 0;
+    size_t N = 0;
+    size_t K = 0;
 
     size_t iterations = 100;
     size_t warmup = 10;
@@ -36,6 +36,7 @@ struct BenchConfig
 
     bool csv_mode = false;
     std::string kernel_name = "ijk";
+    bool legacy_mode = false;
 };
 
 inline BenchConfig& config()
@@ -75,9 +76,10 @@ inline void parseArgs(int argc,
         {
             std::cout << "Usage: GemmBench [options]\n"
                       << "Options:\n"
-                      << "  --m <N>             M dimension (default: 32)\n"
-                      << "  --n <N>             N dimension (default: 32)\n"
-                      << "  --k <N>             K dimension (default: 32)\n"
+                      << "  --m <N>             M dimension (default: auto MR in BLIS mode, 32 in legacy)\n"
+                      << "  --n <N>             N dimension (default: auto NR in BLIS mode, 32 in legacy)\n"
+                      << "  --k <N>             K dimension (default: 128 in BLIS mode, 32 in legacy)\n"
+                      << "  --legacy            Run in legacy square-matrix mode with 64-element padding\n"
                       << "  --alpha, -a <val>   Alpha parameter (default: 1.0)\n"
                       << "  --beta, -b <val>    Beta parameter (default: 0.0)\n"
                       << "  --kernel <name>     Kernel name (default: ijk)\n"
@@ -97,6 +99,8 @@ inline void parseArgs(int argc,
             cfg.N = next_ulong();
         else if(arg == "--k")
             cfg.K = next_ulong();
+        else if(arg == "--legacy")
+            cfg.legacy_mode = true;
         else if(arg == "--alpha" || arg == "-a")
             cfg.alpha = next_double();
         else if(arg == "--beta" || arg == "-b")

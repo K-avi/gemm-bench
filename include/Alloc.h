@@ -239,6 +239,42 @@ public:
         return m;
     }
 
+    template<class M = PackedRowMajor<T>>
+    M allocatePackedTile(size_t rows,
+                         size_t cols,
+                         InitMode init = InitMode::Random)
+    {
+        M m;
+
+        m.rows = rows;
+        m.cols = cols;
+
+        if constexpr (M::order == PLayout::Col)
+        {
+            // In packed BLIS Column-Major panel, rows is MR, and ld is strictly MR (no row padding)
+            m.padded_rows = rows;
+            m.padded_cols = cols;
+            m.ld = rows;
+        }
+        else
+        {
+            // In packed Row-Major panel, cols must be padded to SIMD packet width
+            m.padded_rows = rows;
+            m.padded_cols = roundUp(cols, simdWidth());
+            m.ld = m.padded_cols;
+        }
+
+        const size_t count = m.padded_rows * m.padded_cols;
+
+        m.data = allocate(count);
+
+        std::fill_n(m.data, count, T{});
+
+        initializeLogical(m, init);
+
+        return m;
+    }
+
     void freeVector(T* ptr) const
     {
         std::free(ptr);

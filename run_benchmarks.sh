@@ -105,9 +105,21 @@ REQUESTED_COMPILERS=()
 CUSTOM_KERNELS=()
 CUSTOM_SIZES=()
 OUTPUT_PREFIX=""
+CRR_ONLY=false
+RRR_ONLY=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --crr|--crr-only)
+            CRR_ONLY=true
+            RRR_ONLY=false
+            shift
+            ;;
+        --rrr|--rrr-only)
+            RRR_ONLY=true
+            CRR_ONLY=false
+            shift
+            ;;
         --tests)
             RUN_TESTS=true
             shift
@@ -291,7 +303,17 @@ MIPP_EXPLO_KERNELS=(
 # Matrix Sizes (N, iterations, warmup)
 ################################################################################
 
-if [[ ${#CUSTOM_SIZES[@]} -gt 0 ]]; then
+if [[ "$CRR_ONLY" == "true" && ${#CUSTOM_SIZES[@]} -eq 0 ]]; then
+    # In CRR BLIS mode: sweep K across realistic cache hierarchy depths
+    SIZES=(
+        "32 100000 10000"
+        "64 50000 5000"
+        "128 50000 5000"
+        "256 20000 2000"
+        "512 10000 1000"
+        "1024 5000 500"
+    )
+elif [[ ${#CUSTOM_SIZES[@]} -gt 0 ]]; then
     SIZES=()
     for s in "${CUSTOM_SIZES[@]}"; do
         if (( s <= 32 )); then
@@ -354,15 +376,22 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
     echo "# Benchmarking ${PLATFORM_NAME} with ${COMPILER} (${COMPILER_TAG})"
     echo "################################################################################"
 
+    file_suffix=""
+    if [[ "$CRR_ONLY" == "true" ]]; then
+        file_suffix="_crr"
+    elif [[ "$RRR_ONLY" == "true" ]]; then
+        file_suffix="_rrr"
+    fi
+
     if [[ -n "${OUTPUT_PREFIX}" ]]; then
         local_prefix="${OUTPUT_PREFIX%_}"
         if [[ "${local_prefix}" == gemm_results_* ]]; then
-            CSV="results/${local_prefix}_${COMPILER_TAG}.csv"
+            CSV="results/${local_prefix}${file_suffix}_${COMPILER_TAG}.csv"
         else
-            CSV="results/gemm_results_${local_prefix}_${COMPILER_TAG}.csv"
+            CSV="results/gemm_results_${local_prefix}${file_suffix}_${COMPILER_TAG}.csv"
         fi
     else
-        CSV="results/${CSV_PREFIX}_${COMPILER_TAG}.csv"
+        CSV="results/${CSV_PREFIX}${file_suffix}_${COMPILER_TAG}.csv"
     fi
     mkdir -p "$(dirname "$CSV")"
     echo "Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS" > "$CSV"
@@ -496,24 +525,62 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
             fi
         fi
 
+        # Filter for CRR_ONLY or RRR_ONLY if requested
+        if [[ "$CRR_ONLY" == "true" ]]; then
+            FILTERED_KERNELS=()
+            for k in "${RUN_KERNELS[@]}"; do
+                if [[ "$k" == *_crr* || "$k" == *panel* ]]; then
+                    FILTERED_KERNELS+=("$k")
+                fi
+            done
+            RUN_KERNELS=("${FILTERED_KERNELS[@]}")
+        elif [[ "$RRR_ONLY" == "true" ]]; then
+            FILTERED_KERNELS=()
+            for k in "${RUN_KERNELS[@]}"; do
+                if [[ "$k" != *_crr* && "$k" != *panel* ]]; then
+                    FILTERED_KERNELS+=("$k")
+                fi
+            done
+            RUN_KERNELS=("${FILTERED_KERNELS[@]}")
+        fi
+
         for KERNEL in "${RUN_KERNELS[@]}"; do
             for SIZE_ENTRY in "${SIZES[@]}"; do
                 read -r SIZE ITERS WARMUP <<< "${SIZE_ENTRY}"
 
-                if LINE=$("${TASKSET_PREFIX[@]}" "${BIN}" \
-                    --kernel "${KERNEL}" \
-                    --m "${SIZE}" \
-                    --n "${SIZE}" \
-                    --k "${SIZE}" \
-                    --alpha "${ALPHA}" \
-                    --beta "${BETA}" \
-                    --iterations "${ITERS}" \
-                    --warmup "${WARMUP}" \
-                    --csv); then
-                    echo "${VERSION},${LINE}" >> "${CSV}"
-                    echo "[${COMPILER_TAG}] ${VERSION} ${KERNEL} ${SIZE}x${SIZE}"
+                BENCH_CMD=()
+                if [[ "$KERNEL" == *_crr* ]]; then
+                    # In CRR BLIS mode: size is K, while M and N are auto-detected native MR x NR
+                    BENCH_CMD=("${TASKSET_PREFIX[@]}" "${BIN}" \
+                        --kernel "${KERNEL}" \
+                        --k "${SIZE}" \
+                        --alpha "${ALPHA}" \
+                        --beta "${BETA}" \
+                        --iterations "${ITERS}" \
+                        --warmup "${WARMUP}" \
+                        --csv)
+                    DESC_STR="K=${SIZE}"
                 else
-                    echo "[${COMPILER_TAG}] ${VERSION} ${KERNEL} ${SIZE}x${SIZE} FAILED" >&2
+                    # In RRR mode: legacy full square matrix
+                    BENCH_CMD=("${TASKSET_PREFIX[@]}" "${BIN}" \
+                        --kernel "${KERNEL}" \
+                        --m "${SIZE}" \
+                        --n "${SIZE}" \
+                        --k "${SIZE}" \
+                        --alpha "${ALPHA}" \
+                        --beta "${BETA}" \
+                        --iterations "${ITERS}" \
+                        --warmup "${WARMUP}" \
+                        --legacy \
+                        --csv)
+                    DESC_STR="${SIZE}x${SIZE}"
+                fi
+
+                if LINE=$("${BENCH_CMD[@]}"); then
+                    echo "${VERSION},${LINE}" >> "${CSV}"
+                    echo "[${COMPILER_TAG}] ${VERSION} ${KERNEL} (${DESC_STR})"
+                else
+                    echo "[${COMPILER_TAG}] ${VERSION} ${KERNEL} (${DESC_STR}) FAILED" >&2
                 fi
             done
         done
