@@ -18,8 +18,119 @@
 
     const size_t a_ld = A.ld;
     const size_t b_ld = B.ld;
-    const size_t Mfull = (A.rows / MR) * MR;
     const size_t K = A.cols;
+
+    // Fast-path: single micro-tile (M == MR and N == NR3)
+    if (__builtin_expect(A.rows == MR && B.cols == NR3, 1)) {
+      const T *__restrict a_k = A.data;
+      const T *__restrict b_k = B.data;
+      const size_t c_ld = C.ld;
+
+      auto c00 = set0<T, lmul>();
+      auto c01 = set0<T, lmul>();
+      auto c02 = set0<T, lmul>();
+      auto c10 = set0<T, lmul>();
+      auto c11 = set0<T, lmul>();
+      auto c12 = set0<T, lmul>();
+      auto c20 = set0<T, lmul>();
+      auto c21 = set0<T, lmul>();
+      auto c22 = set0<T, lmul>();
+      auto c30 = set0<T, lmul>();
+      auto c31 = set0<T, lmul>();
+      auto c32 = set0<T, lmul>();
+
+      const size_t K4 = (K / 4) * 4;
+      for (size_t k = 0; k < K4; k += 4) {
+        #pragma GCC unroll 4
+        for (size_t s = 0; s < 4; ++s) {
+          const auto b0 = load<T, lmul>(b_k + s * b_ld);
+          const auto b1 = load<T, lmul>(b_k + s * b_ld + VL);
+          const auto b2 = load<T, lmul>(b_k + s * b_ld + 2 * VL);
+
+          const T *a_s = a_k + s * a_ld;
+          {
+            const auto a0 = set1<T, lmul>(a_s[0]);
+            c00 = fmadd(a0, b0, c00);
+            c01 = fmadd(a0, b1, c01);
+            c02 = fmadd(a0, b2, c02);
+          }
+          {
+            const auto a1 = set1<T, lmul>(a_s[1]);
+            c10 = fmadd(a1, b0, c10);
+            c11 = fmadd(a1, b1, c11);
+            c12 = fmadd(a1, b2, c12);
+          }
+          {
+            const auto a2 = set1<T, lmul>(a_s[2]);
+            c20 = fmadd(a2, b0, c20);
+            c21 = fmadd(a2, b1, c21);
+            c22 = fmadd(a2, b2, c22);
+          }
+          {
+            const auto a3 = set1<T, lmul>(a_s[3]);
+            c30 = fmadd(a3, b0, c30);
+            c31 = fmadd(a3, b1, c31);
+            c32 = fmadd(a3, b2, c32);
+          }
+        }
+        b_k += 4 * b_ld;
+        a_k += 4 * a_ld;
+      }
+
+      for (size_t k = K4; k < K; ++k) {
+        const auto b0 = load<T, lmul>(b_k);
+        const auto b1 = load<T, lmul>(b_k + VL);
+        const auto b2 = load<T, lmul>(b_k + 2 * VL);
+        b_k += b_ld;
+
+        {
+          const auto a0 = set1<T, lmul>(a_k[0]);
+          c00 = fmadd(a0, b0, c00);
+          c01 = fmadd(a0, b1, c01);
+          c02 = fmadd(a0, b2, c02);
+        }
+        {
+          const auto a1 = set1<T, lmul>(a_k[1]);
+          c10 = fmadd(a1, b0, c10);
+          c11 = fmadd(a1, b1, c11);
+          c12 = fmadd(a1, b2, c12);
+        }
+        {
+          const auto a2 = set1<T, lmul>(a_k[2]);
+          c20 = fmadd(a2, b0, c20);
+          c21 = fmadd(a2, b1, c21);
+          c22 = fmadd(a2, b2, c22);
+        }
+        {
+          const auto a3 = set1<T, lmul>(a_k[3]);
+          c30 = fmadd(a3, b0, c30);
+          c31 = fmadd(a3, b1, c31);
+          c32 = fmadd(a3, b2, c32);
+        }
+        a_k += a_ld;
+      }
+
+      T *c0 = C.data;
+      T *c1 = c0 + c_ld;
+      T *c2 = c1 + c_ld;
+      T *c3 = c2 + c_ld;
+
+      Epilogue::store<T, lmul, FastPath>(c0 + 0 * VL, c00, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c0 + 1 * VL, c01, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c0 + 2 * VL, c02, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c1 + 0 * VL, c10, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c1 + 1 * VL, c11, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c1 + 2 * VL, c12, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c2 + 0 * VL, c20, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c2 + 1 * VL, c21, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c2 + 2 * VL, c22, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c3 + 0 * VL, c30, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c3 + 1 * VL, c31, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c3 + 2 * VL, c32, alpha, beta);
+      return;
+    }
+
+    const size_t Mfull = (A.rows / MR) * MR;
 
     size_t limit12 = B.cols;
     if (B.cols >= 16 && (B.cols % NR3) == VL) {
@@ -723,8 +834,85 @@
 
     const size_t a_ld = A.ld;
     const size_t b_ld = B.ld;
-    const size_t Mfull = (A.rows / MR) * MR;
     const size_t K = A.cols;
+
+    // Fast-path: single micro-tile (M == MR and N == NR4)
+    if (__builtin_expect(A.rows == MR && B.cols == NR4, 1)) {
+      const T *__restrict a_k = A.data;
+      const T *__restrict b_k = B.data;
+
+      auto c00 = set0<T, lmul>(); auto c01 = set0<T, lmul>(); auto c02 = set0<T, lmul>(); auto c03 = set0<T, lmul>();
+      auto c10 = set0<T, lmul>(); auto c11 = set0<T, lmul>(); auto c12 = set0<T, lmul>(); auto c13 = set0<T, lmul>();
+      auto c20 = set0<T, lmul>(); auto c21 = set0<T, lmul>(); auto c22 = set0<T, lmul>(); auto c23 = set0<T, lmul>();
+      auto c30 = set0<T, lmul>(); auto c31 = set0<T, lmul>(); auto c32 = set0<T, lmul>(); auto c33 = set0<T, lmul>();
+
+      #pragma GCC unroll 1
+      for (size_t k = 0; k < K; ++k) {
+        const auto b0 = load<T, lmul>(b_k + 0 * VL);
+        const auto b1 = load<T, lmul>(b_k + 1 * VL);
+        const auto b2 = load<T, lmul>(b_k + 2 * VL);
+        const auto b3 = load<T, lmul>(b_k + 3 * VL);
+        b_k += b_ld;
+
+        {
+          const T a0 = a_k[0];
+          c00 = fmaddi(b0, a0, c00);
+          c01 = fmaddi(b1, a0, c01);
+          c02 = fmaddi(b2, a0, c02);
+          c03 = fmaddi(b3, a0, c03);
+        }
+        {
+          const T a1 = a_k[1];
+          c10 = fmaddi(b0, a1, c10);
+          c11 = fmaddi(b1, a1, c11);
+          c12 = fmaddi(b2, a1, c12);
+          c13 = fmaddi(b3, a1, c13);
+        }
+        {
+          const T a2 = a_k[2];
+          c20 = fmaddi(b0, a2, c20);
+          c21 = fmaddi(b1, a2, c21);
+          c22 = fmaddi(b2, a2, c22);
+          c23 = fmaddi(b3, a2, c23);
+        }
+        {
+          const T a3 = a_k[3];
+          c30 = fmaddi(b0, a3, c30);
+          c31 = fmaddi(b1, a3, c31);
+          c32 = fmaddi(b2, a3, c32);
+          c33 = fmaddi(b3, a3, c33);
+        }
+        a_k += a_ld;
+      }
+
+      T *c0_ptr = C[0];
+      T *c1_ptr = C[1];
+      T *c2_ptr = C[2];
+      T *c3_ptr = C[3];
+
+      Epilogue::store<T, lmul, FastPath>(c0_ptr + 0 * VL, c00, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c0_ptr + 1 * VL, c01, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c0_ptr + 2 * VL, c02, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c0_ptr + 3 * VL, c03, alpha, beta);
+
+      Epilogue::store<T, lmul, FastPath>(c1_ptr + 0 * VL, c10, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c1_ptr + 1 * VL, c11, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c1_ptr + 2 * VL, c12, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c1_ptr + 3 * VL, c13, alpha, beta);
+
+      Epilogue::store<T, lmul, FastPath>(c2_ptr + 0 * VL, c20, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c2_ptr + 1 * VL, c21, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c2_ptr + 2 * VL, c22, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c2_ptr + 3 * VL, c23, alpha, beta);
+
+      Epilogue::store<T, lmul, FastPath>(c3_ptr + 0 * VL, c30, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c3_ptr + 1 * VL, c31, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c3_ptr + 2 * VL, c32, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c3_ptr + 3 * VL, c33, alpha, beta);
+      return;
+    }
+
+    const size_t Mfull = (A.rows / MR) * MR;
 
     for (size_t i = 0; i < Mfull; i += MR) {
       const T *a_base = A.data + i;
@@ -754,31 +942,35 @@
           const auto b3 = load<T, lmul>(b_k + 3 * VL);
           b_k += b_ld;
 
-          const T a0 = a_k[0];
-          const T a1 = a_k[1];
-          const T a2 = a_k[2];
-          const T a3 = a_k[3];
+          {
+            const T a0 = a_k[0];
+            c00 = fmaddi(b0, a0, c00);
+            c01 = fmaddi(b1, a0, c01);
+            c02 = fmaddi(b2, a0, c02);
+            c03 = fmaddi(b3, a0, c03);
+          }
+          {
+            const T a1 = a_k[1];
+            c10 = fmaddi(b0, a1, c10);
+            c11 = fmaddi(b1, a1, c11);
+            c12 = fmaddi(b2, a1, c12);
+            c13 = fmaddi(b3, a1, c13);
+          }
+          {
+            const T a2 = a_k[2];
+            c20 = fmaddi(b0, a2, c20);
+            c21 = fmaddi(b1, a2, c21);
+            c22 = fmaddi(b2, a2, c22);
+            c23 = fmaddi(b3, a2, c23);
+          }
+          {
+            const T a3 = a_k[3];
+            c30 = fmaddi(b0, a3, c30);
+            c31 = fmaddi(b1, a3, c31);
+            c32 = fmaddi(b2, a3, c32);
+            c33 = fmaddi(b3, a3, c33);
+          }
           a_k += a_ld;
-
-          c00 = fmaddi(b0, a0, c00);
-          c01 = fmaddi(b1, a0, c01);
-          c02 = fmaddi(b2, a0, c02);
-          c03 = fmaddi(b3, a0, c03);
-
-          c10 = fmaddi(b0, a1, c10);
-          c11 = fmaddi(b1, a1, c11);
-          c12 = fmaddi(b2, a1, c12);
-          c13 = fmaddi(b3, a1, c13);
-
-          c20 = fmaddi(b0, a2, c20);
-          c21 = fmaddi(b1, a2, c21);
-          c22 = fmaddi(b2, a2, c22);
-          c23 = fmaddi(b3, a2, c23);
-
-          c30 = fmaddi(b0, a3, c30);
-          c31 = fmaddi(b1, a3, c31);
-          c32 = fmaddi(b2, a3, c32);
-          c33 = fmaddi(b3, a3, c33);
         }
 
         const auto c0_ptr = c0_base + j;
@@ -823,20 +1015,27 @@
           const auto b1 = load<T, lmul>(b_k + VL);
           b_k += b_ld;
 
-          const T a0 = a_k[0];
-          const T a1 = a_k[1];
-          const T a2 = a_k[2];
-          const T a3 = a_k[3];
+          {
+            const T a0 = a_k[0];
+            c00 = fmaddi(b0, a0, c00);
+            c01 = fmaddi(b1, a0, c01);
+          }
+          {
+            const T a1 = a_k[1];
+            c10 = fmaddi(b0, a1, c10);
+            c11 = fmaddi(b1, a1, c11);
+          }
+          {
+            const T a2 = a_k[2];
+            c20 = fmaddi(b0, a2, c20);
+            c21 = fmaddi(b1, a2, c21);
+          }
+          {
+            const T a3 = a_k[3];
+            c30 = fmaddi(b0, a3, c30);
+            c31 = fmaddi(b1, a3, c31);
+          }
           a_k += a_ld;
-
-          c00 = fmaddi(b0, a0, c00);
-          c01 = fmaddi(b1, a0, c01);
-          c10 = fmaddi(b0, a1, c10);
-          c11 = fmaddi(b1, a1, c11);
-          c20 = fmaddi(b0, a2, c20);
-          c21 = fmaddi(b1, a2, c21);
-          c30 = fmaddi(b0, a3, c30);
-          c31 = fmaddi(b1, a3, c31);
         }
 
         const auto c0_ptr = c0_base + j;
@@ -868,16 +1067,23 @@
           const auto b0 = load<T, lmul>(b_k);
           b_k += b_ld;
 
-          const T a0 = a_k[0];
-          const T a1 = a_k[1];
-          const T a2 = a_k[2];
-          const T a3 = a_k[3];
+          {
+            const T a0 = a_k[0];
+            c0 = fmaddi(b0, a0, c0);
+          }
+          {
+            const T a1 = a_k[1];
+            c1 = fmaddi(b0, a1, c1);
+          }
+          {
+            const T a2 = a_k[2];
+            c2 = fmaddi(b0, a2, c2);
+          }
+          {
+            const T a3 = a_k[3];
+            c3 = fmaddi(b0, a3, c3);
+          }
           a_k += a_ld;
-
-          c0 = fmaddi(b0, a0, c0);
-          c1 = fmaddi(b0, a1, c1);
-          c2 = fmaddi(b0, a2, c2);
-          c3 = fmaddi(b0, a3, c3);
         }
 
         Epilogue::store<T, lmul, FastPath>(c0_base + j, c0, alpha, beta);
@@ -1239,8 +1445,113 @@
 
     const size_t a_ld = A.ld;
     const size_t b_ld = B.ld;
-    const size_t Mfull = (A.rows / MR) * MR;
     const size_t K = A.cols;
+
+    // Fast-path: single micro-tile (M == MR and N == NR4)
+    if (__builtin_expect(A.rows == MR && B.cols == NR4, 1)) {
+      const T *__restrict a_k = A.data;
+      const T *__restrict b_k = B.data;
+
+      auto c00 = set0<T, lmul>(); auto c01 = set0<T, lmul>(); auto c02 = set0<T, lmul>(); auto c03 = set0<T, lmul>();
+      auto c10 = set0<T, lmul>(); auto c11 = set0<T, lmul>(); auto c12 = set0<T, lmul>(); auto c13 = set0<T, lmul>();
+      auto c20 = set0<T, lmul>(); auto c21 = set0<T, lmul>(); auto c22 = set0<T, lmul>(); auto c23 = set0<T, lmul>();
+      auto c30 = set0<T, lmul>(); auto c31 = set0<T, lmul>(); auto c32 = set0<T, lmul>(); auto c33 = set0<T, lmul>();
+      auto c40 = set0<T, lmul>(); auto c41 = set0<T, lmul>(); auto c42 = set0<T, lmul>(); auto c43 = set0<T, lmul>();
+      auto c50 = set0<T, lmul>(); auto c51 = set0<T, lmul>(); auto c52 = set0<T, lmul>(); auto c53 = set0<T, lmul>();
+
+      #pragma GCC unroll 1
+      for (size_t k = 0; k < K; ++k) {
+        const auto b0 = load<T, lmul>(b_k + 0 * VL);
+        const auto b1 = load<T, lmul>(b_k + 1 * VL);
+        const auto b2 = load<T, lmul>(b_k + 2 * VL);
+        const auto b3 = load<T, lmul>(b_k + 3 * VL);
+        b_k += b_ld;
+
+        {
+          const T a0 = a_k[0];
+          c00 = fmaddi(b0, a0, c00);
+          c01 = fmaddi(b1, a0, c01);
+          c02 = fmaddi(b2, a0, c02);
+          c03 = fmaddi(b3, a0, c03);
+        }
+        {
+          const T a1 = a_k[1];
+          c10 = fmaddi(b0, a1, c10);
+          c11 = fmaddi(b1, a1, c11);
+          c12 = fmaddi(b2, a1, c12);
+          c13 = fmaddi(b3, a1, c13);
+        }
+        {
+          const T a2 = a_k[2];
+          c20 = fmaddi(b0, a2, c20);
+          c21 = fmaddi(b1, a2, c21);
+          c22 = fmaddi(b2, a2, c22);
+          c23 = fmaddi(b3, a2, c23);
+        }
+        {
+          const T a3 = a_k[3];
+          c30 = fmaddi(b0, a3, c30);
+          c31 = fmaddi(b1, a3, c31);
+          c32 = fmaddi(b2, a3, c32);
+          c33 = fmaddi(b3, a3, c33);
+        }
+        {
+          const T a4 = a_k[4];
+          c40 = fmaddi(b0, a4, c40);
+          c41 = fmaddi(b1, a4, c41);
+          c42 = fmaddi(b2, a4, c42);
+          c43 = fmaddi(b3, a4, c43);
+        }
+        {
+          const T a5 = a_k[5];
+          c50 = fmaddi(b0, a5, c50);
+          c51 = fmaddi(b1, a5, c51);
+          c52 = fmaddi(b2, a5, c52);
+          c53 = fmaddi(b3, a5, c53);
+        }
+        a_k += a_ld;
+      }
+
+      T *c0_ptr = C[0];
+      T *c1_ptr = C[1];
+      T *c2_ptr = C[2];
+      T *c3_ptr = C[3];
+      T *c4_ptr = C[4];
+      T *c5_ptr = C[5];
+
+      Epilogue::store<T, lmul, FastPath>(c0_ptr + 0 * VL, c00, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c0_ptr + 1 * VL, c01, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c0_ptr + 2 * VL, c02, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c0_ptr + 3 * VL, c03, alpha, beta);
+
+      Epilogue::store<T, lmul, FastPath>(c1_ptr + 0 * VL, c10, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c1_ptr + 1 * VL, c11, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c1_ptr + 2 * VL, c12, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c1_ptr + 3 * VL, c13, alpha, beta);
+
+      Epilogue::store<T, lmul, FastPath>(c2_ptr + 0 * VL, c20, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c2_ptr + 1 * VL, c21, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c2_ptr + 2 * VL, c22, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c2_ptr + 3 * VL, c23, alpha, beta);
+
+      Epilogue::store<T, lmul, FastPath>(c3_ptr + 0 * VL, c30, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c3_ptr + 1 * VL, c31, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c3_ptr + 2 * VL, c32, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c3_ptr + 3 * VL, c33, alpha, beta);
+
+      Epilogue::store<T, lmul, FastPath>(c4_ptr + 0 * VL, c40, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c4_ptr + 1 * VL, c41, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c4_ptr + 2 * VL, c42, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c4_ptr + 3 * VL, c43, alpha, beta);
+
+      Epilogue::store<T, lmul, FastPath>(c5_ptr + 0 * VL, c50, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c5_ptr + 1 * VL, c51, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c5_ptr + 2 * VL, c52, alpha, beta);
+      Epilogue::store<T, lmul, FastPath>(c5_ptr + 3 * VL, c53, alpha, beta);
+      return;
+    }
+
+    const size_t Mfull = (A.rows / MR) * MR;
 
     for (size_t i = 0; i < Mfull; i += MR) {
       const T *a_base = A.data + i;
@@ -1273,43 +1584,49 @@
           const auto b3 = load<T, lmul>(b_k + 3 * VL);
           b_k += b_ld;
 
-          const T a0 = a_k[0];
-          const T a1 = a_k[1];
-          const T a2 = a_k[2];
-          const T a3 = a_k[3];
-          const T a4 = a_k[4];
-          const T a5 = a_k[5];
+          {
+            const T a0 = a_k[0];
+            c00 = fmaddi(b0, a0, c00);
+            c01 = fmaddi(b1, a0, c01);
+            c02 = fmaddi(b2, a0, c02);
+            c03 = fmaddi(b3, a0, c03);
+          }
+          {
+            const T a1 = a_k[1];
+            c10 = fmaddi(b0, a1, c10);
+            c11 = fmaddi(b1, a1, c11);
+            c12 = fmaddi(b2, a1, c12);
+            c13 = fmaddi(b3, a1, c13);
+          }
+          {
+            const T a2 = a_k[2];
+            c20 = fmaddi(b0, a2, c20);
+            c21 = fmaddi(b1, a2, c21);
+            c22 = fmaddi(b2, a2, c22);
+            c23 = fmaddi(b3, a2, c23);
+          }
+          {
+            const T a3 = a_k[3];
+            c30 = fmaddi(b0, a3, c30);
+            c31 = fmaddi(b1, a3, c31);
+            c32 = fmaddi(b2, a3, c32);
+            c33 = fmaddi(b3, a3, c33);
+          }
+          {
+            const T a4 = a_k[4];
+            c40 = fmaddi(b0, a4, c40);
+            c41 = fmaddi(b1, a4, c41);
+            c42 = fmaddi(b2, a4, c42);
+            c43 = fmaddi(b3, a4, c43);
+          }
+          {
+            const T a5 = a_k[5];
+            c50 = fmaddi(b0, a5, c50);
+            c51 = fmaddi(b1, a5, c51);
+            c52 = fmaddi(b2, a5, c52);
+            c53 = fmaddi(b3, a5, c53);
+          }
           a_k += a_ld;
-
-          c00 = fmaddi(b0, a0, c00);
-          c01 = fmaddi(b1, a0, c01);
-          c02 = fmaddi(b2, a0, c02);
-          c03 = fmaddi(b3, a0, c03);
-
-          c10 = fmaddi(b0, a1, c10);
-          c11 = fmaddi(b1, a1, c11);
-          c12 = fmaddi(b2, a1, c12);
-          c13 = fmaddi(b3, a1, c13);
-
-          c20 = fmaddi(b0, a2, c20);
-          c21 = fmaddi(b1, a2, c21);
-          c22 = fmaddi(b2, a2, c22);
-          c23 = fmaddi(b3, a2, c23);
-
-          c30 = fmaddi(b0, a3, c30);
-          c31 = fmaddi(b1, a3, c31);
-          c32 = fmaddi(b2, a3, c32);
-          c33 = fmaddi(b3, a3, c33);
-
-          c40 = fmaddi(b0, a4, c40);
-          c41 = fmaddi(b1, a4, c41);
-          c42 = fmaddi(b2, a4, c42);
-          c43 = fmaddi(b3, a4, c43);
-
-          c50 = fmaddi(b0, a5, c50);
-          c51 = fmaddi(b1, a5, c51);
-          c52 = fmaddi(b2, a5, c52);
-          c53 = fmaddi(b3, a5, c53);
         }
 
         const auto c0_ptr = c0_base + j;
@@ -1367,17 +1684,37 @@
           const auto b1 = load<T, lmul>(b_k + 1 * VL);
           b_k += b_ld;
 
-          const T a0 = a_k[0]; const T a1 = a_k[1];
-          const T a2 = a_k[2]; const T a3 = a_k[3];
-          const T a4 = a_k[4]; const T a5 = a_k[5];
+          {
+            const T a0 = a_k[0];
+            c00 = fmaddi(b0, a0, c00);
+            c01 = fmaddi(b1, a0, c01);
+          }
+          {
+            const T a1 = a_k[1];
+            c10 = fmaddi(b0, a1, c10);
+            c11 = fmaddi(b1, a1, c11);
+          }
+          {
+            const T a2 = a_k[2];
+            c20 = fmaddi(b0, a2, c20);
+            c21 = fmaddi(b1, a2, c21);
+          }
+          {
+            const T a3 = a_k[3];
+            c30 = fmaddi(b0, a3, c30);
+            c31 = fmaddi(b1, a3, c31);
+          }
+          {
+            const T a4 = a_k[4];
+            c40 = fmaddi(b0, a4, c40);
+            c41 = fmaddi(b1, a4, c41);
+          }
+          {
+            const T a5 = a_k[5];
+            c50 = fmaddi(b0, a5, c50);
+            c51 = fmaddi(b1, a5, c51);
+          }
           a_k += a_ld;
-
-          c00 = fmaddi(b0, a0, c00); c01 = fmaddi(b1, a0, c01);
-          c10 = fmaddi(b0, a1, c10); c11 = fmaddi(b1, a1, c11);
-          c20 = fmaddi(b0, a2, c20); c21 = fmaddi(b1, a2, c21);
-          c30 = fmaddi(b0, a3, c30); c31 = fmaddi(b1, a3, c31);
-          c40 = fmaddi(b0, a4, c40); c41 = fmaddi(b1, a4, c41);
-          c50 = fmaddi(b0, a5, c50); c51 = fmaddi(b1, a5, c51);
         }
 
         const auto c0_ptr = c0_base + j; const auto c1_ptr = c1_base + j;
@@ -1413,17 +1750,31 @@
           const auto b0 = load<T, lmul>(b_k);
           b_k += b_ld;
 
-          const T a0 = a_k[0]; const T a1 = a_k[1];
-          const T a2 = a_k[2]; const T a3 = a_k[3];
-          const T a4 = a_k[4]; const T a5 = a_k[5];
+          {
+            const T a0 = a_k[0];
+            c0 = fmaddi(b0, a0, c0);
+          }
+          {
+            const T a1 = a_k[1];
+            c1 = fmaddi(b0, a1, c1);
+          }
+          {
+            const T a2 = a_k[2];
+            c2 = fmaddi(b0, a2, c2);
+          }
+          {
+            const T a3 = a_k[3];
+            c3 = fmaddi(b0, a3, c3);
+          }
+          {
+            const T a4 = a_k[4];
+            c4 = fmaddi(b0, a4, c4);
+          }
+          {
+            const T a5 = a_k[5];
+            c5 = fmaddi(b0, a5, c5);
+          }
           a_k += a_ld;
-
-          c0 = fmaddi(b0, a0, c0);
-          c1 = fmaddi(b0, a1, c1);
-          c2 = fmaddi(b0, a2, c2);
-          c3 = fmaddi(b0, a3, c3);
-          c4 = fmaddi(b0, a4, c4);
-          c5 = fmaddi(b0, a5, c5);
         }
 
         Epilogue::store<T, lmul, FastPath>(c0_base + j, c0, alpha, beta);

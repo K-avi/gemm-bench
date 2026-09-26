@@ -22,7 +22,7 @@ struct BenchConfig
     size_t iterations = 100;
     size_t warmup = 10;
 
-    size_t packet_size = 4;
+    size_t packet_size = mipp::N<double, 1>();
     size_t lmul = 1;
     size_t alignment = 32;
 
