@@ -1,0 +1,7 @@
+Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS
+native,mippv2_meteorlake_mr4_nr3_crr,4,12,32,1,0,4.88133e-08,62.9336
+native,mippv2_meteorlake_mr4_nr3_crr,4,12,64,1,0,8.69512e-08,70.6603
+native,mippv2_meteorlake_mr4_nr3_crr,4,12,128,1,0,1.69027e-07,72.6986
+native,mippv2_meteorlake_mr4_nr3_crr,4,12,256,1,0,3.52432e-07,69.7325
+native,mippv2_meteorlake_mr4_nr3_crr,4,12,512,1,0,6.80883e-07,72.1886
+native,mippv2_meteorlake_mr4_nr3_crr,4,12,1024,1,0,1.32149e-06,74.389

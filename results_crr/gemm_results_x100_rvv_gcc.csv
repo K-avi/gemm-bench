@@ -1,5 +1,0 @@
-Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS
-rvv,mippv2_x100_register_blocked_apack4_crr,32,32,32,1,0,4.89696e-06,13.383
-rvv,mippv2_x100_register_blocked_apack4_crr,64,64,64,1,0,3.78019e-05,13.8694
-rvv,mippv2_x100_register_blocked_apack4_crr,96,96,96,1,0,0.000218116,8.11251
-rvv,mippv2_x100_register_blocked_apack4_crr,128,128,128,1,0,0.000605803,6.92355

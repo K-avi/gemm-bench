@@ -1,0 +1,7 @@
+Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS
+native,mippv2_firestorm_mr4_nr4_fmaddi_crr,4,32,32,1,0,9.74471e-08,84.0662
+native,mippv2_firestorm_mr4_nr4_fmaddi_crr,4,32,64,1,0,1.92734e-07,85.0082
+native,mippv2_firestorm_mr4_nr4_fmaddi_crr,4,32,128,1,0,3.89342e-07,84.1624
+native,mippv2_firestorm_mr4_nr4_fmaddi_crr,4,32,256,1,0,7.66748e-07,85.4727
+native,mippv2_firestorm_mr4_nr4_fmaddi_crr,4,32,512,1,0,1.53248e-06,85.5296
+native,mippv2_firestorm_mr4_nr4_fmaddi_crr,4,32,1024,1,0,3.09385e-06,84.7307
