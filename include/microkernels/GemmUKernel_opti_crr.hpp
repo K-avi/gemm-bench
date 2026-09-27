@@ -370,34 +370,30 @@
         const auto b3 = load<T, lmul>(b_k + 3 * VL);
         b_k += b_ld;
 
-        {
-          const T a0 = a_k[0];
-          c00 = fmaddi(b0, a0, c00);
-          c01 = fmaddi(b1, a0, c01);
-          c02 = fmaddi(b2, a0, c02);
-          c03 = fmaddi(b3, a0, c03);
-        }
-        {
-          const T a1 = a_k[1];
-          c10 = fmaddi(b0, a1, c10);
-          c11 = fmaddi(b1, a1, c11);
-          c12 = fmaddi(b2, a1, c12);
-          c13 = fmaddi(b3, a1, c13);
-        }
-        {
-          const T a2 = a_k[2];
-          c20 = fmaddi(b0, a2, c20);
-          c21 = fmaddi(b1, a2, c21);
-          c22 = fmaddi(b2, a2, c22);
-          c23 = fmaddi(b3, a2, c23);
-        }
-        {
-          const T a3 = a_k[3];
-          c30 = fmaddi(b0, a3, c30);
-          c31 = fmaddi(b1, a3, c31);
-          c32 = fmaddi(b2, a3, c32);
-          c33 = fmaddi(b3, a3, c33);
-        }
+        const auto a0 = set1<T, lmul>(a_k[0]);
+        const auto a1 = set1<T, lmul>(a_k[1]);
+        const auto a2 = set1<T, lmul>(a_k[2]);
+        const auto a3 = set1<T, lmul>(a_k[3]);
+
+        c00 = fmadd(b0, a0, c00);
+        c01 = fmadd(b1, a0, c01);
+        c02 = fmadd(b2, a0, c02);
+        c03 = fmadd(b3, a0, c03);
+
+        c10 = fmadd(b0, a1, c10);
+        c11 = fmadd(b1, a1, c11);
+        c12 = fmadd(b2, a1, c12);
+        c13 = fmadd(b3, a1, c13);
+
+        c20 = fmadd(b0, a2, c20);
+        c21 = fmadd(b1, a2, c21);
+        c22 = fmadd(b2, a2, c22);
+        c23 = fmadd(b3, a2, c23);
+
+        c30 = fmadd(b0, a3, c30);
+        c31 = fmadd(b1, a3, c31);
+        c32 = fmadd(b2, a3, c32);
+        c33 = fmadd(b3, a3, c33);
         a_k += a_ld;
       }
 
@@ -458,34 +454,30 @@
           const auto b3 = load<T, lmul>(b_k + 3 * VL);
           b_k += b_ld;
 
-          {
-            const T a0 = a_k[0];
-            c00 = fmaddi(b0, a0, c00);
-            c01 = fmaddi(b1, a0, c01);
-            c02 = fmaddi(b2, a0, c02);
-            c03 = fmaddi(b3, a0, c03);
-          }
-          {
-            const T a1 = a_k[1];
-            c10 = fmaddi(b0, a1, c10);
-            c11 = fmaddi(b1, a1, c11);
-            c12 = fmaddi(b2, a1, c12);
-            c13 = fmaddi(b3, a1, c13);
-          }
-          {
-            const T a2 = a_k[2];
-            c20 = fmaddi(b0, a2, c20);
-            c21 = fmaddi(b1, a2, c21);
-            c22 = fmaddi(b2, a2, c22);
-            c23 = fmaddi(b3, a2, c23);
-          }
-          {
-            const T a3 = a_k[3];
-            c30 = fmaddi(b0, a3, c30);
-            c31 = fmaddi(b1, a3, c31);
-            c32 = fmaddi(b2, a3, c32);
-            c33 = fmaddi(b3, a3, c33);
-          }
+          const auto a0 = set1<T, lmul>(a_k[0]);
+          const auto a1 = set1<T, lmul>(a_k[1]);
+          const auto a2 = set1<T, lmul>(a_k[2]);
+          const auto a3 = set1<T, lmul>(a_k[3]);
+
+          c00 = fmadd(b0, a0, c00);
+          c01 = fmadd(b1, a0, c01);
+          c02 = fmadd(b2, a0, c02);
+          c03 = fmadd(b3, a0, c03);
+
+          c10 = fmadd(b0, a1, c10);
+          c11 = fmadd(b1, a1, c11);
+          c12 = fmadd(b2, a1, c12);
+          c13 = fmadd(b3, a1, c13);
+
+          c20 = fmadd(b0, a2, c20);
+          c21 = fmadd(b1, a2, c21);
+          c22 = fmadd(b2, a2, c22);
+          c23 = fmadd(b3, a2, c23);
+
+          c30 = fmadd(b0, a3, c30);
+          c31 = fmadd(b1, a3, c31);
+          c32 = fmadd(b2, a3, c32);
+          c33 = fmadd(b3, a3, c33);
           a_k += a_ld;
         }
 
