@@ -19,6 +19,7 @@ enum class UKernelType {
   // Champions (RRR)
   mippv2_meteorlake_mr4_nr3,
   mippv2_a76_mr6_nr3,
+  mippv2_a76_mr6_nr4_fmaddi,
   mippv2_zen4_mr4_nr4_fmaddi,
   mippv2_firestorm_mr4_nr4_fmaddi,
   mippv2_firestorm_mr6_nr4_fmaddi,
@@ -29,7 +30,8 @@ enum class UKernelType {
 
   // Champions (CRR)
   mippv2_meteorlake_mr4_nr3_crr,
-  mippv2_a76_mr6_nr3_crr,
+  mippv2_a76_mr6_nr4_fmaddi_crr,
+  mippv2_a76_mr6_nr3_crr = mippv2_a76_mr6_nr4_fmaddi_crr,
   mippv2_zen4_mr4_nr4_fmaddi_crr,
   mippv2_firestorm_mr4_nr4_fmaddi_crr,
   mippv2_firestorm_mr6_nr4_fmaddi_crr,
@@ -134,6 +136,7 @@ inline constexpr KernelDescriptor kernelTable[] = {
     // Champions
     {UKernelType::mippv2_meteorlake_mr4_nr3, "mippv2_meteorlake_mr4_nr3", RRR, 64, 4, 3},
     {UKernelType::mippv2_a76_mr6_nr3, "mippv2_a76_mr6_nr3", RRR, 64, 6, 3},
+    {UKernelType::mippv2_a76_mr6_nr4_fmaddi, "mippv2_a76_mr6_nr4_fmaddi", RRR, 64, 6, 4},
     {UKernelType::mippv2_zen4_mr4_nr4_fmaddi, "mippv2_zen4_mr4_nr4_fmaddi", RRR, 64, 4, 4},
     {UKernelType::mippv2_firestorm_mr4_nr4_fmaddi, "mippv2_firestorm_mr4_nr4_fmaddi", RRR, 64, 4, 4},
     {UKernelType::mippv2_firestorm_mr6_nr4_fmaddi, "mippv2_firestorm_mr6_nr4_fmaddi", RRR, 64, 6, 4},
@@ -144,7 +147,8 @@ inline constexpr KernelDescriptor kernelTable[] = {
 
     // Champions (CRR)
     {UKernelType::mippv2_meteorlake_mr4_nr3_crr, "mippv2_meteorlake_mr4_nr3_crr", CRR, 64, 4, 3},
-    {UKernelType::mippv2_a76_mr6_nr3_crr, "mippv2_a76_mr6_nr3_crr", CRR, 64, 6, 3},
+    {UKernelType::mippv2_a76_mr6_nr4_fmaddi_crr, "mippv2_a76_mr6_nr4_fmaddi_crr", CRR, 64, 6, 4},
+    {UKernelType::mippv2_a76_mr6_nr4_fmaddi_crr, "mippv2_a76_mr6_nr3_crr", CRR, 64, 6, 4},
     {UKernelType::mippv2_zen4_mr4_nr4_fmaddi_crr, "mippv2_zen4_mr4_nr4_fmaddi_crr", CRR, 64, 4, 4},
     {UKernelType::mippv2_firestorm_mr4_nr4_fmaddi_crr, "mippv2_firestorm_mr4_nr4_fmaddi_crr", CRR, 64, 4, 4},
     {UKernelType::mippv2_firestorm_mr6_nr4_fmaddi_crr, "mippv2_firestorm_mr6_nr4_fmaddi_crr", CRR, 64, 6, 4},

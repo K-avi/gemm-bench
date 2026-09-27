@@ -338,490 +338,6 @@
 
   template <int lmul = 1, bool FastPath = false>
   static inline void
-  gemm_mippv2_a76_mr6_nr3_crr_core(const PackedColMajor<T> &__restrict A,
-                                   const PackedRowMajor<T> &__restrict B,
-                                   PackedRowMajor<T> &__restrict C,
-                                   T alpha = T{1}, T beta = T{0}) {
-    using namespace mipp;
-
-    constexpr size_t VL = N<T, lmul>();
-    constexpr size_t MR = 6;
-    constexpr size_t NR3 = 3 * VL;
-
-    const size_t a_ld = A.ld;
-    const size_t b_ld = B.ld;
-    const size_t Mfull = (A.rows / MR) * MR;
-    const size_t K = A.cols;
-
-    for (size_t i = 0; i < Mfull; i += MR) {
-      const T *a_base = A.data + i;
-
-      T *c0_base = C[i + 0];
-      T *c1_base = C[i + 1];
-      T *c2_base = C[i + 2];
-      T *c3_base = C[i + 3];
-      T *c4_base = C[i + 4];
-      T *c5_base = C[i + 5];
-
-      size_t j = 0;
-
-      // 1. Main 6x3 Tiles
-      for (; j + NR3 <= B.cols; j += NR3) {
-        auto c00 = set0<T, lmul>(); auto c01 = set0<T, lmul>(); auto c02 = set0<T, lmul>();
-        auto c10 = set0<T, lmul>(); auto c11 = set0<T, lmul>(); auto c12 = set0<T, lmul>();
-        auto c20 = set0<T, lmul>(); auto c21 = set0<T, lmul>(); auto c22 = set0<T, lmul>();
-        auto c30 = set0<T, lmul>(); auto c31 = set0<T, lmul>(); auto c32 = set0<T, lmul>();
-        auto c40 = set0<T, lmul>(); auto c41 = set0<T, lmul>(); auto c42 = set0<T, lmul>();
-        auto c50 = set0<T, lmul>(); auto c51 = set0<T, lmul>(); auto c52 = set0<T, lmul>();
-
-        const T *__restrict a_k = a_base;
-        const T *__restrict b_k = B.data + j;
-
-        #pragma GCC unroll 1
-        for (size_t k = 0; k < K; ++k) {
-          const auto b0 = load<T, lmul>(b_k + 0 * VL);
-          const auto b1 = load<T, lmul>(b_k + 1 * VL);
-          const auto b2 = load<T, lmul>(b_k + 2 * VL);
-          b_k += b_ld;
-
-          const auto a0 = set1<T, lmul>(a_k[0]);
-          const auto a1 = set1<T, lmul>(a_k[1]);
-          c00 = fmadd(a0, b0, c00);
-          c10 = fmadd(a1, b0, c10);
-          c01 = fmadd(a0, b1, c01);
-          c11 = fmadd(a1, b1, c11);
-          c02 = fmadd(a0, b2, c02);
-          c12 = fmadd(a1, b2, c12);
-
-          const auto a2 = set1<T, lmul>(a_k[2]);
-          const auto a3 = set1<T, lmul>(a_k[3]);
-          c20 = fmadd(a2, b0, c20);
-          c30 = fmadd(a3, b0, c30);
-          c21 = fmadd(a2, b1, c21);
-          c31 = fmadd(a3, b1, c31);
-          c22 = fmadd(a2, b2, c22);
-          c32 = fmadd(a3, b2, c32);
-
-          const auto a4 = set1<T, lmul>(a_k[4]);
-          const auto a5 = set1<T, lmul>(a_k[5]);
-          a_k += a_ld;
-
-          c40 = fmadd(a4, b0, c40);
-          c50 = fmadd(a5, b0, c50);
-          c41 = fmadd(a4, b1, c41);
-          c51 = fmadd(a5, b1, c51);
-          c42 = fmadd(a4, b2, c42);
-          c52 = fmadd(a5, b2, c52);
-        }
-
-        const auto c0_ptr = c0_base + j;
-        const auto c1_ptr = c1_base + j;
-        const auto c2_ptr = c2_base + j;
-        const auto c3_ptr = c3_base + j;
-        const auto c4_ptr = c4_base + j;
-        const auto c5_ptr = c5_base + j;
-
-        Epilogue::store<T, lmul, FastPath>(c0_ptr + 0 * VL, c00, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c0_ptr + 1 * VL, c01, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c0_ptr + 2 * VL, c02, alpha, beta);
-
-        Epilogue::store<T, lmul, FastPath>(c1_ptr + 0 * VL, c10, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c1_ptr + 1 * VL, c11, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c1_ptr + 2 * VL, c12, alpha, beta);
-
-        Epilogue::store<T, lmul, FastPath>(c2_ptr + 0 * VL, c20, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c2_ptr + 1 * VL, c21, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c2_ptr + 2 * VL, c22, alpha, beta);
-
-        Epilogue::store<T, lmul, FastPath>(c3_ptr + 0 * VL, c30, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c3_ptr + 1 * VL, c31, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c3_ptr + 2 * VL, c32, alpha, beta);
-
-        Epilogue::store<T, lmul, FastPath>(c4_ptr + 0 * VL, c40, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c4_ptr + 1 * VL, c41, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c4_ptr + 2 * VL, c42, alpha, beta);
-
-        Epilogue::store<T, lmul, FastPath>(c5_ptr + 0 * VL, c50, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c5_ptr + 1 * VL, c51, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c5_ptr + 2 * VL, c52, alpha, beta);
-      }
-
-      // 2. Cleanup 6x2
-      while (j + 2 * VL <= B.cols) {
-        auto c00 = set0<T, lmul>(); auto c01 = set0<T, lmul>();
-        auto c10 = set0<T, lmul>(); auto c11 = set0<T, lmul>();
-        auto c20 = set0<T, lmul>(); auto c21 = set0<T, lmul>();
-        auto c30 = set0<T, lmul>(); auto c31 = set0<T, lmul>();
-        auto c40 = set0<T, lmul>(); auto c41 = set0<T, lmul>();
-        auto c50 = set0<T, lmul>(); auto c51 = set0<T, lmul>();
-
-        const T *__restrict a_k = a_base;
-        const T *__restrict b_k = B.data + j;
-
-        #pragma GCC unroll 1
-        for (size_t k = 0; k < K; ++k) {
-          const auto b0 = load<T, lmul>(b_k + 0 * VL);
-          const auto b1 = load<T, lmul>(b_k + 1 * VL);
-          b_k += b_ld;
-
-          const auto a0 = set1<T, lmul>(a_k[0]);
-          const auto a1 = set1<T, lmul>(a_k[1]);
-          c00 = fmadd(a0, b0, c00);
-          c10 = fmadd(a1, b0, c10);
-          c01 = fmadd(a0, b1, c01);
-          c11 = fmadd(a1, b1, c11);
-
-          const auto a2 = set1<T, lmul>(a_k[2]);
-          const auto a3 = set1<T, lmul>(a_k[3]);
-          c20 = fmadd(a2, b0, c20);
-          c30 = fmadd(a3, b0, c30);
-          c21 = fmadd(a2, b1, c21);
-          c31 = fmadd(a3, b1, c31);
-
-          const auto a4 = set1<T, lmul>(a_k[4]);
-          const auto a5 = set1<T, lmul>(a_k[5]);
-          a_k += a_ld;
-
-          c40 = fmadd(a4, b0, c40);
-          c50 = fmadd(a5, b0, c50);
-          c41 = fmadd(a4, b1, c41);
-          c51 = fmadd(a5, b1, c51);
-        }
-
-        const auto c0_ptr = c0_base + j;
-        const auto c1_ptr = c1_base + j;
-        const auto c2_ptr = c2_base + j;
-        const auto c3_ptr = c3_base + j;
-        const auto c4_ptr = c4_base + j;
-        const auto c5_ptr = c5_base + j;
-
-        Epilogue::store<T, lmul, FastPath>(c0_ptr + 0 * VL, c00, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c0_ptr + 1 * VL, c01, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c1_ptr + 0 * VL, c10, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c1_ptr + 1 * VL, c11, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c2_ptr + 0 * VL, c20, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c2_ptr + 1 * VL, c21, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c3_ptr + 0 * VL, c30, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c3_ptr + 1 * VL, c31, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c4_ptr + 0 * VL, c40, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c4_ptr + 1 * VL, c41, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c5_ptr + 0 * VL, c50, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c5_ptr + 1 * VL, c51, alpha, beta);
-
-        j += 2 * VL;
-      }
-
-      // 3. Cleanup 6x1
-      while (j + VL <= B.cols) {
-        auto c0 = set0<T, lmul>(); auto c1 = set0<T, lmul>(); auto c2 = set0<T, lmul>();
-        auto c3 = set0<T, lmul>(); auto c4 = set0<T, lmul>(); auto c5 = set0<T, lmul>();
-
-        const T *__restrict a_k = a_base;
-        const T *__restrict b_k = B.data + j;
-
-        for (size_t k = 0; k < K; ++k) {
-          const auto b0 = load<T, lmul>(b_k);
-          b_k += b_ld;
-
-          const auto a0 = set1<T, lmul>(a_k[0]);
-          const auto a1 = set1<T, lmul>(a_k[1]);
-          c0 = fmadd(a0, b0, c0);
-          c1 = fmadd(a1, b0, c1);
-
-          const auto a2 = set1<T, lmul>(a_k[2]);
-          const auto a3 = set1<T, lmul>(a_k[3]);
-          c2 = fmadd(a2, b0, c2);
-          c3 = fmadd(a3, b0, c3);
-
-          const auto a4 = set1<T, lmul>(a_k[4]);
-          const auto a5 = set1<T, lmul>(a_k[5]);
-          a_k += a_ld;
-
-          c4 = fmadd(a4, b0, c4);
-          c5 = fmadd(a5, b0, c5);
-        }
-
-        Epilogue::store<T, lmul, FastPath>(c0_base + j, c0, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c1_base + j, c1, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c2_base + j, c2, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c3_base + j, c3, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c4_base + j, c4, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c5_base + j, c5, alpha, beta);
-
-        j += VL;
-      }
-    }
-
-    // Remainder rows
-    size_t i = Mfull;
-    if (i + 4 <= A.rows) {
-      const T *a_base = A.data + i;
-      T *c0_base = C[i + 0]; T *c1_base = C[i + 1];
-      T *c2_base = C[i + 2]; T *c3_base = C[i + 3];
-
-      size_t j = 0;
-      for (; j + NR3 <= B.cols; j += NR3) {
-        auto c00 = set0<T, lmul>(); auto c01 = set0<T, lmul>(); auto c02 = set0<T, lmul>();
-        auto c10 = set0<T, lmul>(); auto c11 = set0<T, lmul>(); auto c12 = set0<T, lmul>();
-        auto c20 = set0<T, lmul>(); auto c21 = set0<T, lmul>(); auto c22 = set0<T, lmul>();
-        auto c30 = set0<T, lmul>(); auto c31 = set0<T, lmul>(); auto c32 = set0<T, lmul>();
-
-        const T *__restrict a_k = a_base;
-        const T *__restrict b_k = B.data + j;
-
-        for (size_t k = 0; k < K; ++k) {
-          const auto b0 = load<T, lmul>(b_k + 0 * VL);
-          const auto b1 = load<T, lmul>(b_k + 1 * VL);
-          const auto b2 = load<T, lmul>(b_k + 2 * VL);
-          b_k += b_ld;
-
-          const auto a0 = set1<T, lmul>(a_k[0]);
-          const auto a1 = set1<T, lmul>(a_k[1]);
-          c00 = fmadd(a0, b0, c00);
-          c10 = fmadd(a1, b0, c10);
-          c01 = fmadd(a0, b1, c01);
-          c11 = fmadd(a1, b1, c11);
-          c02 = fmadd(a0, b2, c02);
-          c12 = fmadd(a1, b2, c12);
-
-          const auto a2 = set1<T, lmul>(a_k[2]);
-          const auto a3 = set1<T, lmul>(a_k[3]);
-          a_k += a_ld;
-
-          c20 = fmadd(a2, b0, c20);
-          c30 = fmadd(a3, b0, c30);
-          c21 = fmadd(a2, b1, c21);
-          c31 = fmadd(a3, b1, c31);
-          c22 = fmadd(a2, b2, c22);
-          c32 = fmadd(a3, b2, c32);
-        }
-
-        Epilogue::store<T, lmul, FastPath>(c0_base + j + 0 * VL, c00, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c0_base + j + 1 * VL, c01, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c0_base + j + 2 * VL, c02, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c1_base + j + 0 * VL, c10, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c1_base + j + 1 * VL, c11, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c1_base + j + 2 * VL, c12, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c2_base + j + 0 * VL, c20, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c2_base + j + 1 * VL, c21, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c2_base + j + 2 * VL, c22, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c3_base + j + 0 * VL, c30, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c3_base + j + 1 * VL, c31, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c3_base + j + 2 * VL, c32, alpha, beta);
-      }
-      while (j + 2 * VL <= B.cols) {
-        auto c00 = set0<T, lmul>(); auto c01 = set0<T, lmul>();
-        auto c10 = set0<T, lmul>(); auto c11 = set0<T, lmul>();
-        auto c20 = set0<T, lmul>(); auto c21 = set0<T, lmul>();
-        auto c30 = set0<T, lmul>(); auto c31 = set0<T, lmul>();
-
-        const T *__restrict a_k = a_base;
-        const T *__restrict b_k = B.data + j;
-
-        for (size_t k = 0; k < K; ++k) {
-          const auto b0 = load<T, lmul>(b_k + 0 * VL);
-          const auto b1 = load<T, lmul>(b_k + 1 * VL);
-          b_k += b_ld;
-
-          const auto a0 = set1<T, lmul>(a_k[0]);
-          const auto a1 = set1<T, lmul>(a_k[1]);
-          c00 = fmadd(a0, b0, c00);
-          c10 = fmadd(a1, b0, c10);
-          c01 = fmadd(a0, b1, c01);
-          c11 = fmadd(a1, b1, c11);
-
-          const auto a2 = set1<T, lmul>(a_k[2]);
-          const auto a3 = set1<T, lmul>(a_k[3]);
-          a_k += a_ld;
-
-          c20 = fmadd(a2, b0, c20);
-          c30 = fmadd(a3, b0, c30);
-          c21 = fmadd(a2, b1, c21);
-          c31 = fmadd(a3, b1, c31);
-        }
-
-        Epilogue::store<T, lmul, FastPath>(c0_base + j + 0 * VL, c00, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c0_base + j + 1 * VL, c01, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c1_base + j + 0 * VL, c10, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c1_base + j + 1 * VL, c11, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c2_base + j + 0 * VL, c20, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c2_base + j + 1 * VL, c21, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c3_base + j + 0 * VL, c30, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c3_base + j + 1 * VL, c31, alpha, beta);
-        j += 2 * VL;
-      }
-      while (j + VL <= B.cols) {
-        auto c0 = set0<T, lmul>(); auto c1 = set0<T, lmul>();
-        auto c2 = set0<T, lmul>(); auto c3 = set0<T, lmul>();
-        const T *__restrict a_k = a_base;
-        const T *__restrict b_k = B.data + j;
-        for (size_t k = 0; k < K; ++k) {
-          const auto b0 = load<T, lmul>(b_k); b_k += b_ld;
-          const auto a0 = set1<T, lmul>(a_k[0]);
-          const auto a1 = set1<T, lmul>(a_k[1]);
-          c0 = fmadd(a0, b0, c0);
-          c1 = fmadd(a1, b0, c1);
-          const auto a2 = set1<T, lmul>(a_k[2]);
-          const auto a3 = set1<T, lmul>(a_k[3]);
-          a_k += a_ld;
-          c2 = fmadd(a2, b0, c2);
-          c3 = fmadd(a3, b0, c3);
-        }
-        Epilogue::store<T, lmul, FastPath>(c0_base + j, c0, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c1_base + j, c1, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c2_base + j, c2, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c3_base + j, c3, alpha, beta);
-        j += VL;
-      }
-      i += 4;
-    }
-
-    if (i + 2 <= A.rows) {
-      const T *a_base = A.data + i;
-      T *c0_base = C[i + 0]; T *c1_base = C[i + 1];
-
-      size_t j = 0;
-      for (; j + NR3 <= B.cols; j += NR3) {
-        auto c00 = set0<T, lmul>(); auto c01 = set0<T, lmul>(); auto c02 = set0<T, lmul>();
-        auto c10 = set0<T, lmul>(); auto c11 = set0<T, lmul>(); auto c12 = set0<T, lmul>();
-
-        const T *__restrict a_k = a_base;
-        const T *__restrict b_k = B.data + j;
-
-        for (size_t k = 0; k < K; ++k) {
-          const auto b0 = load<T, lmul>(b_k + 0 * VL);
-          const auto b1 = load<T, lmul>(b_k + 1 * VL);
-          const auto b2 = load<T, lmul>(b_k + 2 * VL);
-          b_k += b_ld;
-
-          const auto a0 = set1<T, lmul>(a_k[0]);
-          const auto a1 = set1<T, lmul>(a_k[1]);
-          a_k += a_ld;
-
-          c00 = fmadd(a0, b0, c00);
-          c10 = fmadd(a1, b0, c10);
-          c01 = fmadd(a0, b1, c01);
-          c11 = fmadd(a1, b1, c11);
-          c02 = fmadd(a0, b2, c02);
-          c12 = fmadd(a1, b2, c12);
-        }
-
-        Epilogue::store<T, lmul, FastPath>(c0_base + j + 0 * VL, c00, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c0_base + j + 1 * VL, c01, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c0_base + j + 2 * VL, c02, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c1_base + j + 0 * VL, c10, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c1_base + j + 1 * VL, c11, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c1_base + j + 2 * VL, c12, alpha, beta);
-      }
-      while (j + 2 * VL <= B.cols) {
-        auto c00 = set0<T, lmul>(); auto c01 = set0<T, lmul>();
-        auto c10 = set0<T, lmul>(); auto c11 = set0<T, lmul>();
-
-        const T *__restrict a_k = a_base;
-        const T *__restrict b_k = B.data + j;
-
-        for (size_t k = 0; k < K; ++k) {
-          const auto b0 = load<T, lmul>(b_k + 0 * VL);
-          const auto b1 = load<T, lmul>(b_k + 1 * VL);
-          b_k += b_ld;
-
-          const auto a0 = set1<T, lmul>(a_k[0]);
-          const auto a1 = set1<T, lmul>(a_k[1]);
-          a_k += a_ld;
-
-          c00 = fmadd(a0, b0, c00);
-          c10 = fmadd(a1, b0, c10);
-          c01 = fmadd(a0, b1, c01);
-          c11 = fmadd(a1, b1, c11);
-        }
-
-        Epilogue::store<T, lmul, FastPath>(c0_base + j + 0 * VL, c00, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c0_base + j + 1 * VL, c01, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c1_base + j + 0 * VL, c10, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c1_base + j + 1 * VL, c11, alpha, beta);
-        j += 2 * VL;
-      }
-      while (j + VL <= B.cols) {
-        auto c0 = set0<T, lmul>(); auto c1 = set0<T, lmul>();
-        const T *__restrict a_k = a_base;
-        const T *__restrict b_k = B.data + j;
-        for (size_t k = 0; k < K; ++k) {
-          const auto b0 = load<T, lmul>(b_k); b_k += b_ld;
-          const auto a0 = set1<T, lmul>(a_k[0]);
-          const auto a1 = set1<T, lmul>(a_k[1]);
-          a_k += a_ld;
-          c0 = fmadd(a0, b0, c0);
-          c1 = fmadd(a1, b0, c1);
-        }
-        Epilogue::store<T, lmul, FastPath>(c0_base + j, c0, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c1_base + j, c1, alpha, beta);
-        j += VL;
-      }
-      i += 2;
-    }
-
-    if (i < A.rows) {
-      const T *a_base = A.data + i;
-      T *c0_base = C[i];
-      size_t j = 0;
-      for (; j + NR3 <= B.cols; j += NR3) {
-        auto c00 = set0<T, lmul>(); auto c01 = set0<T, lmul>(); auto c02 = set0<T, lmul>();
-        const T *__restrict a_k = a_base;
-        const T *__restrict b_k = B.data + j;
-        for (size_t k = 0; k < K; ++k) {
-          const auto b0 = load<T, lmul>(b_k + 0 * VL);
-          const auto b1 = load<T, lmul>(b_k + 1 * VL);
-          const auto b2 = load<T, lmul>(b_k + 2 * VL);
-          b_k += b_ld;
-          const auto a0 = set1<T, lmul>(*a_k);
-          a_k += a_ld;
-          c00 = fmadd(a0, b0, c00);
-          c01 = fmadd(a0, b1, c01);
-          c02 = fmadd(a0, b2, c02);
-        }
-        Epilogue::store<T, lmul, FastPath>(c0_base + j + 0 * VL, c00, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c0_base + j + 1 * VL, c01, alpha, beta);
-        Epilogue::store<T, lmul, FastPath>(c0_base + j + 2 * VL, c02, alpha, beta);
-      }
-      while (j + VL <= B.cols) {
-        auto c0 = set0<T, lmul>();
-        const T *__restrict a_k = a_base;
-        const T *__restrict b_k = B.data + j;
-        for (size_t k = 0; k < K; ++k) {
-          const auto b0 = load<T, lmul>(b_k); b_k += b_ld;
-          const auto a0 = set1<T, lmul>(*a_k);
-          a_k += a_ld;
-          c0 = fmadd(a0, b0, c0);
-        }
-        Epilogue::store<T, lmul, FastPath>(c0_base + j, c0, alpha, beta);
-        j += VL;
-      }
-    }
-  }
-
-  template <int lmul = 1>
-  static inline void
-  gemm_mippv2_a76_mr6_nr3_crr(const PackedColMajor<T> &__restrict A,
-                              const PackedRowMajor<T> &__restrict B,
-                              PackedRowMajor<T> &__restrict C) {
-    gemm_mippv2_a76_mr6_nr3_crr_core<lmul, true>(A, B, C);
-  }
-
-  template <int lmul = 1>
-  static inline void
-  gemm_mippv2_a76_mr6_nr3_crr(const PackedColMajor<T> &__restrict A,
-                              const PackedRowMajor<T> &__restrict B,
-                              PackedRowMajor<T> &__restrict C,
-                              T alpha, T beta) {
-    if (__builtin_expect(alpha == T{1} && beta == T{0}, 1)) {
-      gemm_mippv2_a76_mr6_nr3_crr_core<lmul, true>(A, B, C);
-    } else {
-      gemm_mippv2_a76_mr6_nr3_crr_core<lmul, false>(A, B, C, alpha, beta);
-    }
-  }
-
-  template <int lmul = 1, bool FastPath = false>
-  static inline void
   gemm_mippv2_zen4_mr4_nr4_fmaddi_crr_core(const PackedColMajor<T> &__restrict A,
                                            const PackedRowMajor<T> &__restrict B,
                                            PackedRowMajor<T> &__restrict C,
@@ -1919,6 +1435,46 @@
       gemm_mippv2_firestorm_mr6_nr4_fmaddi_crr_core<lmul, false>(A, B, C, alpha, beta);
     }
   }
+
+  template <int lmul = 1>
+  static inline void
+  gemm_mippv2_a76_mr6_nr4_fmaddi_crr(const PackedColMajor<T> &__restrict A,
+                                     const PackedRowMajor<T> &__restrict B,
+                                     PackedRowMajor<T> &__restrict C) {
+    gemm_mippv2_firestorm_mr6_nr4_fmaddi_crr_core<lmul, true>(A, B, C);
+  }
+
+  template <int lmul = 1>
+  static inline void
+  gemm_mippv2_a76_mr6_nr4_fmaddi_crr(const PackedColMajor<T> &__restrict A,
+                                     const PackedRowMajor<T> &__restrict B,
+                                     PackedRowMajor<T> &__restrict C,
+                                     T alpha, T beta) {
+    if (__builtin_expect(alpha == T{1} && beta == T{0}, 1)) {
+      gemm_mippv2_firestorm_mr6_nr4_fmaddi_crr_core<lmul, true>(A, B, C);
+    } else {
+      gemm_mippv2_firestorm_mr6_nr4_fmaddi_crr_core<lmul, false>(A, B, C, alpha, beta);
+    }
+  }
+
+  // Alias for backward-compatibility
+  template <int lmul = 1>
+  static inline void
+  gemm_mippv2_a76_mr6_nr3_crr(const PackedColMajor<T> &__restrict A,
+                              const PackedRowMajor<T> &__restrict B,
+                              PackedRowMajor<T> &__restrict C) {
+    gemm_mippv2_a76_mr6_nr4_fmaddi_crr<lmul>(A, B, C);
+  }
+
+  template <int lmul = 1>
+  static inline void
+  gemm_mippv2_a76_mr6_nr3_crr(const PackedColMajor<T> &__restrict A,
+                              const PackedRowMajor<T> &__restrict B,
+                              PackedRowMajor<T> &__restrict C,
+                              T alpha, T beta) {
+    gemm_mippv2_a76_mr6_nr4_fmaddi_crr<lmul>(A, B, C, alpha, beta);
+  }
+
 
   template <int lmul = 1, bool FastPath = false>
   static inline void

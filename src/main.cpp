@@ -57,6 +57,11 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
         gemm.gemm_mippv2_a76_mr6_nr3(A, B, C),
         gemm.gemm_mippv2_a76_mr6_nr3(A, B, C, cfg.alpha, cfg.beta));
 
+  case UKernelType::mippv2_a76_mr6_nr4_fmaddi:
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_mippv2_a76_mr6_nr4_fmaddi(A, B, C),
+        gemm.gemm_mippv2_a76_mr6_nr4_fmaddi(A, B, C, cfg.alpha, cfg.beta));
+
   case UKernelType::mippv2_zen4_mr4_nr4_fmaddi:
     BENCH_KERNEL_FASTPATH(
         gemm.gemm_mippv2_zen4_mr4_nr4_fmaddi(A, B, C),
@@ -246,10 +251,10 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
         gemm.gemm_mippv2_meteorlake_mr4_nr3_crr(A, B, C),
         gemm.gemm_mippv2_meteorlake_mr4_nr3_crr(A, B, C, cfg.alpha, cfg.beta));
 
-  case UKernelType::mippv2_a76_mr6_nr3_crr:
+  case UKernelType::mippv2_a76_mr6_nr4_fmaddi_crr:
     BENCH_KERNEL_FASTPATH(
-        gemm.gemm_mippv2_a76_mr6_nr3_crr(A, B, C),
-        gemm.gemm_mippv2_a76_mr6_nr3_crr(A, B, C, cfg.alpha, cfg.beta));
+        gemm.gemm_mippv2_a76_mr6_nr4_fmaddi_crr(A, B, C),
+        gemm.gemm_mippv2_a76_mr6_nr4_fmaddi_crr(A, B, C, cfg.alpha, cfg.beta));
 
   case UKernelType::mippv2_zen4_mr4_nr4_fmaddi_crr:
     BENCH_KERNEL_FASTPATH(

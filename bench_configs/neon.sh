@@ -14,7 +14,7 @@ elif [[ "$(hostname)" == *"rpi"* || "${PLATFORM_TAG:-}" == "rpi5" ]]; then
     CSV_PREFIX="gemm_results_neon_rpi5"
     DEFAULT_KERNELS=(
         mippv2_a76_mr6_nr3
-        mippv2_a76_mr6_nr3_crr
+        mippv2_a76_mr6_nr4_fmaddi_crr
     )
 else
     PLATFORM_NAME="ARMv8-A (NEON)"
@@ -22,7 +22,7 @@ else
     CSV_PREFIX="gemm_results_neon"
     DEFAULT_KERNELS=(
         mippv2_a76_mr6_nr3
-        mippv2_a76_mr6_nr3_crr
+        mippv2_a76_mr6_nr4_fmaddi_crr
         mippv2_x60_mr6_nr4_fmaddi
         mippv2_x60_mr6_nr4_fmaddi_crr
     )
@@ -30,6 +30,8 @@ fi
 
 ALL_KERNELS=(
     mippv2_a76_mr6_nr3
+    mippv2_a76_mr6_nr4_fmaddi
+    mippv2_a76_mr6_nr4_fmaddi_crr
     mippv2_a76_mr6_nr3_crr
     mippv2_x60_mr6_nr4_fmaddi
     mippv2_x60_mr6_nr4_fmaddi_crr

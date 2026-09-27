@@ -106,6 +106,9 @@ static void testGemmSuite() {
   TEST_KERNEL("MIPPv2 Cortex-A76 MR6 NR3",
               gemm.gemm_mippv2_a76_mr6_nr3(A, B, C_test));
 
+  TEST_KERNEL("MIPPv2 Cortex-A76 MR6 NR4 fmaddi",
+              gemm.gemm_mippv2_a76_mr6_nr4_fmaddi(A, B, C_test));
+
   TEST_KERNEL("MIPPv2 Zen 4 MR4 NR4 fmaddi",
               gemm.gemm_mippv2_zen4_mr4_nr4_fmaddi(A, B, C_test));
 
@@ -257,8 +260,8 @@ template <typename T> static void testGemmSuiteCRR() {
   // CRR Champion kernels
   TEST_KERNEL("MIPPv2 Meteorlake MR4 NR3 CRR",
               gemm.gemm_mippv2_meteorlake_mr4_nr3_crr(A, B, C_test));
-  TEST_KERNEL("MIPPv2 Cortex-A76 MR6 NR3 CRR",
-              gemm.gemm_mippv2_a76_mr6_nr3_crr(A, B, C_test));
+  TEST_KERNEL("MIPPv2 Cortex-A76 MR6 NR4 FMADDI CRR",
+              gemm.gemm_mippv2_a76_mr6_nr4_fmaddi_crr(A, B, C_test));
   TEST_KERNEL("MIPPv2 Zen 4 MR4 NR4 FMADDI CRR",
               gemm.gemm_mippv2_zen4_mr4_nr4_fmaddi_crr(A, B, C_test));
   TEST_KERNEL("MIPPv2 Firestorm MR4 NR4 FMADDI CRR",
@@ -365,6 +368,12 @@ template <typename T> static void testAlphaBetaSuite() {
       SECTION("mippv2_a76_mr6_nr3") {
         resetMatrix(C_test, C_init);
         gemm.gemm_mippv2_a76_mr6_nr3(A, B, C_test, p.alpha, p.beta);
+        checkMatrixEqual(C_ref, C_test);
+      }
+
+      SECTION("mippv2_a76_mr6_nr4_fmaddi") {
+        resetMatrix(C_test, C_init);
+        gemm.gemm_mippv2_a76_mr6_nr4_fmaddi(A, B, C_test, p.alpha, p.beta);
         checkMatrixEqual(C_ref, C_test);
       }
 
@@ -549,9 +558,9 @@ template <typename T> static void testAlphaBetaSuiteCRR() {
         gemm.gemm_mippv2_meteorlake_mr4_nr3_crr(A, B, C_test, p.alpha, p.beta);
         checkMatrixEqual(C_ref, C_test);
       }
-      SECTION("mippv2_a76_mr6_nr3_crr") {
+      SECTION("mippv2_a76_mr6_nr4_fmaddi_crr") {
         resetMatrix(C_test, C_init);
-        gemm.gemm_mippv2_a76_mr6_nr3_crr(A, B, C_test, p.alpha, p.beta);
+        gemm.gemm_mippv2_a76_mr6_nr4_fmaddi_crr(A, B, C_test, p.alpha, p.beta);
         checkMatrixEqual(C_ref, C_test);
       }
       SECTION("mippv2_zen4_mr4_nr4_fmaddi_crr") {
