@@ -143,7 +143,7 @@ inline constexpr KernelDescriptor kernelTable[] = {
     {UKernelType::mippv2_x60_mr6_nr4_fmaddi, "mippv2_x60_mr6_nr4_fmaddi", RRR, 64, 6, 4},
     {UKernelType::mippv2_x100_register_blocked_apack4, "mippv2_x100_register_blocked_apack4", RRR, 66, 3, 4},
     {UKernelType::mippv2_a100_mr7_nr4_pipe, "mippv2_a100_mr7_nr4_pipe", RRR, 64, 7, 4},
-    {UKernelType::mippv2_a100_mr7_nr2_lmul2_pipe, "mippv2_a100_mr7_nr2_lmul2_pipe", RRR, 64, 7, 2},
+    {UKernelType::mippv2_a100_mr7_nr2_lmul2_pipe, "mippv2_a100_mr7_nr2_lmul2_pipe", RRR, 64, 7, 4},
 
     // Champions (CRR)
     {UKernelType::mippv2_meteorlake_mr4_nr3_crr, "mippv2_meteorlake_mr4_nr3_crr", CRR, 64, 4, 3},
@@ -155,7 +155,7 @@ inline constexpr KernelDescriptor kernelTable[] = {
     {UKernelType::mippv2_x60_mr6_nr4_fmaddi_crr, "mippv2_x60_mr6_nr4_fmaddi_crr", CRR, 64, 6, 4},
     {UKernelType::mippv2_x100_register_blocked_apack4_crr, "mippv2_x100_register_blocked_apack4_crr", CRR, 66, 3, 4},
     {UKernelType::mippv2_a100_mr7_nr4_pipe_crr, "mippv2_a100_mr7_nr4_pipe_crr", CRR, 64, 7, 4},
-    {UKernelType::mippv2_a100_mr7_nr2_lmul2_pipe_crr, "mippv2_a100_mr7_nr2_lmul2_pipe_crr", CRR, 64, 7, 2},
+    {UKernelType::mippv2_a100_mr7_nr2_lmul2_pipe_crr, "mippv2_a100_mr7_nr2_lmul2_pipe_crr", CRR, 64, 7, 4},
 
 #ifdef GEMMBENCH_ENABLE_EXPLO
     // Exploratory kernels
