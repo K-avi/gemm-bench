@@ -29,7 +29,7 @@
     const size_t b_ld = B.ld;
 
     size_t limit12 = B.cols;
-    if (B.cols >= 16 && (B.cols % NR3) == VL) {
+    if (B.cols >= 4 * VL && (B.cols % NR3) == VL) {
       limit12 = B.cols - 4 * VL;
     }
 
