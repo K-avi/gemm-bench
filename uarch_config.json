@@ -7,7 +7,9 @@
       "peak_flop_per_cycle": 16.0,
       "measured_peak_flop_per_cycle": 16.0,
       "expected_best_kernel": "mippv2_meteorlake_mr4_nr3",
-      "csv_pattern": "*gemm_results_*skylake*_{compiler}.csv"
+      "expected_best_kernel_crr": "mippv2_meteorlake_mr4_nr3_crr",
+      "csv_pattern": "*gemm_results_*skylake*_{compiler}.csv",
+      "crr_csv_pattern": "*gemm_results_*skylake*crr*_{compiler}.csv"
     },
     "meteorlake": {
       "name": "Intel Meteor Lake",
@@ -16,7 +18,9 @@
       "peak_flop_per_cycle": 16.0,
       "measured_peak_flop_per_cycle": 16.0,
       "expected_best_kernel": "mippv2_meteorlake_mr4_nr3",
-      "csv_pattern": "*gemm_results_*meteorlake*_{compiler}.csv"
+      "expected_best_kernel_crr": "mippv2_meteorlake_mr4_nr3_crr",
+      "csv_pattern": "*gemm_results_*meteorlake*_{compiler}.csv",
+      "crr_csv_pattern": "*gemm_results_*meteorlake*crr*_{compiler}.csv"
     }
   },
   "avx512": {
@@ -27,7 +31,9 @@
       "peak_flop_per_cycle": 16.0,
       "measured_peak_flop_per_cycle": 16.0,
       "expected_best_kernel": "mippv2_firestorm_mr4_nr4_fmaddi",
-      "csv_pattern": "*gemm_results_*zen4*_{compiler}.csv"
+      "expected_best_kernel_crr": "mippv2_firestorm_mr4_nr4_fmaddi_crr",
+      "csv_pattern": "*gemm_results_*zen4*_{compiler}.csv",
+      "crr_csv_pattern": "*gemm_results_*zen4*crr*_{compiler}.csv"
     },
     "zen5": {
       "name": "AMD Zen 5 Strix Point",
@@ -36,7 +42,9 @@
       "peak_flop_per_cycle": 16.0,
       "measured_peak_flop_per_cycle": 16.0,
       "expected_best_kernel": "mippv2_firestorm_mr4_nr4_fmaddi",
+      "expected_best_kernel_crr": "mippv2_firestorm_mr4_nr4_fmaddi_crr",
       "csv_pattern": "*gemm_results_*zen5*_{compiler}.csv",
+      "crr_csv_pattern": "*gemm_results_*zen5*crr*_{compiler}.csv",
       "notes": "Strix Point implements dual 256-bit FPU pipelines (double-pumped 512-bit FMA, 16 DP FLOP/cyc max)"
     }
   },
@@ -44,11 +52,14 @@
     "m1": {
       "name": "Apple M1",
       "cpu_model": "Firestorm",
-      "frequency_ghz": 3.0,
+      "frequency_ghz": 3.036,
+      "hardware_max_frequency_ghz": 3.036,
       "peak_flop_per_cycle": 16.0,
       "measured_peak_flop_per_cycle": 16.0,
       "expected_best_kernel": "mippv2_x60_mr6_nr4_fmaddi",
-      "csv_pattern": "*gemm_results_*m1*_{compiler}.csv"
+      "expected_best_kernel_crr": "mippv2_x60_mr6_nr4_fmaddi_crr",
+      "csv_pattern": "*gemm_results_*m1*_{compiler}.csv",
+      "crr_csv_pattern": "*gemm_results_*m1*crr*_{compiler}.csv"
     },
     "rpi5": {
       "name": "Raspberry Pi 5",
@@ -57,7 +68,9 @@
       "peak_flop_per_cycle": 8.0,
       "measured_peak_flop_per_cycle": 8.0,
       "expected_best_kernel": "mippv2_a76_mr6_nr3",
-      "csv_pattern": "*gemm_results_*rpi5*_{compiler}.csv"
+      "expected_best_kernel_crr": "mippv2_a76_mr6_nr4_fmaddi_crr",
+      "csv_pattern": "*gemm_results_*rpi5*_{compiler}.csv",
+      "crr_csv_pattern": "*gemm_results_*rpi5*crr*_{compiler}.csv"
     }
   },
   "rvv": {
@@ -69,8 +82,9 @@
       "peak_flop_per_cycle": 8.0,
       "measured_peak_flop_per_cycle": 8.0,
       "expected_best_kernel": "mippv2_x100_register_blocked_apack4",
+      "expected_best_kernel_crr": "mippv2_x100_register_blocked_apack4_crr",
       "csv_pattern": "*gemm_results_*x100*_{compiler}.csv",
-      "notes": "Cluster node is clocked at 2.2 GHz (hardware max is 2.4 GHz; cluster governance without sudo)"
+      "crr_csv_pattern": "*gemm_results_*x100*crr*_{compiler}.csv",
     },
     "x60": {
       "name": "SpacemiT X60",
@@ -79,7 +93,9 @@
       "peak_flop_per_cycle": 8.0,
       "measured_peak_flop_per_cycle": 8.0,
       "expected_best_kernel": "mippv2_x60_mr6_nr4_fmaddi",
-      "csv_pattern": "*gemm_results_*x60*_{compiler}.csv"
+      "expected_best_kernel_crr": "mippv2_a100_mr7_nr4_pipe_crr",
+      "csv_pattern": "*gemm_results_*x60*_{compiler}.csv",
+      "crr_csv_pattern": "*gemm_results_*x60*crr*_{compiler}.csv"
     },
     "a100": {
       "name": "SpacemiT A100",
@@ -89,8 +105,9 @@
       "peak_flop_per_cycle": 8.0,
       "measured_peak_flop_per_cycle": 8.0,
       "expected_best_kernel": "mippv2_a100_mr7_nr2_lmul2_pipe",
+      "expected_best_kernel_crr": "mippv2_a100_mr7_nr2_lmul2_pipe_crr",
       "csv_pattern": "*gemm_results_*a100*_{compiler}.csv",
-      "notes": "Cluster node is clocked at 1.8 GHz (hardware max is 2.0 GHz; cluster governance without sudo)"
+      "crr_csv_pattern": "*gemm_results_*a100*crr*_{compiler}.csv",
     }
   }
 }

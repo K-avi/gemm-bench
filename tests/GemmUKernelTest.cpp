@@ -206,14 +206,23 @@ static void testGemmSuite() {
   alloc.freePacked(C_test);
 }
 
-template <typename T> static void testGemmSuiteCRR() {
-  constexpr size_t M = 32;
-  constexpr size_t N = 32;
-  constexpr size_t K = 32;
+// ---------------------------------------------------------------------------
+// testGemmSuiteCRR — parameterized version
+//
+// Exercises correctness of CRR champion kernels for arbitrary (M, N, K).
+// This is the primary vehicle for covering cleanup paths:
+//   - tail rows  : M % MR != 0  (e.g. M = 33, 35, 37)
+//   - tail cols  : N % (MR*VL) != 0  (e.g. N = 17, 25)
+//   - K remainder: K % 4 != 0  (e.g. K = 35)
+//   - FP accumulation at large K (e.g. K = 512)
+// ---------------------------------------------------------------------------
+template <typename T>
+static void testGemmSuiteCRR(size_t M = 32, size_t N = 32, size_t K = 32,
+                              uint64_t seed = 42) {
 
   auto &cfg = GEMMBench::config();
 
-  SimdAlloc<T> alloc(cfg.packet_size, cfg.lmul, cfg.alignment, cfg.seed);
+  SimdAlloc<T> alloc(cfg.packet_size, cfg.lmul, cfg.alignment, seed);
 
   //
   // CRR matrices
@@ -236,7 +245,7 @@ template <typename T> static void testGemmSuiteCRR() {
   auto A_ref =
       alloc.template allocatePacked<PackedRowMajor<T>>(M, K, InitMode::Zero);
 
-  // Copy A (CR) -> A_ref (RR)
+  // Copy A (col-major) -> A_ref (row-major) via layout-agnostic operator()
   for (size_t i = 0; i < M; ++i)
     for (size_t k = 0; k < K; ++k)
       A_ref(i, k) = A(i, k);
@@ -244,7 +253,7 @@ template <typename T> static void testGemmSuiteCRR() {
   GemmUKernel<T> gemm;
 
   //
-  // Scalar reference.
+  // Scalar reference: naive ijk on the row-major copy of A.
   //
   gemm.gemm_ijk(A_ref, B, C_ref);
 
@@ -314,6 +323,75 @@ template <typename T> static void testGemmSuiteCRR() {
   alloc.freePacked(B);
   alloc.freePacked(C_test);
   alloc.freePacked(C_ref);
+  alloc.freePacked(A_ref);
+}
+
+// ---------------------------------------------------------------------------
+// testGemmNonSquareCRR — mirrors testGemmNonSquare for CRR kernels
+//
+// Specifically designed to exercise:
+//   - tail rows (M not a multiple of MR=4,6,7)
+//   - tail cols (N not a multiple of NR*VL)
+//   - non-square K
+// ---------------------------------------------------------------------------
+template <typename T>
+static void testGemmNonSquareCRR(size_t M, size_t N, size_t K,
+                                  uint64_t seed = 42) {
+
+  auto &cfg = GEMMBench::config();
+  SimdAlloc<T> alloc(cfg.packet_size, cfg.lmul, cfg.alignment, seed);
+
+  auto A =
+      alloc.template allocatePacked<PackedColMajor<T>>(M, K, InitMode::Random);
+  auto B =
+      alloc.template allocatePacked<PackedRowMajor<T>>(K, N, InitMode::Random);
+  auto C_ref =
+      alloc.template allocatePacked<PackedRowMajor<T>>(M, N, InitMode::Zero);
+  auto C_test =
+      alloc.template allocatePacked<PackedRowMajor<T>>(M, N, InitMode::Zero);
+  auto A_ref =
+      alloc.template allocatePacked<PackedRowMajor<T>>(M, K, InitMode::Zero);
+
+  for (size_t i = 0; i < M; ++i)
+    for (size_t k = 0; k < K; ++k)
+      A_ref(i, k) = A(i, k);
+
+  GemmUKernel<T> gemm;
+  gemm.gemm_ijk(A_ref, B, C_ref);
+
+#define TEST_KERNEL(NAME, CALL)                                                \
+  SECTION(NAME) {                                                              \
+    std::fill_n(C_test.data, C_test.padded_rows * C_test.padded_cols, T{});    \
+    CALL;                                                                      \
+    checkMatrixEqual(C_test, C_ref);                                           \
+  }
+
+  // CRR Champion kernels — same set as testGemmSuiteCRR
+  TEST_KERNEL("MIPPv2 Meteorlake MR4 NR3 CRR",
+              gemm.gemm_mippv2_meteorlake_mr4_nr3_crr(A, B, C_test));
+  TEST_KERNEL("MIPPv2 Cortex-A76 MR6 NR4 FMADDI CRR",
+              gemm.gemm_mippv2_a76_mr6_nr4_fmaddi_crr(A, B, C_test));
+  TEST_KERNEL("MIPPv2 Zen 4 MR4 NR4 FMADDI CRR",
+              gemm.gemm_mippv2_zen4_mr4_nr4_fmaddi_crr(A, B, C_test));
+  TEST_KERNEL("MIPPv2 Firestorm MR4 NR4 FMADDI CRR",
+              gemm.gemm_mippv2_firestorm_mr4_nr4_fmaddi_crr(A, B, C_test));
+  TEST_KERNEL("MIPPv2 Firestorm MR6 NR4 FMADDI CRR",
+              gemm.gemm_mippv2_firestorm_mr6_nr4_fmaddi_crr(A, B, C_test));
+  TEST_KERNEL("MIPPv2 X60 MR6 NR4 FMADDI CRR",
+              gemm.gemm_mippv2_x60_mr6_nr4_fmaddi_crr(A, B, C_test));
+  TEST_KERNEL("MIPPv2 X100 Register Blocked Apack4 CRR",
+              gemm.gemm_mippv2_x100_register_blocked_apack4_crr(A, B, C_test));
+  TEST_KERNEL("MIPPv2 A100 MR7 NR4 Pipe CRR",
+              gemm.gemm_mippv2_a100_mr7_nr4_pipe_crr(A, B, C_test));
+  TEST_KERNEL("MIPPv2 A100 MR7 NR2 LMUL2 Pipe CRR",
+              gemm.gemm_mippv2_a100_mr7_nr2_lmul2_pipe_crr(A, B, C_test));
+
+#undef TEST_KERNEL
+
+  alloc.freePacked(A);
+  alloc.freePacked(B);
+  alloc.freePacked(C_ref);
+  alloc.freePacked(C_test);
   alloc.freePacked(A_ref);
 }
 
@@ -505,13 +583,12 @@ template <typename T> static void testAlphaBetaSuite() {
   alloc.freePacked(C_init);
 }
 
-template <typename T> static void testAlphaBetaSuiteCRR() {
-  constexpr size_t M = 32;
-  constexpr size_t N = 32;
-  constexpr size_t K = 32;
+template <typename T>
+static void testAlphaBetaSuiteCRR(size_t M = 32, size_t N = 32, size_t K = 32,
+                                   uint64_t seed = 42) {
 
   auto &cfg = GEMMBench::config();
-  SimdAlloc<T> alloc(cfg.packet_size, cfg.lmul, cfg.alignment, cfg.seed);
+  SimdAlloc<T> alloc(cfg.packet_size, cfg.lmul, cfg.alignment, seed);
 
   auto A =
       alloc.template allocatePacked<PackedColMajor<T>>(M, K, InitMode::Random);
@@ -663,11 +740,74 @@ TEST_CASE("GEMM RRR kernels", "[gemm]") {
                 PackedRowMajor<double>>();
 }
 
-TEST_CASE("GEMM CRR kernels", "[gemm]") { testGemmSuiteCRR<double>(); }
+// Each dimension gets its own TEST_CASE to avoid Catch2 section ID collision.
+// (Catch2 identifies sections by name + source line; calling the same function
+// multiple times in one TEST_CASE creates duplicate IDs.)
+
+TEST_CASE("GEMM CRR kernels 32x32x32 (nominal)", "[gemm][crr]") {
+  testGemmSuiteCRR<double>(32, 32, 32);
+}
+
+// Tail rows: M % MR != 0
+// MR=4 -> tail=1, MR=6 -> tail=1, MR=7 -> tail=2
+TEST_CASE("GEMM CRR kernels 33x32x32 (tail rows)", "[gemm][crr]") {
+  testGemmSuiteCRR<double>(33, 32, 32);
+}
+// MR=4 -> tail=3, MR=6 -> tail=5, MR=7 -> tail=2
+TEST_CASE("GEMM CRR kernels 35x32x32 (tail rows all)", "[gemm][crr]") {
+  testGemmSuiteCRR<double>(35, 32, 32);
+}
+
+// Tail cols: N % NR != 0, N must be VL-aligned.
+// Kernels handle N down to VL granularity (BLIS handles sub-VL via edge kernel).
+// With VL=4 (AVX2 double): N=16 -> 4x2+4x1 paths, N=24 -> NR3+4x1 (meteorlake)
+TEST_CASE("GEMM CRR kernels 32x16x32 (tail cols 4x2+4x1)", "[gemm][crr]") {
+  testGemmSuiteCRR<double>(32, 16, 32);
+}
+TEST_CASE("GEMM CRR kernels 32x24x32 (tail cols NR3+4x1)", "[gemm][crr]") {
+  testGemmSuiteCRR<double>(32, 24, 32);
+}
+
+// K non-multiple of 4 (meteorlake K4 peel loop)
+TEST_CASE("GEMM CRR kernels 32x32x35 (K%4 != 0)", "[gemm][crr]") {
+  testGemmSuiteCRR<double>(32, 32, 35);
+}
+
+// Large K: validate FP accumulation
+TEST_CASE("GEMM CRR kernels 32x32x512 (large K)", "[gemm][crr]") {
+  testGemmSuiteCRR<double>(32, 32, 512);
+}
+
+// Combined: all tails simultaneously (N VL-aligned)
+TEST_CASE("GEMM CRR kernels 37x24x35 (combined tails)", "[gemm][crr]") {
+  testGemmSuiteCRR<double>(37, 24, 35);
+}
+
+// Different seed: stochastic coverage
+TEST_CASE("GEMM CRR kernels 32x32x32 seed=0xDEAD", "[gemm][crr]") {
+  testGemmSuiteCRR<double>(32, 32, 32, 0xDEADBEEFULL);
+}
+
+// Non-square CRR: exercises tail rows + tail cols simultaneously
+// N is VL-aligned (kernels don't handle sub-VL boundaries)
+TEST_CASE("GEMM CRR Non-square 48x64x32", "[gemm][crr]") {
+  testGemmNonSquareCRR<double>(48, 64, 32);
+}
+TEST_CASE("GEMM CRR Non-square 33x36x35 (tail rows + K%4)", "[gemm][crr]") {
+  testGemmNonSquareCRR<double>(33, 36, 35);
+}
+TEST_CASE("GEMM CRR Non-square 49x64x32 (tail row only)", "[gemm][crr]") {
+  testGemmNonSquareCRR<double>(49, 64, 32);
+}
 
 TEST_CASE("GEMM Alpha Beta scaling and accumulation", "[gemm]") {
   testAlphaBetaSuite<double>();
-  testAlphaBetaSuiteCRR<double>();
+  testAlphaBetaSuiteCRR<double>(32, 32, 32, 42);
+}
+
+// Separate TEST_CASE for tail-row alpha/beta to avoid Catch2 section collision
+TEST_CASE("GEMM Alpha Beta CRR tail rows", "[gemm][crr]") {
+  testAlphaBetaSuiteCRR<double>(33, 32, 32, 0xDEADBEEFULL);
 }
 
 template <typename T> static void testGemmNonSquare() {

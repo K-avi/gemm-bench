@@ -313,6 +313,77 @@
         j += VL;
       }
     }
+
+    // Tail rows (if A.rows % MR != 0)
+    for (size_t i = Mfull; i < A.rows; ++i) {
+      size_t j = 0;
+
+      // NR3 tiles
+      while (j + NR3 <= B.cols) {
+        auto c0 = set0<T, lmul>(); auto c1 = set0<T, lmul>(); auto c2 = set0<T, lmul>();
+
+        const T *__restrict a_k = A.data + i;
+        const T *__restrict b_k = B.data + j;
+
+        for (size_t k = 0; k < K; ++k) {
+          const auto b0 = load<T, lmul>(b_k);
+          const auto b1 = load<T, lmul>(b_k + VL);
+          const auto b2 = load<T, lmul>(b_k + 2 * VL);
+          b_k += b_ld;
+          const T a = *a_k;
+          a_k += a_ld;
+          c0 = fmadd(set1<T, lmul>(a), b0, c0);
+          c1 = fmadd(set1<T, lmul>(a), b1, c1);
+          c2 = fmadd(set1<T, lmul>(a), b2, c2);
+        }
+
+        Epilogue::store<T, lmul, FastPath>(C[i] + j + 0 * VL, c0, alpha, beta);
+        Epilogue::store<T, lmul, FastPath>(C[i] + j + 1 * VL, c1, alpha, beta);
+        Epilogue::store<T, lmul, FastPath>(C[i] + j + 2 * VL, c2, alpha, beta);
+        j += NR3;
+      }
+
+      // 2VL tile
+      while (j + 2 * VL <= B.cols) {
+        auto c0 = set0<T, lmul>(); auto c1 = set0<T, lmul>();
+
+        const T *__restrict a_k = A.data + i;
+        const T *__restrict b_k = B.data + j;
+
+        for (size_t k = 0; k < K; ++k) {
+          const auto b0 = load<T, lmul>(b_k);
+          const auto b1 = load<T, lmul>(b_k + VL);
+          b_k += b_ld;
+          const T a = *a_k;
+          a_k += a_ld;
+          c0 = fmadd(set1<T, lmul>(a), b0, c0);
+          c1 = fmadd(set1<T, lmul>(a), b1, c1);
+        }
+
+        Epilogue::store<T, lmul, FastPath>(C[i] + j + 0 * VL, c0, alpha, beta);
+        Epilogue::store<T, lmul, FastPath>(C[i] + j + 1 * VL, c1, alpha, beta);
+        j += 2 * VL;
+      }
+
+      // 1VL tile
+      while (j + VL <= B.cols) {
+        auto c0 = set0<T, lmul>();
+
+        const T *__restrict a_k = A.data + i;
+        const T *__restrict b_k = B.data + j;
+
+        for (size_t k = 0; k < K; ++k) {
+          const auto b0 = load<T, lmul>(b_k);
+          b_k += b_ld;
+          const T a = *a_k;
+          a_k += a_ld;
+          c0 = fmadd(set1<T, lmul>(a), b0, c0);
+        }
+
+        Epilogue::store<T, lmul, FastPath>(C[i] + j, c0, alpha, beta);
+        j += VL;
+      }
+    }
   }
 
   template <int lmul = 1>
@@ -778,6 +849,19 @@
           a_k += a_ld;
         }
 
+        // K remainder: handle K % 4 remaining k-steps
+        for (size_t k = K4 * 4; k < A.cols; ++k) {
+          const auto b0 = load<T, lmul>(B[k] + j);
+          const auto b1 = load<T, lmul>(B[k] + j + VL);
+          c00 = fmaddi(b0, a_k[0], c00);
+          c01 = fmaddi(b1, a_k[0], c01);
+          c10 = fmaddi(b0, a_k[1], c10);
+          c11 = fmaddi(b1, a_k[1], c11);
+          c20 = fmaddi(b0, a_k[2], c20);
+          c21 = fmaddi(b1, a_k[2], c21);
+          a_k += a_ld;
+        }
+
         store(C[i + 0] + j, c00);
         store(C[i + 0] + j + VL, c01);
         store(C[i + 1] + j, c10);
@@ -809,6 +893,13 @@
 
           c0 = fmaddi(load<T, lmul>(B[4 * kk + 3] + j), a_k[0], c0);
           c1 = fmaddi(load<T, lmul>(B[4 * kk + 3] + j + VL), a_k[0], c1);
+          a_k += a_ld;
+        }
+
+        // K remainder
+        for (size_t k = K4 * 4; k < A.cols; ++k) {
+          c0 = fmaddi(load<T, lmul>(B[k] + j), a_k[0], c0);
+          c1 = fmaddi(load<T, lmul>(B[k] + j + VL), a_k[0], c1);
           a_k += a_ld;
         }
 
