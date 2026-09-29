@@ -808,45 +808,57 @@
         const T *__restrict a_k = a_base;
 
         for (size_t kk = 0; kk < K4; ++kk) {
-          auto b00 = load<T, lmul>(B[4 * kk + 0] + j);
-          auto b01 = load<T, lmul>(B[4 * kk + 0] + j + VL);
-          c00 = fmaddi(b00, a_k[0], c00);
-          c01 = fmaddi(b01, a_k[0], c01);
-          c10 = fmaddi(b00, a_k[1], c10);
-          c11 = fmaddi(b01, a_k[1], c11);
-          c20 = fmaddi(b00, a_k[2], c20);
-          c21 = fmaddi(b01, a_k[2], c21);
-          a_k += a_ld;
+          const T a0_k0 = a_k[0], a1_k0 = a_k[1], a2_k0 = a_k[2];
+          const T *a_k1 = a_k + a_ld;
+          const T a0_k1 = a_k1[0], a1_k1 = a_k1[1], a2_k1 = a_k1[2];
+          const T *a_k2 = a_k1 + a_ld;
+          const T a0_k2 = a_k2[0], a1_k2 = a_k2[1], a2_k2 = a_k2[2];
+          const T *a_k3 = a_k2 + a_ld;
+          const T a0_k3 = a_k3[0], a1_k3 = a_k3[1], a2_k3 = a_k3[2];
+          a_k = a_k3 + a_ld;
 
-          b00 = load<T, lmul>(B[4 * kk + 1] + j);
-          b01 = load<T, lmul>(B[4 * kk + 1] + j + VL);
-          c00 = fmaddi(b00, a_k[0], c00);
-          c01 = fmaddi(b01, a_k[0], c01);
-          c10 = fmaddi(b00, a_k[1], c10);
-          c11 = fmaddi(b01, a_k[1], c11);
-          c20 = fmaddi(b00, a_k[2], c20);
-          c21 = fmaddi(b01, a_k[2], c21);
-          a_k += a_ld;
+          // k = 0
+          auto b0 = load<T, lmul>(B[4 * kk + 0] + j);
+          auto b1 = load<T, lmul>(B[4 * kk + 0] + j + VL);
+          auto b0_next = load<T, lmul>(B[4 * kk + 1] + j);
+          auto b1_next = load<T, lmul>(B[4 * kk + 1] + j + VL);
 
-          b00 = load<T, lmul>(B[4 * kk + 2] + j);
-          b01 = load<T, lmul>(B[4 * kk + 2] + j + VL);
-          c00 = fmaddi(b00, a_k[0], c00);
-          c01 = fmaddi(b01, a_k[0], c01);
-          c10 = fmaddi(b00, a_k[1], c10);
-          c11 = fmaddi(b01, a_k[1], c11);
-          c20 = fmaddi(b00, a_k[2], c20);
-          c21 = fmaddi(b01, a_k[2], c21);
-          a_k += a_ld;
+          c00 = fmaddi(b0, a0_k0, c00);
+          c01 = fmaddi(b1, a0_k0, c01);
+          c10 = fmaddi(b0, a1_k0, c10);
+          c11 = fmaddi(b1, a1_k0, c11);
+          c20 = fmaddi(b0, a2_k0, c20);
+          c21 = fmaddi(b1, a2_k0, c21);
 
-          b00 = load<T, lmul>(B[4 * kk + 3] + j);
-          b01 = load<T, lmul>(B[4 * kk + 3] + j + VL);
-          c00 = fmaddi(b00, a_k[0], c00);
-          c01 = fmaddi(b01, a_k[0], c01);
-          c10 = fmaddi(b00, a_k[1], c10);
-          c11 = fmaddi(b01, a_k[1], c11);
-          c20 = fmaddi(b00, a_k[2], c20);
-          c21 = fmaddi(b01, a_k[2], c21);
-          a_k += a_ld;
+          // k = 1
+          b0 = load<T, lmul>(B[4 * kk + 2] + j);
+          b1 = load<T, lmul>(B[4 * kk + 2] + j + VL);
+
+          c00 = fmaddi(b0_next, a0_k1, c00);
+          c01 = fmaddi(b1_next, a0_k1, c01);
+          c10 = fmaddi(b0_next, a1_k1, c10);
+          c11 = fmaddi(b1_next, a1_k1, c11);
+          c20 = fmaddi(b0_next, a2_k1, c20);
+          c21 = fmaddi(b1_next, a2_k1, c21);
+
+          // k = 2
+          b0_next = load<T, lmul>(B[4 * kk + 3] + j);
+          b1_next = load<T, lmul>(B[4 * kk + 3] + j + VL);
+
+          c00 = fmaddi(b0, a0_k2, c00);
+          c01 = fmaddi(b1, a0_k2, c01);
+          c10 = fmaddi(b0, a1_k2, c10);
+          c11 = fmaddi(b1, a1_k2, c11);
+          c20 = fmaddi(b0, a2_k2, c20);
+          c21 = fmaddi(b1, a2_k2, c21);
+
+          // k = 3
+          c00 = fmaddi(b0_next, a0_k3, c00);
+          c01 = fmaddi(b1_next, a0_k3, c01);
+          c10 = fmaddi(b0_next, a1_k3, c10);
+          c11 = fmaddi(b1_next, a1_k3, c11);
+          c20 = fmaddi(b0_next, a2_k3, c20);
+          c21 = fmaddi(b1_next, a2_k3, c21);
         }
 
         // K remainder: handle K % 4 remaining k-steps
@@ -948,45 +960,57 @@
         const T *__restrict a_k = a_base;
 
         for (size_t kk = 0; kk < K4; ++kk) {
-          auto b00 = load<T, lmul>(B[4 * kk + 0] + j);
-          auto b01 = load<T, lmul>(B[4 * kk + 0] + j + VL);
-          c00 = fmaddi(b00, a_k[0], c00);
-          c01 = fmaddi(b01, a_k[0], c01);
-          c10 = fmaddi(b00, a_k[1], c10);
-          c11 = fmaddi(b01, a_k[1], c11);
-          c20 = fmaddi(b00, a_k[2], c20);
-          c21 = fmaddi(b01, a_k[2], c21);
-          a_k += a_ld;
+          const T a0_k0 = a_k[0], a1_k0 = a_k[1], a2_k0 = a_k[2];
+          const T *a_k1 = a_k + a_ld;
+          const T a0_k1 = a_k1[0], a1_k1 = a_k1[1], a2_k1 = a_k1[2];
+          const T *a_k2 = a_k1 + a_ld;
+          const T a0_k2 = a_k2[0], a1_k2 = a_k2[1], a2_k2 = a_k2[2];
+          const T *a_k3 = a_k2 + a_ld;
+          const T a0_k3 = a_k3[0], a1_k3 = a_k3[1], a2_k3 = a_k3[2];
+          a_k = a_k3 + a_ld;
 
-          b00 = load<T, lmul>(B[4 * kk + 1] + j);
-          b01 = load<T, lmul>(B[4 * kk + 1] + j + VL);
-          c00 = fmaddi(b00, a_k[0], c00);
-          c01 = fmaddi(b01, a_k[0], c01);
-          c10 = fmaddi(b00, a_k[1], c10);
-          c11 = fmaddi(b01, a_k[1], c11);
-          c20 = fmaddi(b00, a_k[2], c20);
-          c21 = fmaddi(b01, a_k[2], c21);
-          a_k += a_ld;
+          // k = 0
+          auto b0 = load<T, lmul>(B[4 * kk + 0] + j);
+          auto b1 = load<T, lmul>(B[4 * kk + 0] + j + VL);
+          auto b0_next = load<T, lmul>(B[4 * kk + 1] + j);
+          auto b1_next = load<T, lmul>(B[4 * kk + 1] + j + VL);
 
-          b00 = load<T, lmul>(B[4 * kk + 2] + j);
-          b01 = load<T, lmul>(B[4 * kk + 2] + j + VL);
-          c00 = fmaddi(b00, a_k[0], c00);
-          c01 = fmaddi(b01, a_k[0], c01);
-          c10 = fmaddi(b00, a_k[1], c10);
-          c11 = fmaddi(b01, a_k[1], c11);
-          c20 = fmaddi(b00, a_k[2], c20);
-          c21 = fmaddi(b01, a_k[2], c21);
-          a_k += a_ld;
+          c00 = fmaddi(b0, a0_k0, c00);
+          c01 = fmaddi(b1, a0_k0, c01);
+          c10 = fmaddi(b0, a1_k0, c10);
+          c11 = fmaddi(b1, a1_k0, c11);
+          c20 = fmaddi(b0, a2_k0, c20);
+          c21 = fmaddi(b1, a2_k0, c21);
 
-          b00 = load<T, lmul>(B[4 * kk + 3] + j);
-          b01 = load<T, lmul>(B[4 * kk + 3] + j + VL);
-          c00 = fmaddi(b00, a_k[0], c00);
-          c01 = fmaddi(b01, a_k[0], c01);
-          c10 = fmaddi(b00, a_k[1], c10);
-          c11 = fmaddi(b01, a_k[1], c11);
-          c20 = fmaddi(b00, a_k[2], c20);
-          c21 = fmaddi(b01, a_k[2], c21);
-          a_k += a_ld;
+          // k = 1
+          b0 = load<T, lmul>(B[4 * kk + 2] + j);
+          b1 = load<T, lmul>(B[4 * kk + 2] + j + VL);
+
+          c00 = fmaddi(b0_next, a0_k1, c00);
+          c01 = fmaddi(b1_next, a0_k1, c01);
+          c10 = fmaddi(b0_next, a1_k1, c10);
+          c11 = fmaddi(b1_next, a1_k1, c11);
+          c20 = fmaddi(b0_next, a2_k1, c20);
+          c21 = fmaddi(b1_next, a2_k1, c21);
+
+          // k = 2
+          b0_next = load<T, lmul>(B[4 * kk + 3] + j);
+          b1_next = load<T, lmul>(B[4 * kk + 3] + j + VL);
+
+          c00 = fmaddi(b0, a0_k2, c00);
+          c01 = fmaddi(b1, a0_k2, c01);
+          c10 = fmaddi(b0, a1_k2, c10);
+          c11 = fmaddi(b1, a1_k2, c11);
+          c20 = fmaddi(b0, a2_k2, c20);
+          c21 = fmaddi(b1, a2_k2, c21);
+
+          // k = 3
+          c00 = fmaddi(b0_next, a0_k3, c00);
+          c01 = fmaddi(b1_next, a0_k3, c01);
+          c10 = fmaddi(b0_next, a1_k3, c10);
+          c11 = fmaddi(b1_next, a1_k3, c11);
+          c20 = fmaddi(b0_next, a2_k3, c20);
+          c21 = fmaddi(b1_next, a2_k3, c21);
         }
 
         Epilogue::store<T, lmul, false>(c0_base + j, c00, alpha, beta);
