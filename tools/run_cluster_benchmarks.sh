@@ -222,6 +222,7 @@ run_target() {
     local node=""
     local platform=""
     local pre_cmd=""
+    local wrapper=""
     local srun_extra=""
     local compilers="gcc clang"
 
@@ -240,7 +241,7 @@ run_target() {
             node="mono-sip-k3"
             platform="rvv_a100"
             out_prefix="a100_rvv"
-            pre_cmd="ai"
+            wrapper="ai "
             srun_extra="-c 8"
             ;;
         x60)
@@ -322,7 +323,7 @@ run_target() {
         done
     fi
 
-    local bench_cmd="${pre_cmd} PLATFORM_TAG=${target} ./run_benchmarks.sh ${platform} ${bench_flags} ${compilers}"
+    local bench_cmd="${pre_cmd} PLATFORM_TAG=${target} ${wrapper}./run_benchmarks.sh ${platform} ${bench_flags} ${compilers}"
 
     if ssh "$FRONT_HOST" "srun -p ${partition} -w ${node} ${srun_extra} bash -l -c 'cd ${REMOTE_DIR} && ${bench_cmd}'"; then
         return 0
