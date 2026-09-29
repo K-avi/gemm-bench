@@ -250,7 +250,11 @@ def load_rrr_dataset_for_uarch(rrr_dir: Path, spec: UArchSpecCRR) -> pd.DataFram
             if df.empty or "Kernel" not in df.columns or "GFLOPS" not in df.columns:
                 continue
 
-            # In RRR comparison, consider non-crr kernels or the best overall RRR kernel
+            # In RRR comparison, strictly exclude CRR / panel kernels
+            df = df[~df["Kernel"].astype(str).str.contains("_crr|panel", regex=True)].copy()
+            if df.empty:
+                continue
+
             flop_per_cycle = df["GFLOPS"] / spec.frequency_ghz
             efficiency_pct = (flop_per_cycle / spec.peak_flop_per_cycle) * 100.0
 
