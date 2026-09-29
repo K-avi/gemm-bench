@@ -84,7 +84,7 @@
       "expected_best_kernel": "mippv2_x100_register_blocked_apack4",
       "expected_best_kernel_crr": "mippv2_x100_register_blocked_apack4_crr",
       "csv_pattern": "*gemm_results_*x100*_{compiler}.csv",
-      "crr_csv_pattern": "*gemm_results_*x100*crr*_{compiler}.csv",
+      "crr_csv_pattern": "*gemm_results_*x100*crr*_{compiler}.csv"
     },
     "x60": {
       "name": "SpacemiT X60",
@@ -107,7 +107,7 @@
       "expected_best_kernel": "mippv2_a100_mr7_nr2_lmul2_pipe",
       "expected_best_kernel_crr": "mippv2_a100_mr7_nr2_lmul2_pipe_crr",
       "csv_pattern": "*gemm_results_*a100*_{compiler}.csv",
-      "crr_csv_pattern": "*gemm_results_*a100*crr*_{compiler}.csv",
+      "crr_csv_pattern": "*gemm_results_*a100*crr*_{compiler}.csv"
     }
   }
 }
