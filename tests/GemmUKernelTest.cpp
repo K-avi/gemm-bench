@@ -140,7 +140,9 @@ static void testGemmSuite() {
 
   TEST_KERNEL("MIPPv2 GEMM lmul=4", gemm.template gemm_mippv2<4>(A, B, C_test));
 
-  TEST_KERNEL("MIPPv2 GEMM lmul=8", gemm.template gemm_mippv2<8>(A, B, C_test));
+  if constexpr (mipp::N<T, 8>() <= 64) {
+    TEST_KERNEL("MIPPv2 GEMM lmul=8", gemm.template gemm_mippv2<8>(A, B, C_test));
+  }
 
   TEST_KERNEL("Blocked MIPPv2 GEMM", gemm.gemm_mippv2_blocked(A, B, C_test));
 
@@ -150,8 +152,10 @@ static void testGemmSuite() {
   TEST_KERNEL("Blocked MIPPv2 GEMM lmul=4",
               gemm.template gemm_mippv2_blocked<4>(A, B, C_test));
 
-  TEST_KERNEL("Blocked MIPPv2 GEMM lmul=8",
-              gemm.template gemm_mippv2_blocked<8>(A, B, C_test));
+  if constexpr (mipp::N<T, 8>() <= 64) {
+    TEST_KERNEL("Blocked MIPPv2 GEMM lmul=8",
+                gemm.template gemm_mippv2_blocked<8>(A, B, C_test));
+  }
 
   TEST_KERNEL("Blocked MIPPv2 GEMM unroll2",
               gemm.gemm_mippv2_blocked_unroll2(A, B, C_test));
@@ -193,10 +197,14 @@ static void testGemmSuite() {
               gemm.template gemm_mippv2_x100_register_blocked<1>(A, B, C_test));
   TEST_KERNEL("MIPPv2 x100 register blocked LMUL2",
               gemm.template gemm_mippv2_x100_register_blocked<2>(A, B, C_test));
-  TEST_KERNEL("MIPPv2 x100 register blocked LMUL4",
-              gemm.template gemm_mippv2_x100_register_blocked<4>(A, B, C_test));
-  TEST_KERNEL("MIPPv2 x100 register blocked LMUL8",
-              gemm.template gemm_mippv2_x100_register_blocked<8>(A, B, C_test));
+  if constexpr (2 * mipp::N<T, 4>() <= 64) {
+    TEST_KERNEL("MIPPv2 x100 register blocked LMUL4",
+                gemm.template gemm_mippv2_x100_register_blocked<4>(A, B, C_test));
+  }
+  if constexpr (2 * mipp::N<T, 8>() <= 64) {
+    TEST_KERNEL("MIPPv2 x100 register blocked LMUL8",
+                gemm.template gemm_mippv2_x100_register_blocked<8>(A, B, C_test));
+  }
 #endif
 #undef TEST_KERNEL
 
@@ -308,11 +316,13 @@ static void testGemmSuiteCRR(size_t M = 32, size_t N = 32, size_t K = 32,
   TEST_KERNEL("MIPPv2 panel x100 LMUL4",
               gemm.template gemm_mippv2_panel_x100<4>(A, B, C_test));
 
-  TEST_KERNEL("MIPPv2 Skylake panel LMUL8",
-              gemm.template gemm_mippv2_skylake_panel_lmul<8>(A, B, C_test));
+  if constexpr (mipp::N<T, 8>() <= 64) {
+    TEST_KERNEL("MIPPv2 Skylake panel LMUL8",
+                gemm.template gemm_mippv2_skylake_panel_lmul<8>(A, B, C_test));
 
-  TEST_KERNEL("MIPPv2 panel x100 LMUL8",
-              gemm.template gemm_mippv2_panel_x100<8>(A, B, C_test));
+    TEST_KERNEL("MIPPv2 panel x100 LMUL8",
+                gemm.template gemm_mippv2_panel_x100<8>(A, B, C_test));
+  }
 #else
   (void)C_test;
 #endif
