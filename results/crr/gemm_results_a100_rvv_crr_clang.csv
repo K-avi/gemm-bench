@@ -1,0 +1,7 @@
+Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS
+rvv,mippv2_a100_mr7_nr2_lmul2_pipe_crr,7,64,32,1,0,2.39957e-06,11.9488
+rvv,mippv2_a100_mr7_nr2_lmul2_pipe_crr,7,64,64,1,0,4.62512e-06,12.3984
+rvv,mippv2_a100_mr7_nr2_lmul2_pipe_crr,7,64,128,1,0,9.07092e-06,12.6435
+rvv,mippv2_a100_mr7_nr2_lmul2_pipe_crr,7,64,256,1,0,1.83761e-05,12.4823
+rvv,mippv2_a100_mr7_nr2_lmul2_pipe_crr,7,64,512,1,0,3.67223e-05,12.4925
+rvv,mippv2_a100_mr7_nr2_lmul2_pipe_crr,7,64,1024,1,0,7.31162e-05,12.5486
