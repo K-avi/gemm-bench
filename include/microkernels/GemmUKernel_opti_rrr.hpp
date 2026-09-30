@@ -1508,6 +1508,7 @@
     constexpr size_t NR = 2 * VL;
 
     const size_t Mfull = (A.rows / MR) * MR;
+    const size_t Nfull = (B.cols / NR) * NR;
 
     //
     // Main 3-row kernel
@@ -1517,7 +1518,7 @@
       const auto *a1_ptr = reinterpret_cast<const ABlock4 *>(A[i + 1]);
       const auto *a2_ptr = reinterpret_cast<const ABlock4 *>(A[i + 2]);
 
-      for (size_t j = 0; j < B.cols; j += NR) {
+      for (size_t j = 0; j < Nfull; j += NR) {
         auto c00 = set0<T, lmul>();
         auto c01 = set0<T, lmul>();
 
@@ -1592,6 +1593,60 @@
         store(C[i + 2] + j, c20);
         store(C[i + 2] + j + VL, c21);
       }
+
+      // Remainder columns: 1 vector (VL)
+      size_t j = Nfull;
+      while (j + VL <= B.cols) {
+        auto c00 = set0<T, lmul>();
+        auto c10 = set0<T, lmul>();
+        auto c20 = set0<T, lmul>();
+
+        const size_t K4 = A.cols / 4;
+
+        for (size_t kk = 0; kk < K4; ++kk) {
+          const ABlock4 a0 = a0_ptr[kk];
+          const ABlock4 a1 = a1_ptr[kk];
+          const ABlock4 a2 = a2_ptr[kk];
+
+          auto b00 = load<T, lmul>(B[4 * kk + 0] + j);
+          c00 = fmaddi(b00, a0.d0, c00);
+          c10 = fmaddi(b00, a1.d0, c10);
+          c20 = fmaddi(b00, a2.d0, c20);
+
+          b00 = load<T, lmul>(B[4 * kk + 1] + j);
+          c00 = fmaddi(b00, a0.d1, c00);
+          c10 = fmaddi(b00, a1.d1, c10);
+          c20 = fmaddi(b00, a2.d1, c20);
+
+          b00 = load<T, lmul>(B[4 * kk + 2] + j);
+          c00 = fmaddi(b00, a0.d2, c00);
+          c10 = fmaddi(b00, a1.d2, c10);
+          c20 = fmaddi(b00, a2.d2, c20);
+
+          b00 = load<T, lmul>(B[4 * kk + 3] + j);
+          c00 = fmaddi(b00, a0.d3, c00);
+          c10 = fmaddi(b00, a1.d3, c10);
+          c20 = fmaddi(b00, a2.d3, c20);
+        }
+
+        store(C[i + 0] + j, c00);
+        store(C[i + 1] + j, c10);
+        store(C[i + 2] + j, c20);
+        j += VL;
+      }
+
+      for (; j < B.cols; ++j) {
+        T c0 = T{0}, c1 = T{0}, c2 = T{0};
+        for (size_t k = 0; k < A.cols; ++k) {
+          const T b_val = B[k][j];
+          c0 += A[i + 0][k] * b_val;
+          c1 += A[i + 1][k] * b_val;
+          c2 += A[i + 2][k] * b_val;
+        }
+        C[i + 0][j] = c0;
+        C[i + 1][j] = c1;
+        C[i + 2][j] = c2;
+      }
     }
 
     //
@@ -1600,7 +1655,8 @@
     for (size_t i = Mfull; i < A.rows; ++i) {
       const auto *a_ptr = reinterpret_cast<const ABlock4 *>(A[i]);
 
-      for (size_t j = 0; j < B.cols; j += NR) {
+      size_t j = 0;
+      for (; j + NR <= B.cols; j += NR) {
         auto c0 = set0<T, lmul>();
         auto c1 = set0<T, lmul>();
 
@@ -1637,9 +1693,38 @@
         store(C[i] + j, c0);
         store(C[i] + j + VL, c1);
       }
+
+      while (j + VL <= B.cols) {
+        auto c0 = set0<T, lmul>();
+        const size_t K4 = A.cols / 4;
+
+        for (size_t kk = 0; kk < K4; ++kk) {
+          const ABlock4 a = a_ptr[kk];
+          auto b0 = load<T, lmul>(B[4 * kk + 0] + j);
+          c0 = fmaddi(b0, a.d0, c0);
+          b0 = load<T, lmul>(B[4 * kk + 1] + j);
+          c0 = fmaddi(b0, a.d1, c0);
+          b0 = load<T, lmul>(B[4 * kk + 2] + j);
+          c0 = fmaddi(b0, a.d2, c0);
+          b0 = load<T, lmul>(B[4 * kk + 3] + j);
+          c0 = fmaddi(b0, a.d3, c0);
+        }
+
+        store(C[i] + j, c0);
+        j += VL;
+      }
+
+      for (; j < B.cols; ++j) {
+        T c0 = T{0};
+        for (size_t k = 0; k < A.cols; ++k) {
+          c0 += A[i][k] * B[k][j];
+        }
+        C[i][j] = c0;
+      }
     }
   }
- // General 5-argument version (arbitrary alpha, beta)
+
+  // General 5-argument version (arbitrary alpha, beta)
   template <int lmul = 2>
   static inline void gemm_mippv2_x100_register_blocked_apack4(
       const PackedRowMajor<T> &__restrict A,
@@ -1658,6 +1743,7 @@
     constexpr size_t NR = 2 * VL;
 
     const size_t Mfull = (A.rows / MR) * MR;
+    const size_t Nfull = (B.cols / NR) * NR;
 
     for (size_t i = 0; i < Mfull; i += MR) {
       const auto *a0_ptr = reinterpret_cast<const ABlock4 *>(A[i + 0]);
@@ -1668,7 +1754,7 @@
       T *__restrict c1_base = C[i + 1];
       T *__restrict c2_base = C[i + 2];
 
-      for (size_t j = 0; j < B.cols; j += NR) {
+      for (size_t j = 0; j < Nfull; j += NR) {
         auto c00 = set0<T, lmul>();
         auto c01 = set0<T, lmul>();
 
@@ -1743,13 +1829,68 @@
         Epilogue::store<T, lmul, false>(c2_base + j, c20, alpha, beta);
         Epilogue::store<T, lmul, false>(c2_base + j + VL, c21, alpha, beta);
       }
+
+      // Remainder columns: 1 vector (VL)
+      size_t j = Nfull;
+      while (j + VL <= B.cols) {
+        auto c00 = set0<T, lmul>();
+        auto c10 = set0<T, lmul>();
+        auto c20 = set0<T, lmul>();
+
+        const size_t K4 = A.cols / 4;
+
+        for (size_t kk = 0; kk < K4; ++kk) {
+          const ABlock4 a0 = a0_ptr[kk];
+          const ABlock4 a1 = a1_ptr[kk];
+          const ABlock4 a2 = a2_ptr[kk];
+
+          auto b00 = load<T, lmul>(B[4 * kk + 0] + j);
+          c00 = fmaddi(b00, a0.d0, c00);
+          c10 = fmaddi(b00, a1.d0, c10);
+          c20 = fmaddi(b00, a2.d0, c20);
+
+          b00 = load<T, lmul>(B[4 * kk + 1] + j);
+          c00 = fmaddi(b00, a0.d1, c00);
+          c10 = fmaddi(b00, a1.d1, c10);
+          c20 = fmaddi(b00, a2.d1, c20);
+
+          b00 = load<T, lmul>(B[4 * kk + 2] + j);
+          c00 = fmaddi(b00, a0.d2, c00);
+          c10 = fmaddi(b00, a1.d2, c10);
+          c20 = fmaddi(b00, a2.d2, c20);
+
+          b00 = load<T, lmul>(B[4 * kk + 3] + j);
+          c00 = fmaddi(b00, a0.d3, c00);
+          c10 = fmaddi(b00, a1.d3, c10);
+          c20 = fmaddi(b00, a2.d3, c20);
+        }
+
+        Epilogue::store<T, lmul, false>(c0_base + j, c00, alpha, beta);
+        Epilogue::store<T, lmul, false>(c1_base + j, c10, alpha, beta);
+        Epilogue::store<T, lmul, false>(c2_base + j, c20, alpha, beta);
+        j += VL;
+      }
+
+      for (; j < B.cols; ++j) {
+        T c0 = T{0}, c1 = T{0}, c2 = T{0};
+        for (size_t k = 0; k < A.cols; ++k) {
+          const T b_val = B[k][j];
+          c0 += A[i + 0][k] * b_val;
+          c1 += A[i + 1][k] * b_val;
+          c2 += A[i + 2][k] * b_val;
+        }
+        Epilogue::store(c0_base + j, c0, alpha, beta);
+        Epilogue::store(c1_base + j, c1, alpha, beta);
+        Epilogue::store(c2_base + j, c2, alpha, beta);
+      }
     }
 
     for (size_t i = Mfull; i < A.rows; ++i) {
       const auto *a_ptr = reinterpret_cast<const ABlock4 *>(A[i]);
       T *__restrict c_base = C[i];
 
-      for (size_t j = 0; j < B.cols; j += NR) {
+      size_t j = 0;
+      for (; j + NR <= B.cols; j += NR) {
         auto c0 = set0<T, lmul>();
         auto c1 = set0<T, lmul>();
 
@@ -1785,6 +1926,34 @@
 
         Epilogue::store<T, lmul, false>(c_base + j, c0, alpha, beta);
         Epilogue::store<T, lmul, false>(c_base + j + VL, c1, alpha, beta);
+      }
+
+      while (j + VL <= B.cols) {
+        auto c0 = set0<T, lmul>();
+        const size_t K4 = A.cols / 4;
+
+        for (size_t kk = 0; kk < K4; ++kk) {
+          const ABlock4 a = a_ptr[kk];
+          auto b0 = load<T, lmul>(B[4 * kk + 0] + j);
+          c0 = fmaddi(b0, a.d0, c0);
+          b0 = load<T, lmul>(B[4 * kk + 1] + j);
+          c0 = fmaddi(b0, a.d1, c0);
+          b0 = load<T, lmul>(B[4 * kk + 2] + j);
+          c0 = fmaddi(b0, a.d2, c0);
+          b0 = load<T, lmul>(B[4 * kk + 3] + j);
+          c0 = fmaddi(b0, a.d3, c0);
+        }
+
+        Epilogue::store<T, lmul, false>(c_base + j, c0, alpha, beta);
+        j += VL;
+      }
+
+      for (; j < B.cols; ++j) {
+        T c0 = T{0};
+        for (size_t k = 0; k < A.cols; ++k) {
+          c0 += A[i][k] * B[k][j];
+        }
+        Epilogue::store(c_base + j, c0, alpha, beta);
       }
     }
   }
