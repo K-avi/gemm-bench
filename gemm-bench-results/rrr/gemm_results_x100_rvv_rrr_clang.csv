@@ -1,0 +1,5 @@
+Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS
+rvv,mippv2_x100_register_blocked_apack4,32,32,32,1,0,4.04733e-06,16.1924
+rvv,mippv2_x100_register_blocked_apack4,64,64,64,1,0,2.96845e-05,17.662
+rvv,mippv2_x100_register_blocked_apack4,96,96,96,1,0,0.000152734,11.5854
+rvv,mippv2_x100_register_blocked_apack4,128,128,128,1,0,0.000397832,10.5429
