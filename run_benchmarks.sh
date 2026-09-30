@@ -110,6 +110,7 @@ CUSTOM_SIZES=()
 OUTPUT_PREFIX=""
 CRR_ONLY=false
 RRR_ONLY=false
+NUM_RUNS=3
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -176,6 +177,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --sizes)
             IFS=' ' read -r -a CUSTOM_SIZES <<< "$2"
+            shift 2
+            ;;
+        --runs|--repeats)
+            NUM_RUNS="$2"
             shift 2
             ;;
         -h|--help)
@@ -314,14 +319,14 @@ MIPP_EXPLO_KERNELS=(
 ################################################################################
 
 if [[ "$CRR_ONLY" == "true" && ${#CUSTOM_SIZES[@]} -eq 0 ]]; then
-    # In CRR BLIS mode: sweep K across realistic cache hierarchy depths
+    # In CRR BLIS mode: sweep K with iterations scaled inverse-proportionally to K (~0.5s per measurement)
     SIZES=(
-        "32 100000 10000"
-        "64 100000 10000"
-        "128 100000 10000"
-        "256 100000 10000"
-        "512 100000 20000"
-        "1024 100000 20000"
+        "32 5000000 500000"
+        "64 2500000 250000"
+        "128 1250000 125000"
+        "256 600000 60000"
+        "512 300000 30000"
+        "1024 150000 15000"
     )
 elif [[ ${#CUSTOM_SIZES[@]} -gt 0 ]]; then
     SIZES=()
@@ -593,8 +598,20 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
                     DESC_STR="${SIZE}x${SIZE}"
                 fi
 
-                if LINE=$("${BENCH_CMD[@]}"); then
-                    echo "${VERSION},${LINE}" >> "${CSV}"
+                BEST_LINE=""
+                BEST_TIME=""
+                for (( run_idx=1; run_idx<=NUM_RUNS; run_idx++ )); do
+                    if CUR_LINE=$("${BENCH_CMD[@]}"); then
+                        CUR_TIME=$(echo "$CUR_LINE" | awk -F',' '{print $(NF-1)}')
+                        if [[ -z "$BEST_TIME" ]] || awk "BEGIN {exit !($CUR_TIME < $BEST_TIME)}"; then
+                            BEST_TIME="$CUR_TIME"
+                            BEST_LINE="$CUR_LINE"
+                        fi
+                    fi
+                done
+
+                if [[ -n "$BEST_LINE" ]]; then
+                    echo "${VERSION},${BEST_LINE}" >> "${CSV}"
                     echo "[${COMPILER_TAG}] ${VERSION} ${KERNEL} (${DESC_STR})"
                 else
                     echo "[${COMPILER_TAG}] ${VERSION} ${KERNEL} (${DESC_STR}) FAILED" >&2
