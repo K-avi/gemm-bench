@@ -46,18 +46,15 @@ CRR microkernels use a column-major packed $A$ panel (leading dimension $= M_R$)
 
 | SIMD | Microarchitecture | CPU / SoC Model | Freq (GHz) | Peak FLOP/cyc | Comp | Peak GFLOP/s | DGEMM FLOP/cyc | % of Peak |
 | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **AVX-512** | **AMD Zen 5 Strix Point** | Ryzen AI 9 HX 370 | 5.1 | 16.0 | GCC | 81.0 | 15.88 | **99.2 %** |
-| **AVX-512** | **AMD Zen 4** | Ryzen 9 7900X | 5.4 | 16.0 | GCC | 85.5 | 15.84 | **99.0 %** |
-| **NEON** | **Apple M1 Firestorm** | M1 Ultra (P-core) | 3.0 | 16.0 | GCC | 48.2 | 15.89 | **99.3 %** |
-| **NEON** | **Cortex-A76** | Raspberry Pi 5 | 2.4 | 8.0 | Clang | 18.9 | 7.87 | **98.3 %** |
+| **AVX-512** | **AMD Zen 5 Strix Point** | Ryzen AI 9 HX 370 | 5.1 | 16.0 | Clang | 81.2 | 15.92 | **99.5 %** |
+| **AVX-512** | **AMD Zen 4** | Ryzen 9 7900X | 5.4 | 16.0 | Clang | 85.8 | 15.90 | **99.4 %** |
+| **NEON** | **Apple M1 Firestorm** | M1 Ultra (P-core) | 3.0 | 16.0 | GCC | 48.3 | 15.90 | **99.4 %** |
+| **NEON** | **Cortex-A76** | Raspberry Pi 5 | 2.4 | 8.0 | Clang | 18.9 | 7.87 | **98.4 %** |
 | **RVV 1.0** | **SpacemiT X100** | K3 SoC (VLEN=256) | 2.4 | 8.0 | Clang | 18.7 | 7.78 | **97.2 %** |
-| **AVX2** | **Intel Skylake** | Core i5-6200U | 2.3 | 16.0 | GCC | 34.2 | 14.86 | **92.9 %** |
-| **AVX2** | **Intel Meteor Lake** | Redwood Cove P-Core | 5.1** | 16.0 | Clang | 74.4 | 14.59 | **91.2 %** |
-| **RVV 1.0** | **SpacemiT A100** | K3 SoC (VLEN=1024) | 2.0 | 8.0 | GCC | 13.2 | 6.59 | **82.4 %** |
-| **RVV 1.0** | **SpacemiT X60** | BPI-F3 SoC (VLEN=256)| 1.6 | 8.0 | GCC† | 7.3 | 4.54 | **56.7 %** |
-
-> [!NOTE]
-> † X60 results are GCC-only: no LLVM version with functional RVV support is available on this platform.
+| **AVX2** | **Intel Meteor Lake** | Redwood Cove P-Core | 5.1** | 16.0 | Clang | 74.7 | 14.64 | **91.5 %** |
+| **RVV 1.0** | **SpacemiT A100** | K3 SoC (VLEN=1024) | 2.0 | 8.0 | GCC | 13.2 | 6.62 | **82.7 %** |
+| **AVX2** | **Intel Skylake** | Core i5-6200U | 2.3 | 16.0 | GCC | 31.7 | 13.77 | **86.1 %** |
+| **RVV 1.0** | **SpacemiT X60** | BPI-F3 SoC (VLEN=256)| 1.6 | 8.0 | Clang* | 7.4 | 4.64 | **58.1 %** |
 
 > [!NOTE]
 > **Roadmap & perspectives: empirical hardware peak measurement**:
