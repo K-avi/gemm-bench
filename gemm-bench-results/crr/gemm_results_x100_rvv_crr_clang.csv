@@ -1,7 +1,7 @@
 Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS
-rvv,mippv2_x100_register_blocked_apack4_crr,3,16,32,1,0,1.9443e-07,15.8
-rvv,mippv2_x100_register_blocked_apack4_crr,3,16,64,1,0,3.55151e-07,17.2997
-rvv,mippv2_x100_register_blocked_apack4_crr,3,16,128,1,0,6.75483e-07,18.1914
-rvv,mippv2_x100_register_blocked_apack4_crr,3,16,256,1,0,1.31702e-06,18.6603
-rvv,mippv2_x100_register_blocked_apack4_crr,3,16,512,1,0,3.13807e-06,15.6631
-rvv,mippv2_x100_register_blocked_apack4_crr,3,16,1024,1,0,6.23585e-06,15.7643
+rvv,mippv2_x100_register_blocked_apack4_crr,3,16,32,1,0,1.93779e-07,15.8531
+rvv,mippv2_x100_register_blocked_apack4_crr,3,16,64,1,0,3.54156e-07,17.3483
+rvv,mippv2_x100_register_blocked_apack4_crr,3,16,128,1,0,6.74791e-07,18.2101
+rvv,mippv2_x100_register_blocked_apack4_crr,3,16,256,1,0,1.31593e-06,18.6758
+rvv,mippv2_x100_register_blocked_apack4_crr,3,16,512,1,0,3.11748e-06,15.7666
+rvv,mippv2_x100_register_blocked_apack4_crr,3,16,1024,1,0,6.21151e-06,15.8261
