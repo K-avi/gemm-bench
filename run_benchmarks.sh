@@ -410,10 +410,15 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
     elif [[ ${#CUSTOM_KERNELS[@]} -gt 0 ]]; then
         for ck in "${CUSTOM_KERNELS[@]}"; do
             case "$ck" in
-                mippv2_meteorlake_mr4_nr3|mippv2_a76_mr6_nr3|mippv2_a76_mr6_nr4_fmaddi|mippv2_zen4_mr4_nr4_fmaddi|\
-                mippv2_firestorm_mr4_nr4_fmaddi|mippv2_firestorm_mr6_nr4_fmaddi|\
-                mippv2_x60_mr6_nr4_fmaddi|mippv2_x100_register_blocked_apack4|\
-                mippv2_a100_mr7_nr4_pipe|mippv2_a100_mr7_nr2_lmul2_pipe|ijk)
+                mippv2_meteorlake_mr4_nr3|mippv2_meteorlake_mr4_nr3_crr|\
+                mippv2_a76_mr6_nr3|mippv2_a76_mr6_nr4_fmaddi|mippv2_a76_mr6_nr4_fmaddi_crr|\
+                mippv2_zen4_mr4_nr4_fmaddi|mippv2_zen4_mr4_nr4_fmaddi_crr|\
+                mippv2_firestorm_mr4_nr4_fmaddi|mippv2_firestorm_mr4_nr4_fmaddi_crr|\
+                mippv2_firestorm_mr6_nr4_fmaddi|mippv2_firestorm_mr6_nr4_fmaddi_crr|\
+                mippv2_x60_mr6_nr4_fmaddi|mippv2_x60_mr6_nr4_fmaddi_crr|\
+                mippv2_x100_register_blocked_apack4|mippv2_x100_register_blocked_apack4_crr|\
+                mippv2_a100_mr7_nr4_pipe|mippv2_a100_mr7_nr4_pipe_crr|\
+                mippv2_a100_mr7_nr2_lmul2_pipe|mippv2_a100_mr7_nr2_lmul2_pipe_crr|ijk)
                     ;;
                 *)
                     NEED_EXPLO=true
