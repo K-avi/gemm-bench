@@ -1687,6 +1687,9 @@
             c50 = fmaddi(b0, a5, c50);
             c60 = fmaddi(b0, a6, c60);
 
+            // b0 is now dead for step k -> reload for step k+1
+            b0 = load<T, lmul>(b_k + 0 * VL);
+
             c01 = fmaddi(b1, a0, c01);
             c11 = fmaddi(b1, a1, c11);
             c21 = fmaddi(b1, a2, c21);
@@ -1694,6 +1697,9 @@
             c41 = fmaddi(b1, a4, c41);
             c51 = fmaddi(b1, a5, c51);
             c61 = fmaddi(b1, a6, c61);
+
+            // b1 is now dead for step k -> reload for step k+1
+            b1 = load<T, lmul>(b_k + 1 * VL);
 
             c02 = fmaddi(b2, a0, c02);
             c12 = fmaddi(b2, a1, c12);
@@ -1703,6 +1709,9 @@
             c52 = fmaddi(b2, a5, c52);
             c62 = fmaddi(b2, a6, c62);
 
+            // b2 is now dead for step k -> reload for step k+1
+            b2 = load<T, lmul>(b_k + 2 * VL);
+
             c03 = fmaddi(b3, a0, c03);
             c13 = fmaddi(b3, a1, c13);
             c23 = fmaddi(b3, a2, c23);
@@ -1711,9 +1720,7 @@
             c53 = fmaddi(b3, a5, c53);
             c63 = fmaddi(b3, a6, c63);
 
-            b0 = load<T, lmul>(b_k + 0 * VL);
-            b1 = load<T, lmul>(b_k + 1 * VL);
-            b2 = load<T, lmul>(b_k + 2 * VL);
+            // b3 is now dead for step k -> reload for step k+1
             b3 = load<T, lmul>(b_k + 3 * VL);
             b_k += b_ld;
           }
