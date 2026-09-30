@@ -78,6 +78,27 @@ CRR microkernels use a column-major packed $A$ panel (leading dimension $= M_R$)
 
 ---
 
+## Hardware Platforms & Compiler Toolchains
+
+To ensure empirical reproducibility, benchmarks are compiled with modern toolchains across all evaluated platforms. The table below lists the exact compiler versions and ISA configurations on each test machine:
+
+| Microarchitecture | Platform Tag | SoC / Model | ISA / Vector Unit | `g++` Version | `clang++` Version |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **SpacemiT X100** | `x100` | SpacemiT K3 | RVV 1.0 (256-bit, VLEN=256) | 15.2.0 (Bianbu 15.2.0-16ubuntu1bb3) | 21.1.8 (Ubuntu 21.1.8-6ubuntu1) |
+| **SpacemiT A100** | `a100` | SpacemiT K3 | RVV 1.0 (1024-bit via `ai`) | 15.2.0 (Bianbu 15.2.0-16ubuntu1bb3) | 21.1.8 (Ubuntu 21.1.8-6ubuntu1) |
+| **SpacemiT X60** | `x60` | Banana Pi BPI-F3 | RVV 1.0 (256-bit, VLEN=256) | 15.2.0 (RISCstar 15.2-r1) | 21.1.8 (cross-built on X100)* |
+| **Raspberry Pi 5** | `rpi5` | Broadcom BCM2712 (Cortex-A76) | ARMv8-A NEON (128-bit) | 15.2.0 (Ubuntu 15.2.0-16ubuntu1) | 21.1.8 (Ubuntu 21.1.8-6ubuntu1) |
+| **Apple M1** | `m1` | Apple M1 Ultra (Firestorm) | ARMv8-A NEON (128-bit) | 16.1.1 (Red Hat 16.1.1-1) | 22.1.5 (Fedora 22.1.5-1.fc44) |
+| **AMD Zen 4** | `zen4` | Ryzen 9 7900X | x86_64 AVX-512 | 13.3.0 (Ubuntu 13.3.0-6ubuntu2) | 18.1.3 (Ubuntu 18.1.3-1ubuntu1) |
+| **AMD Zen 5** | `zen5` | Ryzen AI 9 HX 370 | x86_64 AVX-512 (256-bit DP) | 13.3.0 (Ubuntu 13.3.0-6ubuntu2) | 18.1.3 (Ubuntu 18.1.3-1ubuntu1) |
+| **Intel Meteor Lake** | `meteorlake` | Core Ultra (Redwood Cove P-core) | x86_64 AVX2 / FMA | 13.3.0 (Ubuntu 13.3.0-6ubuntu2) | 18.1.3 (Ubuntu 18.1.3-1ubuntu1) |
+| **Intel Skylake** | `skylake` | Core i5-6200U (local laptop) | x86_64 AVX2 / FMA | 14.2.1 (GCC 14.2.1 20250405) | 21.1.8 (Clang 21.1.8) |
+
+> [!NOTE]
+> \* **SpacemiT X60 Clang Support**: The native distribution on the BPI-F3 board includes Bianbu Clang 18.1.8, which lacks functional RVV 1.0 intrinsic support. Because the X60 and X100 share the exact same vector ISA (`-march=rv64gcv_zvl256b -mrvv-vector-bits=zvl`) and access the shared NFS filesystem on the Dalek cluster, X60 Clang binaries are compiled on the X100 node with Ubuntu Clang 21.1.8 and then executed natively on the X60 hardware.
+
+---
+
 ## Performance Visualizations
 
 Plots are generated locally by `plot_results.py` (RRR) and `plot_results_crr.py` (CRR). Run the plotting scripts to regenerate them (see [Plotting & Performance Analysis](#plotting--performance-analysis) below).

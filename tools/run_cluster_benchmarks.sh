@@ -171,7 +171,7 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ ${#SELECTED_TARGETS[@]} -eq 0 ]]; then
-    SELECTED_TARGETS=(x100 a100 x60 rpi5 m1 zen4 meteorlake)
+    SELECTED_TARGETS=(x100 a100 x60 rpi5 m1 zen4 zen5 meteorlake)
 fi
 
 echo -e "${BOLD}${CYAN}================================================================================${NC}"
@@ -207,6 +207,24 @@ if [[ "$DO_PULL" == "true" ]]; then
     fi
 else
     echo -e "${YELLOW}[1/3] Synchronisation git ignorée (--no-pull).${NC}\n"
+fi
+
+# -----------------------------------------------------------------------------
+# 1bis. Archivage des résultats antérieurs sur la frontale
+# -----------------------------------------------------------------------------
+echo -e "${BLUE}[+] Archivage des résultats antérieurs sur ${FRONT_HOST}...${NC}"
+ssh "$FRONT_HOST" "bash -l -c 'cd ${REMOTE_DIR} && if [ -d results ] && [ \"\$(ls -A results 2>/dev/null)\" ]; then ARCHIVE_DIR=\"results_archive_\$(date +%Y%m%d_%H%M%S)\"; mkdir -p \"\$ARCHIVE_DIR\" && cp -r results/* \"\$ARCHIVE_DIR/\" 2>/dev/null || true; echo \"✓ Résultats archivés dans \$ARCHIVE_DIR\"; fi'"
+
+# -----------------------------------------------------------------------------
+# 1ter. Pré-compilation croisée X60 (Clang) sur le nœud X100 (mono-sip-k3)
+# -----------------------------------------------------------------------------
+has_x60=false
+for t in "${SELECTED_TARGETS[@]}"; do
+    [[ "$t" == "x60" ]] && has_x60=true
+done
+if [[ "$has_x60" == "true" ]]; then
+    echo -e "${CYAN}→ Pré-compilation du binaire X60 (Clang) sur le nœud X100 (mono-sip-k3)...${NC}"
+    ssh "$FRONT_HOST" "srun -p mono -w mono-sip-k3 bash -l -c 'cd ${REMOTE_DIR} && cmake -B build_rvv_x60_clang_rvv -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_CXX_FLAGS=\"-O3 -ffast-math -finline-functions -funroll-loops -fno-semantic-interposition -falign-functions=64 -falign-loops=32 -march=rv64gcv_zvl256b -mrvv-vector-bits=zvl\" -DGEMMBENCH_ENABLE_EXPLO=OFF && cmake --build build_rvv_x60_clang_rvv --target GemmBench --parallel'"
 fi
 
 # -----------------------------------------------------------------------------
@@ -251,7 +269,7 @@ run_target() {
             out_prefix="x60_rvv"
             pre_cmd="module load gcc 2>/dev/null || true;"
             srun_extra="--exclusive"
-            compilers="gcc"
+            compilers="gcc clang"
             ;;
         rpi5)
             partition="mono"
@@ -323,7 +341,13 @@ run_target() {
         done
     fi
 
-    local bench_cmd="${pre_cmd} PLATFORM_TAG=${target} ${wrapper}./run_benchmarks.sh ${platform} ${bench_flags} ${compilers}"
+    local target_bench_flags="$bench_flags"
+    if [[ "$target" == "x60" ]]; then
+        # Le binaire Clang a été compilé sur X100; éviter qu'un rebuild local n'appelle clang++ défaillant sur x60
+        target_bench_flags="${target_bench_flags//--rebuild/}"
+    fi
+
+    local bench_cmd="${pre_cmd} PLATFORM_TAG=${target} ${wrapper}./run_benchmarks.sh ${platform} ${target_bench_flags} ${compilers}"
 
     if ssh "$FRONT_HOST" "srun -p ${partition} -w ${node} ${srun_extra} bash -l -c 'cd ${REMOTE_DIR} && ${bench_cmd}'"; then
         return 0
@@ -449,3 +473,16 @@ for target in "${SELECTED_TARGETS[@]}"; do
 done
 echo
 echo -e "Les fichiers de résultats CSV sont disponibles dans le dossier partagé : ${BOLD}${REMOTE_DIR}/results/${NC}"
+
+# -----------------------------------------------------------------------------
+# 5. Rapatriement automatique des CSV vers la machine locale
+# -----------------------------------------------------------------------------
+echo
+echo -e "${BLUE}[3/3] Rapatriement (scp) des résultats CSV vers la machine locale...${NC}"
+mkdir -p gemm-bench-results/crr
+if scp -q "${FRONT_HOST}:${REMOTE_DIR}/results/*_crr_*.csv" gemm-bench-results/crr/ 2>/dev/null; then
+    echo -e "${GREEN}✓ Résultats rapatriés avec succès dans gemm-bench-results/crr/${NC}"
+    ls -lh gemm-bench-results/crr/
+else
+    echo -e "${YELLOW}Avertissement : aucun CSV CRR trouvé à rapatrier.${NC}"
+fi
