@@ -15,10 +15,12 @@ Platforms:
   avx512     x86_64 AVX-512
   neon       ARMv8-A NEON
   rvv_x100   SpacemiT X100 (RVV 256-bit)
+  rvv_x60    SpacemiT X60  (RVV 256-bit)
   rvv_a100   SpacemiT A100 (RVV 1024-bit)
 
 Options:
   --run-all               Run all versions (including scalar) and exploratory kernels/sizes
+  --crr, --crr-only       Run only CRR (col-major A) kernels with BLIS-like K sweep
   --explo                 Enable exploratory kernels (-DGEMMBENCH_ENABLE_EXPLO=ON)
   --rebuild               Force clean re-compilation even if binary exists
   -c, --core <N>          Pin execution to specific CPU core via taskset
@@ -39,6 +41,7 @@ Examples:
   ./run_benchmarks.sh avx2 --run-all gcc
   ./run_benchmarks.sh neon -c 4 -k mippv2_firestorm_mr4_nr4_fmaddi
   ./run_benchmarks.sh rvv_a100 --rebuild -s 64 -s 128
+  ./run_benchmarks.sh avx512 --crr -o zen4_avx512 gcc clang
 EOF
 }
 

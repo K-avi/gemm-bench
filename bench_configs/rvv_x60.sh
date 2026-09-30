@@ -4,6 +4,10 @@ BUILD_DIR_PREFIX="build_rvv_x60"
 CSV_PREFIX="gemm_results_rvv_x60"
 DEFAULT_VERSION="rvv"
 
+# NOTE: The A100 mr7_nr4_pipe kernel is the empirical champion on X60 despite
+# being designed for the A100 core. Both share VLEN=256 and the wider 7×4 tile
+# outperforms the X60-native 6×4 tile on this in-order pipeline.
+# No Clang results: no LLVM version with functional RVV support on this platform.
 DEFAULT_KERNELS=(
     mippv2_a100_mr7_nr4_pipe
     mippv2_a100_mr7_nr4_pipe_crr

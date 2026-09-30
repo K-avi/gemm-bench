@@ -1018,7 +1018,9 @@ def main() -> None:
     # 1. Determine input directory
     input_dir = args.input_dir
     if input_dir is None:
-        if Path("results/crr").is_dir():
+        if Path("gemm-bench-results/crr").is_dir():
+            input_dir = Path("gemm-bench-results/crr")
+        elif Path("results/crr").is_dir():
             input_dir = Path("results/crr")
         elif Path("results").is_dir():
             input_dir = Path("results")

@@ -26,6 +26,8 @@ The benchmark evaluates single-thread, compute-bound double-precision GEMM throu
 
 Across all target ISA families (x86_64 AVX2 & AVX-512, ARM NEON, RISC-V Vector), some microkernels achieve **>90% of theoretical peak performance** (reaching up to **>98%** on some uarchs):
 
+### RRR Layout (Row-Major A, B, C)
+
 | SIMD | Microarchitecture | CPU / SoC Model | Freq (GHz) | Peak FLOP/cyc | Comp | Peak GFLOP/s | DGEMM FLOP/cyc | % of Peak |
 | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
 | **AVX-512** | **AMD Zen 4** | Ryzen 9 7900X | 5.4 | 16.0 | GCC | 85.4 | 15.82 | **98.9 %** |
@@ -37,6 +39,25 @@ Across all target ISA families (x86_64 AVX2 & AVX-512, ARM NEON, RISC-V Vector),
 | **RVV 1.0** | **SpacemiT X100** | K3 SoC (VLEN=256) | 2.4 | 8.0 | Clang | 17.8 | 7.42 | **92.8 %** |
 | **RVV 1.0** | **SpacemiT A100** | K3 SoC (VLEN=1024) | 2.0 | 8.0 | GCC | 13.0 | 6.48 | **81.0 %** |
 | **RVV 1.0** | **SpacemiT X60** | BPI-F3 SoC (VLEN=256)| 1.6 | 8.0 | GCC | 6.2 | 3.89 | **48.7 %** |
+
+### CRR Layout (Col-Major A, Row-Major B, C) — GotoBLAS / BLIS packing
+
+CRR microkernels use a column-major packed $A$ panel (leading dimension $= M_R$), matching the access pattern of the GotoBLAS / BLIS macro-kernel inner loop. The benchmark evaluates a single register tile ($M_R \times N_R$) across panel depth $K \in \{32, 64, 128, 256, 512, 1024\}$.
+
+| SIMD | Microarchitecture | CPU / SoC Model | Freq (GHz) | Peak FLOP/cyc | Comp | Peak GFLOP/s | DGEMM FLOP/cyc | % of Peak |
+| :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
+| **AVX-512** | **AMD Zen 5 Strix Point** | Ryzen AI 9 HX 370 | 5.1 | 16.0 | GCC | 81.0 | 15.88 | **99.2 %** |
+| **AVX-512** | **AMD Zen 4** | Ryzen 9 7900X | 5.4 | 16.0 | GCC | 85.5 | 15.84 | **99.0 %** |
+| **NEON** | **Apple M1 Firestorm** | M1 Ultra (P-core) | 3.0 | 16.0 | GCC | 48.2 | 15.89 | **99.3 %** |
+| **NEON** | **Cortex-A76** | Raspberry Pi 5 | 2.4 | 8.0 | Clang | 18.9 | 7.87 | **98.3 %** |
+| **RVV 1.0** | **SpacemiT X100** | K3 SoC (VLEN=256) | 2.4 | 8.0 | Clang | 18.7 | 7.78 | **97.2 %** |
+| **AVX2** | **Intel Skylake** | Core i5-6200U | 2.3 | 16.0 | GCC | 34.2 | 14.86 | **92.9 %** |
+| **AVX2** | **Intel Meteor Lake** | Redwood Cove P-Core | 5.1** | 16.0 | Clang | 74.4 | 14.59 | **91.2 %** |
+| **RVV 1.0** | **SpacemiT A100** | K3 SoC (VLEN=1024) | 2.0 | 8.0 | GCC | 13.2 | 6.59 | **82.4 %** |
+| **RVV 1.0** | **SpacemiT X60** | BPI-F3 SoC (VLEN=256)| 1.6 | 8.0 | GCC† | 7.3 | 4.54 | **56.7 %** |
+
+> [!NOTE]
+> † X60 results are GCC-only: no LLVM version with functional RVV support is available on this platform.
 
 > [!NOTE]
 > **Roadmap & perspectives: empirical hardware peak measurement**:
@@ -59,20 +80,10 @@ Across all target ISA families (x86_64 AVX2 & AVX-512, ARM NEON, RISC-V Vector),
 
 ## Performance Visualizations
 
-### Cross-Microarchitecture Efficiency (% of Theoretical Peak)
+Plots are generated locally by `plot_results.py` (RRR) and `plot_results_crr.py` (CRR). Run the plotting scripts to regenerate them (see [Plotting & Performance Analysis](#plotting--performance-analysis) below).
 
-![Cross-UArch Efficiency](plots/cross_uarch_efficiency_comparison.svg)
-
-### Representative Architecture Profiles
-
-#### AMD Zen 4 (AVX-512 @ 5.4 GHz) — x86_64
-![Zen 4 Overview](plots/avx512_zen4_overview.svg)
-
-#### Apple M1 Firestorm (NEON @ 3.0 GHz) — AArch64
-![M1 Overview](plots/neon_m1_overview.svg)
-
-#### SpacemiT X100 (RVV 256-bit @ 2.2 GHz) — RISC-V
-![X100 Overview](plots/rvv_x100_overview.svg)
+<!-- Note: plots/ and plots_crr/ are gitignored and generated locally. -->
+<!-- To view them, clone the repo and run the plotting scripts. -->
 
 ---
 
@@ -125,16 +136,21 @@ Always specify `-o <uarch>_<simd>` to ensure non-colliding, standardized result 
 
 # Benchmark SpacemiT X100 with clean rebuild
 ./run_benchmarks.sh rvv_x100 -o x100_rvv --rebuild clang
+
+# Benchmark CRR kernels only (BLIS-like K sweep on native MR×NR tile)
+./run_benchmarks.sh avx512 --crr -o zen4_avx512 gcc clang
 ```
 
 ---
 
 ## Plotting & Performance Analysis
 
-The analytical suite [`plot_results.py`](file:///home/ivan/Files/projets/gemm_bench/plot_results.py) reads the hierarchical hardware specification in [`uarch_config.json`](file:///home/ivan/Files/projets/gemm_bench/uarch_config.json), scans the benchmark datasets, identifies the champion kernel for each microarchitecture, and outputs comparison plots:
+### RRR Plots
+
+The analytical suite `plot_results.py` reads the hierarchical hardware specification in `uarch_config.json`, scans the benchmark datasets, identifies the champion kernel for each microarchitecture, and outputs comparison plots:
 
 ```bash
-# Generate all plots from reference datasets
+# Generate all RRR plots from reference datasets
 python3 plot_results.py --input-dir gemm-bench-results --output plots
 
 # Filter specific architectures or SIMD extensions
@@ -145,10 +161,31 @@ python3 plot_results.py --input-dir gemm-bench-results --simd avx512 neon
 python3 plot_results.py --input-dir gemm-bench-results --freq zen4=5.4,m1=3.0
 ```
 
-### Output Figures (`plots/`)
-- `cross_uarch_efficiency_comparison.svg`: Multi-architecture comparison in **% of theoretical peak**.
-- `cross_uarch_flop_cycle_comparison.svg`: Multi-architecture comparison in **DP FLOP/cycle**.
-- `<simd>_<uarch>_overview.svg`: Per-architecture detailed breakdown showing top kernels, scalar baseline, and dual-axis throughput (GFLOP/s and FLOP/cycle).
+### CRR Plots
+
+`plot_results_crr.py` analyzes CRR micro-kernel benchmark results with automatic champion selection and FLOP/cycle efficiency. It can optionally generate side-by-side comparisons against RRR baselines:
+
+```bash
+# Generate all CRR plots (auto-detects gemm-bench-results/crr/)
+python3 plot_results_crr.py --output plots_crr --png
+
+# With side-by-side CRR vs RRR comparison
+python3 plot_results_crr.py --output plots_crr --compare-rrr gemm-bench-results --png
+
+# Filter specific architectures
+python3 plot_results_crr.py --uarch zen4 m1 x100 --output plots_crr
+```
+
+### Output Figures
+- **`plots/`** (RRR):
+  - `cross_uarch_efficiency_comparison.svg`: Multi-architecture comparison in **% of theoretical peak**.
+  - `cross_uarch_flop_cycle_comparison.svg`: Multi-architecture comparison in **DP FLOP/cycle**.
+  - `<simd>_<uarch>_overview.svg`: Per-architecture detailed breakdown.
+- **`plots_crr/`** (CRR):
+  - `cross_uarch_crr_efficiency_comparison.svg`: CRR efficiency across architectures.
+  - `cross_uarch_crr_flop_cycle_comparison.svg`: CRR FLOP/cycle comparison.
+  - `cross_uarch_crr_vs_rrr_comparison.svg`: CRR vs RRR speedup (with `--compare-rrr`).
+  - `<simd>_<uarch>_crr_overview.svg`: Per-architecture CRR breakdown.
 
 ---
 
@@ -157,7 +194,7 @@ python3 plot_results.py --input-dir gemm-bench-results --freq zen4=5.4,m1=3.0
 This end-to-end tutorial demonstrates how to implement, register, test, benchmark, and analyze a new GEMM microkernel across the entire pipeline.
 
 ### Step 1: Implement the Kernel in C++
-Microkernels are implemented in [`include/GemmUKernel_opti.hpp`](file:///home/ivan/Files/projets/gemm_bench/include/GemmUKernel_opti.hpp) (or [`include/GemmUKernel_explo.hpp`](file:///home/ivan/Files/projets/gemm_bench/include/GemmUKernel_explo.hpp) for exploratory variants).
+Microkernels are implemented in `include/microkernels/GemmUKernel_opti_rrr.hpp` (RRR layout) or `include/microkernels/GemmUKernel_opti_crr.hpp` (CRR layout). Exploratory kernels go in `include/microkernels/GemmUKernel_explo.hpp`.
 
 1. **Choose Register Tile Geometry ($M_R \times N_R$)**:
    - In elements: $M_R$ rows $\times$ $N_R$ columns, where $N_R = N_V \times VL$ ($N_V$ vectors wide, $VL = \text{vlen}$).
@@ -172,7 +209,7 @@ Microkernels are implemented in [`include/GemmUKernel_opti.hpp`](file:///home/iv
 
 2. **Inner Loop Pattern**:
    ```cpp
-   // In include/GemmUKernel_opti.hpp (inside template <typename T> class GemmUKernel):
+   // In include/microkernels/GemmUKernel_opti_rrr.hpp (inside template <typename T> class GemmUKernel):
    template <int lmul = 1, bool FastPath = false>
    static inline void
    gemm_mippv2_myukernel_core(const PackedRowMajor<T> &__restrict A,
@@ -252,7 +289,7 @@ Microkernels are implemented in [`include/GemmUKernel_opti.hpp`](file:///home/iv
    }
    ```
 
-### Step 2: Register in `include/GemmUKernel.h`
+### Step 2: Register in `include/microkernels/GemmUKernel.h`
 1. Add the enum identifier in `UKernelType`:
    ```cpp
    enum class UKernelType {
@@ -263,9 +300,10 @@ Microkernels are implemented in [`include/GemmUKernel_opti.hpp`](file:///home/iv
 
 2. Add a `KernelDescriptor` to `kernelTable`:
    ```cpp
-   {UKernelType::mippv2_myukernel, "mippv2_myukernel", RRR, 64},
+   {UKernelType::mippv2_myukernel, "mippv2_myukernel", RRR, 64, 4, 3},
    ```
    - Specify layout: `RRR` (Row-major $A, B, C$) or `CRR` (Col-major $A$, Row-major $B, C$).
+   - `MR` and `NR_vec` define the register tile geometry for auto-sizing.
    - Specify minimal tile size: typically `64`.
 
 ### Step 3: Wire in `src/main.cpp`
@@ -359,7 +397,7 @@ Generative AI assistants (**Google Gemini** and **OpenAI ChatGPT**) were utilize
 The foundational DGEMM microkernel designs tuned for **Intel Skylake** (AVX2 + FMA) and the **SpacemiT K3 X100** core are the result of multiple weeks of work and reflection on the underlying microarchitectures and platforms. And the best **X100** microkernels are, I think, some of the best results of my internship.
 
 For subsequent target microarchitectures, the methodology was empirical, the exploration workflow relied on pre-established invariants:
-- **Consistent Layout**: Favoring the $RRR$ packing format (Row-major $A, B, C$). I've messed with CRR & CRC when I was getting desperate on the X60. It didn't amount to much...
+- **Layout Exploration**: Both the $RRR$ format (Row-major $A, B, C$) and the $CRR$ format (Column-major $A$, Row-major $B, C$) are implemented. CRR uses the GotoBLAS / BLIS packing convention where $A$ is stored contiguously along $M_R$ with leading dimension $= M_R$, matching the inner kernel's access pattern. CRR microkernels achieve comparable or higher peak efficiency than RRR on most microarchitectures (up to **99.3%** on M1).
 - **Inner-Loop Access Patterns**: Preserving either the scalar broadcast pattern (`mipp::set1` + `mipp::fmadd`) or the indexed FMA pattern (`mipp::fmaddi`) on matrix $A$.
 
 Under these, the exploration focused on sweeping register block dimensions ($M_R \times N_R$) that made sense given the uarch characteristics. Register file size, number of FMA pipelines/execution units and FMA latency being the three things that answer the questions :

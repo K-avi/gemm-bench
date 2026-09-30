@@ -31,6 +31,7 @@ enum class UKernelType {
   // Champions (CRR)
   mippv2_meteorlake_mr4_nr3_crr,
   mippv2_a76_mr6_nr4_fmaddi_crr,
+  // Alias: A76 mr6_nr3_crr uses the same implementation as mr6_nr4_fmaddi_crr
   mippv2_a76_mr6_nr3_crr = mippv2_a76_mr6_nr4_fmaddi_crr,
   mippv2_zen4_mr4_nr4_fmaddi_crr,
   mippv2_firestorm_mr4_nr4_fmaddi_crr,
