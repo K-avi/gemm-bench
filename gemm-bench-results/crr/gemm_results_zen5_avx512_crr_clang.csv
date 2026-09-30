@@ -1,7 +1,7 @@
 Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS
-native,mippv2_firestorm_mr4_nr4_fmaddi_crr,4,32,32,1,0,1.01345e-07,80.8324
-native,mippv2_firestorm_mr4_nr4_fmaddi_crr,4,32,64,1,0,2.02706e-07,80.8265
-native,mippv2_firestorm_mr4_nr4_fmaddi_crr,4,32,128,1,0,4.0511e-07,80.8868
-native,mippv2_firestorm_mr4_nr4_fmaddi_crr,4,32,256,1,0,8.13476e-07,80.5629
-native,mippv2_firestorm_mr4_nr4_fmaddi_crr,4,32,512,1,0,1.62605e-06,80.6077
-native,mippv2_firestorm_mr4_nr4_fmaddi_crr,4,32,1024,1,0,3.25274e-06,80.5919
+native,mippv2_firestorm_mr4_nr4_fmaddi_crr,4,32,32,1,0,1.01474e-07,80.7297
+native,mippv2_firestorm_mr4_nr4_fmaddi_crr,4,32,64,1,0,2.03015e-07,80.7035
+native,mippv2_firestorm_mr4_nr4_fmaddi_crr,4,32,128,1,0,4.06083e-07,80.6928
+native,mippv2_firestorm_mr4_nr4_fmaddi_crr,4,32,256,1,0,8.14386e-07,80.4729
+native,mippv2_firestorm_mr4_nr4_fmaddi_crr,4,32,512,1,0,1.62604e-06,80.608
+native,mippv2_firestorm_mr4_nr4_fmaddi_crr,4,32,1024,1,0,3.25414e-06,80.5571

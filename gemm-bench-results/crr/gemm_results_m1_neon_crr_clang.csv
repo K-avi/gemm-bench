@@ -1,7 +1,7 @@
 Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS
-native,mippv2_x60_mr6_nr4_fmaddi_crr,6,8,32,1,0,6.82971e-08,44.9799
-native,mippv2_x60_mr6_nr4_fmaddi_crr,6,8,64,1,0,1.31691e-07,46.6546
-native,mippv2_x60_mr6_nr4_fmaddi_crr,6,8,128,1,0,2.62737e-07,46.7692
-native,mippv2_x60_mr6_nr4_fmaddi_crr,6,8,256,1,0,5.16257e-07,47.6042
-native,mippv2_x60_mr6_nr4_fmaddi_crr,6,8,512,1,0,1.02369e-06,48.0145
-native,mippv2_x60_mr6_nr4_fmaddi_crr,6,8,1024,1,0,2.03891e-06,48.214
+native,mippv2_x60_mr6_nr4_fmaddi_crr,6,8,32,1,0,6.82865e-08,44.9869
+native,mippv2_x60_mr6_nr4_fmaddi_crr,6,8,64,1,0,1.31683e-07,46.6576
+native,mippv2_x60_mr6_nr4_fmaddi_crr,6,8,128,1,0,2.62647e-07,46.7852
+native,mippv2_x60_mr6_nr4_fmaddi_crr,6,8,256,1,0,5.16462e-07,47.5853
+native,mippv2_x60_mr6_nr4_fmaddi_crr,6,8,512,1,0,1.02386e-06,48.0067
+native,mippv2_x60_mr6_nr4_fmaddi_crr,6,8,1024,1,0,2.03893e-06,48.2135

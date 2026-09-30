@@ -1,7 +1,7 @@
 Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS
-native,mippv2_a76_mr6_nr4_fmaddi_crr,6,8,32,1,0,1.75459e-07,17.5083
-native,mippv2_a76_mr6_nr4_fmaddi_crr,6,8,64,1,0,3.37085e-07,18.2269
-native,mippv2_a76_mr6_nr4_fmaddi_crr,6,8,128,1,0,6.58619e-07,18.6572
-native,mippv2_a76_mr6_nr4_fmaddi_crr,6,8,256,1,0,1.30086e-06,18.8922
-native,mippv2_a76_mr6_nr4_fmaddi_crr,6,8,512,1,0,2.61364e-06,18.8059
-native,mippv2_a76_mr6_nr4_fmaddi_crr,6,8,1024,1,0,5.43116e-06,18.1
+native,mippv2_a76_mr6_nr4_fmaddi_crr,6,8,32,1,0,1.75513e-07,17.503
+native,mippv2_a76_mr6_nr4_fmaddi_crr,6,8,64,1,0,3.37017e-07,18.2305
+native,mippv2_a76_mr6_nr4_fmaddi_crr,6,8,128,1,0,6.58755e-07,18.6534
+native,mippv2_a76_mr6_nr4_fmaddi_crr,6,8,256,1,0,1.30098e-06,18.8903
+native,mippv2_a76_mr6_nr4_fmaddi_crr,6,8,512,1,0,2.61683e-06,18.783
+native,mippv2_a76_mr6_nr4_fmaddi_crr,6,8,1024,1,0,5.43588e-06,18.0843
