@@ -457,7 +457,7 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
 
         echo "Flags: ${FORMATTED_FLAGS}"
 
-        TEST_BUILD_FLAG=""
+        TEST_BUILD_FLAG="-DGEMMBENCH_BUILD_TESTS=OFF"
         if [[ "$RUN_TESTS" == "true" ]]; then
             TEST_BUILD_FLAG="-DGEMMBENCH_BUILD_TESTS=ON"
         fi
@@ -476,9 +476,11 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
             ${TEST_BUILD_FLAG} \
             ${CATCH2_PREFIX_FLAG}
 
-        BUILD_TARGET_FLAG=""
+        BUILD_TARGET_FLAG="--target GemmBench"
         if [[ "$TESTS_ONLY" == "true" ]]; then
             BUILD_TARGET_FLAG="--target GemmBenchTests"
+        elif [[ "$RUN_TESTS" == "true" ]]; then
+            BUILD_TARGET_FLAG=""
         fi
 
         cmake --build "${BUILD_DIR}" ${BUILD_TARGET_FLAG} --parallel
