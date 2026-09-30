@@ -479,10 +479,13 @@ echo -e "Les fichiers de résultats CSV sont disponibles dans le dossier partag�
 # -----------------------------------------------------------------------------
 echo
 echo -e "${BLUE}[3/3] Rapatriement (scp) des résultats CSV vers la machine locale...${NC}"
-mkdir -p gemm-bench-results/crr
+mkdir -p gemm-bench-results/crr gemm-bench-results/rrr
 if scp -q "${FRONT_HOST}:${REMOTE_DIR}/results/*_crr_*.csv" gemm-bench-results/crr/ 2>/dev/null; then
-    echo -e "${GREEN}✓ Résultats rapatriés avec succès dans gemm-bench-results/crr/${NC}"
+    echo -e "${GREEN}✓ Résultats CRR rapatriés avec succès dans gemm-bench-results/crr/${NC}"
     ls -lh gemm-bench-results/crr/
-else
-    echo -e "${YELLOW}Avertissement : aucun CSV CRR trouvé à rapatrier.${NC}"
 fi
+if scp -q "${FRONT_HOST}:${REMOTE_DIR}/results/*_rrr_*.csv" gemm-bench-results/rrr/ 2>/dev/null; then
+    echo -e "${GREEN}✓ Résultats RRR rapatriés avec succès dans gemm-bench-results/rrr/${NC}"
+    ls -lh gemm-bench-results/rrr/
+fi
+
