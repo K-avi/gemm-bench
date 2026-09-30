@@ -345,6 +345,7 @@ run_target() {
     if [[ "$target" == "x60" ]]; then
         # Le binaire Clang a été compilé sur X100; éviter qu'un rebuild local n'appelle clang++ défaillant sur x60
         target_bench_flags="${target_bench_flags//--rebuild/}"
+        target_bench_flags="${target_bench_flags//--tests /}"
     fi
 
     local bench_cmd="${pre_cmd} PLATFORM_TAG=${target} ${wrapper}./run_benchmarks.sh ${platform} ${target_bench_flags} ${compilers}"
