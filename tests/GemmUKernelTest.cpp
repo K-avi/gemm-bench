@@ -8,22 +8,55 @@
 
 using namespace GEMMBench;
 
-#define TEST_KERNEL(NAME, CALL)                                                \
-  SECTION(NAME) {                                                              \
-    std::fill_n(C_test.data, C_test.padded_rows * C_test.padded_cols, T{});    \
-                                                                               \
-    CALL;                                                                      \
-                                                                               \
-    checkMatrixEqual(C_ref, C_test);                                           \
+template <typename T>
+constexpr T CANARY_VALUE() {
+  return static_cast<T>(-1337.125);
+}
+
+template <typename M>
+static void fillPaddingWithCanary(M &mat) {
+  using T = typename M::value_type;
+  const T canary = CANARY_VALUE<T>();
+  for (size_t i = 0; i < mat.padded_rows; ++i) {
+    for (size_t j = 0; j < mat.padded_cols; ++j) {
+      if (i >= mat.rows || j >= mat.cols) {
+        mat[i][j] = canary;
+      }
+    }
   }
+}
+
+template <typename M>
+static void checkPaddingIntact(const M &mat) {
+  using T = typename M::value_type;
+  const T canary = CANARY_VALUE<T>();
+  for (size_t i = 0; i < mat.padded_rows; ++i) {
+    for (size_t j = 0; j < mat.padded_cols; ++j) {
+      if (i >= mat.rows || j >= mat.cols) {
+        INFO("Padding clobbered at (" << i << ", " << j << ") got=" << mat[i][j]
+                                     << " expected canary=" << canary);
+        REQUIRE(mat[i][j] == canary);
+      }
+    }
+  }
+}
+
+template <typename T>
+constexpr T defaultEps(size_t K) {
+  if constexpr (std::is_same_v<T, float>) {
+    return static_cast<T>(1e-4 + K * 1e-6);
+  } else {
+    return static_cast<T>(1e-10 + K * 1e-13);
+  }
+}
 
 template <typename MA, typename MB>
 static void
-checkMatrixEqual(const MA &A, const MB &B,
-                 typename MA::value_type eps = typename MA::value_type(1e-5)) {
+checkMatrixEqual(const MA &A, const MB &B, size_t K = 32) {
   using T = typename MA::value_type;
 
   static_assert(std::is_same_v<T, typename MB::value_type>);
+  const T eps = defaultEps<T>(K);
 
   REQUIRE(A.rows == B.rows);
   REQUIRE(A.cols == B.cols);
@@ -46,6 +79,13 @@ checkMatrixEqual(const MA &A, const MB &B,
   }
 }
 
+template <typename MRef, typename MTest>
+static void
+checkMatrixAndPadding(const MRef &ref, const MTest &test, size_t K = 32) {
+  checkMatrixEqual(test, ref, K);
+  checkPaddingIntact(test);
+}
+
 template <typename MDest, typename MSrc>
 static void resetMatrix(MDest &dest, const MSrc &src) {
   REQUIRE(dest.rows == src.rows);
@@ -55,7 +95,18 @@ static void resetMatrix(MDest &dest, const MSrc &src) {
       dest(i, j) = src(i, j);
     }
   }
+  fillPaddingWithCanary(dest);
 }
+
+#define TEST_KERNEL(NAME, CALL)                                                \
+  SECTION(NAME) {                                                              \
+    std::fill_n(C_test.data, C_test.padded_rows * C_test.padded_cols, T{});    \
+    fillPaddingWithCanary(C_test);                                             \
+                                                                               \
+    CALL;                                                                      \
+                                                                               \
+    checkMatrixAndPadding(C_ref, C_test, K);                                   \
+  }
 
 template <typename T, class AMatrix, class BMatrix, class CMatrix>
 static void testGemmSuite() {
@@ -268,10 +319,11 @@ static void testGemmSuiteCRR(size_t M = 32, size_t N = 32, size_t K = 32,
 #define TEST_KERNEL(NAME, CALL)                                                \
   SECTION(NAME) {                                                              \
     std::fill_n(C_test.data, C_test.padded_rows * C_test.padded_cols, T{});    \
+    fillPaddingWithCanary(C_test);                                             \
                                                                                \
     CALL;                                                                      \
                                                                                \
-    checkMatrixEqual(C_test, C_ref);                                           \
+    checkMatrixAndPadding(C_ref, C_test, K);                                   \
   }
 
   // CRR Champion kernels
@@ -372,8 +424,9 @@ static void testGemmNonSquareCRR(size_t M, size_t N, size_t K,
 #define TEST_KERNEL(NAME, CALL)                                                \
   SECTION(NAME) {                                                              \
     std::fill_n(C_test.data, C_test.padded_rows * C_test.padded_cols, T{});    \
+    fillPaddingWithCanary(C_test);                                             \
     CALL;                                                                      \
-    checkMatrixEqual(C_test, C_ref);                                           \
+    checkMatrixAndPadding(C_ref, C_test, K);                                   \
   }
 
   // CRR Champion kernels — same set as testGemmSuiteCRR
@@ -437,6 +490,9 @@ template <typename T> static void testAlphaBetaSuite() {
       {T{1.0}, T{1.0}, "alpha=1.0, beta=1.0"},
       {T{2.5}, T{0.5}, "alpha=2.5, beta=0.5"},
       {T{0.0}, T{1.0}, "alpha=0.0, beta=1.0"},
+      {T{0.0}, T{0.0}, "alpha=0.0, beta=0.0 (BLAS zeroing)"},
+      {T{-1.0}, T{1.0}, "alpha=-1.0, beta=1.0 (subtraction)"},
+      {T{-1.0}, T{-1.0}, "alpha=-1.0, beta=-1.0 (neg accumulation)"},
   };
 
   for (const auto &p : params) {
@@ -630,6 +686,9 @@ static void testAlphaBetaSuiteCRR(size_t M = 32, size_t N = 32, size_t K = 32,
       {T{1.0}, T{1.0}, "alpha=1.0, beta=1.0"},
       {T{2.5}, T{0.5}, "alpha=2.5, beta=0.5"},
       {T{0.0}, T{1.0}, "alpha=0.0, beta=1.0"},
+      {T{0.0}, T{0.0}, "alpha=0.0, beta=0.0 (BLAS zeroing)"},
+      {T{-1.0}, T{1.0}, "alpha=-1.0, beta=1.0 (subtraction)"},
+      {T{-1.0}, T{-1.0}, "alpha=-1.0, beta=-1.0 (neg accumulation)"},
   };
 
   for (const auto &p : params) {
@@ -770,12 +829,15 @@ TEST_CASE("GEMM CRR kernels 35x32x32 (tail rows all)", "[gemm][crr]") {
 
 // Tail cols: N % NR != 0, N must be VL-aligned.
 // Kernels handle N down to VL granularity (BLIS handles sub-VL via edge kernel).
-// With VL=4 (AVX2 double): N=16 -> 4x2+4x1 paths, N=24 -> NR3+4x1 (meteorlake)
-TEST_CASE("GEMM CRR kernels 32x16x32 (tail cols 4x2+4x1)", "[gemm][crr]") {
-  testGemmSuiteCRR<double>(32, 16, 32);
+// Dynamic VL alignment ensures portability across NEON (VL=2), AVX2/RVV256 (VL=4),
+// AVX-512 (VL=8), and RVV1024 (VL=16).
+TEST_CASE("GEMM CRR kernels tail cols (1*VL)", "[gemm][crr]") {
+  constexpr size_t VL = mipp::N<double>();
+  testGemmSuiteCRR<double>(32, 1 * VL, 32);
 }
-TEST_CASE("GEMM CRR kernels 32x24x32 (tail cols NR3+4x1)", "[gemm][crr]") {
-  testGemmSuiteCRR<double>(32, 24, 32);
+TEST_CASE("GEMM CRR kernels tail cols (3*VL)", "[gemm][crr]") {
+  constexpr size_t VL = mipp::N<double>();
+  testGemmSuiteCRR<double>(32, 3 * VL, 32);
 }
 
 // K non-multiple of 4 (meteorlake K4 peel loop)
@@ -789,8 +851,9 @@ TEST_CASE("GEMM CRR kernels 32x32x512 (large K)", "[gemm][crr]") {
 }
 
 // Combined: all tails simultaneously (N VL-aligned)
-TEST_CASE("GEMM CRR kernels 37x24x35 (combined tails)", "[gemm][crr]") {
-  testGemmSuiteCRR<double>(37, 24, 35);
+TEST_CASE("GEMM CRR kernels combined tails (37 x 3*VL x 35)", "[gemm][crr]") {
+  constexpr size_t VL = mipp::N<double>();
+  testGemmSuiteCRR<double>(37, 3 * VL, 35);
 }
 
 // Different seed: stochastic coverage
@@ -803,11 +866,22 @@ TEST_CASE("GEMM CRR kernels 32x32x32 seed=0xDEAD", "[gemm][crr]") {
 TEST_CASE("GEMM CRR Non-square 48x64x32", "[gemm][crr]") {
   testGemmNonSquareCRR<double>(48, 64, 32);
 }
-TEST_CASE("GEMM CRR Non-square 33x36x35 (tail rows + K%4)", "[gemm][crr]") {
-  testGemmNonSquareCRR<double>(33, 36, 35);
+TEST_CASE("GEMM CRR Non-square (33 x 5*VL x 35) (tail rows + K%4)", "[gemm][crr]") {
+  constexpr size_t VL = mipp::N<double>();
+  testGemmNonSquareCRR<double>(33, 5 * VL, 35);
 }
 TEST_CASE("GEMM CRR Non-square 49x64x32 (tail row only)", "[gemm][crr]") {
   testGemmNonSquareCRR<double>(49, 64, 32);
+}
+
+// Isolated nominal single-tile unit tests matching benchmark fast-path without tails
+TEST_CASE("GEMM CRR nominal single tile MR6 (6 x 4*VL x 128)", "[gemm][crr]") {
+  constexpr size_t VL = mipp::N<double>();
+  testGemmSuiteCRR<double>(6, 4 * VL, 128);
+}
+TEST_CASE("GEMM CRR nominal single tile MR7 (7 x 4*VL x 128)", "[gemm][crr]") {
+  constexpr size_t VL = mipp::N<double>();
+  testGemmSuiteCRR<double>(7, 4 * VL, 128);
 }
 
 TEST_CASE("GEMM Alpha Beta scaling and accumulation", "[gemm]") {
@@ -839,8 +913,9 @@ template <typename T> static void testGemmNonSquare() {
 #define TEST_KERNEL(NAME, CALL)                                                \
   SECTION(NAME) {                                                              \
     std::fill_n(C_test.data, C_test.padded_rows * C_test.padded_cols, T{});    \
+    fillPaddingWithCanary(C_test);                                             \
     CALL;                                                                      \
-    checkMatrixEqual(C_ref, C_test);                                           \
+    checkMatrixAndPadding(C_ref, C_test, K);                                   \
   }
 
   // Champions
@@ -875,4 +950,28 @@ template <typename T> static void testGemmNonSquare() {
 
 TEST_CASE("GEMM Non-square dimensions (M!=N!=K)", "[gemm]") {
   testGemmNonSquare<double>();
+}
+
+// ===========================================================================
+// FP32 (Single Precision float) Tests
+// ===========================================================================
+TEST_CASE("GEMM RRR kernels float", "[gemm][float]") {
+  testGemmSuite<float, PackedRowMajor<float>, PackedRowMajor<float>,
+                PackedRowMajor<float>>();
+}
+
+TEST_CASE("GEMM CRR kernels float (nominal)", "[gemm][crr][float]") {
+  constexpr size_t VL = mipp::N<float>();
+  testGemmSuiteCRR<float>(32, 4 * VL, 32);
+}
+
+TEST_CASE("GEMM CRR kernels float (tail rows)", "[gemm][crr][float]") {
+  constexpr size_t VL = mipp::N<float>();
+  testGemmSuiteCRR<float>(33, 4 * VL, 32);
+}
+
+TEST_CASE("GEMM Alpha Beta scaling float", "[gemm][float]") {
+  constexpr size_t VL = mipp::N<float>();
+  testAlphaBetaSuite<float>();
+  testAlphaBetaSuiteCRR<float>(32, 4 * VL, 32, 42);
 }

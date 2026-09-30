@@ -1489,10 +1489,10 @@
   // =========================================================================
 
   struct ABlock4 {
-    double d0;
-    double d1;
-    double d2;
-    double d3;
+    T d0;
+    T d1;
+    T d2;
+    T d3;
   };
 
   // FastPath 3-argument version (alpha=1, beta=0): identical to origin/main

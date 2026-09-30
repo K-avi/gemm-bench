@@ -795,12 +795,13 @@
     const size_t a_ld4 = 4 * a_ld;
     const size_t b_ld4 = 4 * b_ld;
     const size_t Mfull = (A.rows / MR) * MR;
+    const size_t Nfull = (B.cols / NR) * NR;
     const size_t K4 = A.cols / 4;
 
     for (size_t i = 0; i < Mfull; i += MR) {
       const T *a_base = A.data + i;
 
-      for (size_t j = 0; j < B.cols; j += NR) {
+      for (size_t j = 0; j < Nfull; j += NR) {
         auto c00 = set0<T, lmul>();
         auto c01 = set0<T, lmul>();
         auto c10 = set0<T, lmul>();
@@ -892,10 +893,86 @@
         store(C[i + 2] + j, c20);
         store(C[i + 2] + j + VL, c21);
       }
+
+      // Remainder columns: 1 vector (VL)
+      size_t j = Nfull;
+      while (j + VL <= B.cols) {
+        auto c00 = set0<T, lmul>();
+        auto c10 = set0<T, lmul>();
+        auto c20 = set0<T, lmul>();
+
+        const T *__restrict a_k = a_base;
+        const T *__restrict b_k = B.data + j;
+
+        for (size_t kk = 0; kk < K4; ++kk) {
+          const T a0_k0 = a_k[0], a1_k0 = a_k[1], a2_k0 = a_k[2];
+          const T *a_k1 = a_k + a_ld;
+          const T a0_k1 = a_k1[0], a1_k1 = a_k1[1], a2_k1 = a_k1[2];
+          const T *a_k2 = a_k1 + a_ld;
+          const T a0_k2 = a_k2[0], a1_k2 = a_k2[1], a2_k2 = a_k2[2];
+          const T *a_k3 = a_k2 + a_ld;
+          const T a0_k3 = a_k3[0], a1_k3 = a_k3[1], a2_k3 = a_k3[2];
+          a_k += a_ld4;
+
+          const T *b_k1 = b_k + b_ld;
+          const T *b_k2 = b_k1 + b_ld;
+          const T *b_k3 = b_k2 + b_ld;
+
+          auto b00 = load<T, lmul>(b_k);
+          c00 = fmaddi(b00, a0_k0, c00);
+          c10 = fmaddi(b00, a1_k0, c10);
+          c20 = fmaddi(b00, a2_k0, c20);
+
+          b00 = load<T, lmul>(b_k1);
+          c00 = fmaddi(b00, a0_k1, c00);
+          c10 = fmaddi(b00, a1_k1, c10);
+          c20 = fmaddi(b00, a2_k1, c20);
+
+          b00 = load<T, lmul>(b_k2);
+          c00 = fmaddi(b00, a0_k2, c00);
+          c10 = fmaddi(b00, a1_k2, c10);
+          c20 = fmaddi(b00, a2_k2, c20);
+
+          b00 = load<T, lmul>(b_k3);
+          b_k += b_ld4;
+          c00 = fmaddi(b00, a0_k3, c00);
+          c10 = fmaddi(b00, a1_k3, c10);
+          c20 = fmaddi(b00, a2_k3, c20);
+        }
+
+        for (size_t k = K4 * 4; k < A.cols; ++k) {
+          const auto b0 = load<T, lmul>(b_k);
+          b_k += b_ld;
+          c00 = fmaddi(b0, a_k[0], c00);
+          c10 = fmaddi(b0, a_k[1], c10);
+          c20 = fmaddi(b0, a_k[2], c20);
+          a_k += a_ld;
+        }
+
+        store(C[i + 0] + j, c00);
+        store(C[i + 1] + j, c10);
+        store(C[i + 2] + j, c20);
+        j += VL;
+      }
+
+      // Scalar tail for remainder columns
+      for (; j < B.cols; ++j) {
+        T c0 = T{0}, c1 = T{0}, c2 = T{0};
+        for (size_t k = 0; k < A.cols; ++k) {
+          const T b_val = B.data[k * b_ld + j];
+          c0 += a_base[0 + k * a_ld] * b_val;
+          c1 += a_base[1 + k * a_ld] * b_val;
+          c2 += a_base[2 + k * a_ld] * b_val;
+        }
+        C[i + 0][j] = c0;
+        C[i + 1][j] = c1;
+        C[i + 2][j] = c2;
+      }
     }
 
     for (size_t i = Mfull; i < A.rows; ++i) {
-      for (size_t j = 0; j < B.cols; j += NR) {
+      size_t j = 0;
+      for (; j + NR <= B.cols; j += NR) {
         auto c0 = set0<T, lmul>();
         auto c1 = set0<T, lmul>();
 
@@ -929,6 +1006,38 @@
         store(C[i] + j, c0);
         store(C[i] + j + VL, c1);
       }
+
+      while (j + VL <= B.cols) {
+        auto c0 = set0<T, lmul>();
+        const T *__restrict a_k = A.data + i;
+
+        for (size_t kk = 0; kk < K4; ++kk) {
+          c0 = fmaddi(load<T, lmul>(B[4 * kk + 0] + j), a_k[0], c0);
+          a_k += a_ld;
+          c0 = fmaddi(load<T, lmul>(B[4 * kk + 1] + j), a_k[0], c0);
+          a_k += a_ld;
+          c0 = fmaddi(load<T, lmul>(B[4 * kk + 2] + j), a_k[0], c0);
+          a_k += a_ld;
+          c0 = fmaddi(load<T, lmul>(B[4 * kk + 3] + j), a_k[0], c0);
+          a_k += a_ld;
+        }
+
+        for (size_t k = K4 * 4; k < A.cols; ++k) {
+          c0 = fmaddi(load<T, lmul>(B[k] + j), a_k[0], c0);
+          a_k += a_ld;
+        }
+
+        store(C[i] + j, c0);
+        j += VL;
+      }
+
+      for (; j < B.cols; ++j) {
+        T c0 = T{0};
+        for (size_t k = 0; k < A.cols; ++k) {
+          c0 += A.data[i + k * a_ld] * B.data[k * b_ld + j];
+        }
+        C[i][j] = c0;
+      }
     }
   }
 
@@ -954,6 +1063,7 @@
     const size_t a_ld4 = 4 * a_ld;
     const size_t b_ld4 = 4 * b_ld;
     const size_t Mfull = (A.rows / MR) * MR;
+    const size_t Nfull = (B.cols / NR) * NR;
     const size_t K4 = A.cols / 4;
 
     for (size_t i = 0; i < Mfull; i += MR) {
@@ -963,7 +1073,7 @@
       T *__restrict c1_base = C[i + 1];
       T *__restrict c2_base = C[i + 2];
 
-      for (size_t j = 0; j < B.cols; j += NR) {
+      for (size_t j = 0; j < Nfull; j += NR) {
         auto c00 = set0<T, lmul>();
         auto c01 = set0<T, lmul>();
         auto c10 = set0<T, lmul>();
@@ -1055,11 +1165,86 @@
         Epilogue::store<T, lmul, false>(c2_base + j, c20, alpha, beta);
         Epilogue::store<T, lmul, false>(c2_base + j + VL, c21, alpha, beta);
       }
+
+      // Remainder columns: 1 vector (VL)
+      size_t j = Nfull;
+      while (j + VL <= B.cols) {
+        auto c00 = set0<T, lmul>();
+        auto c10 = set0<T, lmul>();
+        auto c20 = set0<T, lmul>();
+
+        const T *__restrict a_k = a_base;
+        const T *__restrict b_k = B.data + j;
+
+        for (size_t kk = 0; kk < K4; ++kk) {
+          const T a0_k0 = a_k[0], a1_k0 = a_k[1], a2_k0 = a_k[2];
+          const T *a_k1 = a_k + a_ld;
+          const T a0_k1 = a_k1[0], a1_k1 = a_k1[1], a2_k1 = a_k1[2];
+          const T *a_k2 = a_k1 + a_ld;
+          const T a0_k2 = a_k2[0], a1_k2 = a_k2[1], a2_k2 = a_k2[2];
+          const T *a_k3 = a_k2 + a_ld;
+          const T a0_k3 = a_k3[0], a1_k3 = a_k3[1], a2_k3 = a_k3[2];
+          a_k += a_ld4;
+
+          const T *b_k1 = b_k + b_ld;
+          const T *b_k2 = b_k1 + b_ld;
+          const T *b_k3 = b_k2 + b_ld;
+
+          auto b00 = load<T, lmul>(b_k);
+          c00 = fmaddi(b00, a0_k0, c00);
+          c10 = fmaddi(b00, a1_k0, c10);
+          c20 = fmaddi(b00, a2_k0, c20);
+
+          b00 = load<T, lmul>(b_k1);
+          c00 = fmaddi(b00, a0_k1, c00);
+          c10 = fmaddi(b00, a1_k1, c10);
+          c20 = fmaddi(b00, a2_k1, c20);
+
+          b00 = load<T, lmul>(b_k2);
+          c00 = fmaddi(b00, a0_k2, c00);
+          c10 = fmaddi(b00, a1_k2, c10);
+          c20 = fmaddi(b00, a2_k2, c20);
+
+          b00 = load<T, lmul>(b_k3);
+          b_k += b_ld4;
+          c00 = fmaddi(b00, a0_k3, c00);
+          c10 = fmaddi(b00, a1_k3, c10);
+          c20 = fmaddi(b00, a2_k3, c20);
+        }
+
+        for (size_t k = K4 * 4; k < A.cols; ++k) {
+          const auto b0 = load<T, lmul>(b_k);
+          b_k += b_ld;
+          c00 = fmaddi(b0, a_k[0], c00);
+          c10 = fmaddi(b0, a_k[1], c10);
+          c20 = fmaddi(b0, a_k[2], c20);
+          a_k += a_ld;
+        }
+
+        Epilogue::store<T, lmul, false>(c0_base + j, c00, alpha, beta);
+        Epilogue::store<T, lmul, false>(c1_base + j, c10, alpha, beta);
+        Epilogue::store<T, lmul, false>(c2_base + j, c20, alpha, beta);
+        j += VL;
+      }
+
+      for (; j < B.cols; ++j) {
+        T c0 = T{0}, c1 = T{0}, c2 = T{0};
+        for (size_t k = 0; k < A.cols; ++k) {
+          const T b_val = B.data[k * b_ld + j];
+          c0 += a_base[0 + k * a_ld] * b_val;
+          c1 += a_base[1 + k * a_ld] * b_val;
+          c2 += a_base[2 + k * a_ld] * b_val;
+        }
+        Epilogue::store(c0_base + j, c0, alpha, beta);
+        Epilogue::store(c1_base + j, c1, alpha, beta);
+        Epilogue::store(c2_base + j, c2, alpha, beta);
+      }
     }
 
     for (size_t i = Mfull; i < A.rows; ++i) {
       T *__restrict c_base = C[i];
-      for (size_t j = 0; j < B.cols; j += NR) {
+      size_t j = 0;
+      for (; j + NR <= B.cols; j += NR) {
         auto c0 = set0<T, lmul>();
         auto c1 = set0<T, lmul>();
 
@@ -1083,8 +1268,50 @@
           a_k += a_ld;
         }
 
+        // K remainder
+        for (size_t k = K4 * 4; k < A.cols; ++k) {
+          c0 = fmaddi(load<T, lmul>(B[k] + j), a_k[0], c0);
+          c1 = fmaddi(load<T, lmul>(B[k] + j + VL), a_k[0], c1);
+          a_k += a_ld;
+        }
+
         Epilogue::store<T, lmul, false>(c_base + j, c0, alpha, beta);
         Epilogue::store<T, lmul, false>(c_base + j + VL, c1, alpha, beta);
+      }
+
+      while (j + VL <= B.cols) {
+        auto c0 = set0<T, lmul>();
+        const T *__restrict a_k = A.data + i;
+
+        for (size_t kk = 0; kk < K4; ++kk) {
+          c0 = fmaddi(load<T, lmul>(B[4 * kk + 0] + j), a_k[0], c0);
+          a_k += a_ld;
+
+          c0 = fmaddi(load<T, lmul>(B[4 * kk + 1] + j), a_k[0], c0);
+          a_k += a_ld;
+
+          c0 = fmaddi(load<T, lmul>(B[4 * kk + 2] + j), a_k[0], c0);
+          a_k += a_ld;
+
+          c0 = fmaddi(load<T, lmul>(B[4 * kk + 3] + j), a_k[0], c0);
+          a_k += a_ld;
+        }
+
+        for (size_t k = K4 * 4; k < A.cols; ++k) {
+          c0 = fmaddi(load<T, lmul>(B[k] + j), a_k[0], c0);
+          a_k += a_ld;
+        }
+
+        Epilogue::store<T, lmul, false>(c_base + j, c0, alpha, beta);
+        j += VL;
+      }
+
+      for (; j < B.cols; ++j) {
+        T c0 = T{0};
+        for (size_t k = 0; k < A.cols; ++k) {
+          c0 += A.data[i + k * a_ld] * B.data[k * b_ld + j];
+        }
+        Epilogue::store(c_base + j, c0, alpha, beta);
       }
     }
   }

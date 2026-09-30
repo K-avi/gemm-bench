@@ -446,52 +446,68 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
             EXPLO_FLAG="-DGEMMBENCH_ENABLE_EXPLO=OFF"
         fi
         BIN="${BUILD_DIR}/GemmBench"
+        TEST_BIN="${BUILD_DIR}/tests/GemmBenchTests"
 
-        if [[ -f "$BIN" && "$FORCE_REBUILD" != "true" ]]; then
+        NEED_BUILD=false
+        if [[ "$FORCE_REBUILD" == "true" ]]; then
+            NEED_BUILD=true
+        elif [[ "$TESTS_ONLY" == "true" ]]; then
+            if [[ ! -f "$TEST_BIN" ]]; then
+                NEED_BUILD=true
+            fi
+        else
+            if [[ ! -f "$BIN" ]]; then
+                NEED_BUILD=true
+            fi
+            if [[ "$RUN_TESTS" == "true" && ! -f "$TEST_BIN" ]]; then
+                NEED_BUILD=true
+            fi
+        fi
+
+        if [[ "$NEED_BUILD" == "true" ]]; then
             echo
             echo "======================================="
-            echo "Binary ${BIN} already exists, skipping build (use --rebuild to force)."
+            echo "Building ${VERSION} for ${PLATFORM_NAME} (${COMPILER}) in ${BUILD_DIR}"
             echo "======================================="
-            continue
+
+            FULL_FLAGS="${COMMON_FLAGS} ${ARCH_FLAGS[${VERSION}]} ${EXTRA_COMPILER_FLAGS}"
+            FORMATTED_FLAGS=$(echo "$FULL_FLAGS" | tr '\n' ' ' | tr -s ' ')
+
+            echo "Flags: ${FORMATTED_FLAGS}"
+
+            TEST_BUILD_FLAG="-DGEMMBENCH_BUILD_TESTS=OFF"
+            if [[ "$RUN_TESTS" == "true" ]]; then
+                TEST_BUILD_FLAG="-DGEMMBENCH_BUILD_TESTS=ON"
+            fi
+
+            LOCAL_CATCH2="$HOME/.local/catch2/$(uname -m)"
+            CATCH2_PREFIX_FLAG=""
+            if [[ -d "${LOCAL_CATCH2}" ]]; then
+                CATCH2_PREFIX_FLAG="-DCMAKE_PREFIX_PATH=${LOCAL_CATCH2}"
+            fi
+
+            cmake -B "${BUILD_DIR}" -S . \
+                -DCMAKE_BUILD_TYPE=Release \
+                -DCMAKE_CXX_COMPILER="${COMPILER}" \
+                -DCMAKE_CXX_FLAGS="${FORMATTED_FLAGS}" \
+                ${EXPLO_FLAG} \
+                ${TEST_BUILD_FLAG} \
+                ${CATCH2_PREFIX_FLAG}
+
+            BUILD_TARGET_FLAG="--target GemmBench"
+            if [[ "$TESTS_ONLY" == "true" ]]; then
+                BUILD_TARGET_FLAG="--target GemmBenchTests"
+            elif [[ "$RUN_TESTS" == "true" ]]; then
+                BUILD_TARGET_FLAG=""
+            fi
+
+            cmake --build "${BUILD_DIR}" ${BUILD_TARGET_FLAG} --parallel
+        else
+            echo
+            echo "======================================="
+            echo "Target binaries already exist, skipping build (use --rebuild to force)."
+            echo "======================================="
         fi
-
-        echo
-        echo "======================================="
-        echo "Building ${VERSION} for ${PLATFORM_NAME} (${COMPILER}) in ${BUILD_DIR}"
-        echo "======================================="
-
-        FULL_FLAGS="${COMMON_FLAGS} ${ARCH_FLAGS[${VERSION}]} ${EXTRA_COMPILER_FLAGS}"
-        FORMATTED_FLAGS=$(echo "$FULL_FLAGS" | tr '\n' ' ' | tr -s ' ')
-
-        echo "Flags: ${FORMATTED_FLAGS}"
-
-        TEST_BUILD_FLAG="-DGEMMBENCH_BUILD_TESTS=OFF"
-        if [[ "$RUN_TESTS" == "true" ]]; then
-            TEST_BUILD_FLAG="-DGEMMBENCH_BUILD_TESTS=ON"
-        fi
-
-        LOCAL_CATCH2="$HOME/.local/catch2/$(uname -m)"
-        CATCH2_PREFIX_FLAG=""
-        if [[ -d "${LOCAL_CATCH2}" ]]; then
-            CATCH2_PREFIX_FLAG="-DCMAKE_PREFIX_PATH=${LOCAL_CATCH2}"
-        fi
-
-        cmake -B "${BUILD_DIR}" -S . \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_CXX_COMPILER="${COMPILER}" \
-            -DCMAKE_CXX_FLAGS="${FORMATTED_FLAGS}" \
-            ${EXPLO_FLAG} \
-            ${TEST_BUILD_FLAG} \
-            ${CATCH2_PREFIX_FLAG}
-
-        BUILD_TARGET_FLAG="--target GemmBench"
-        if [[ "$TESTS_ONLY" == "true" ]]; then
-            BUILD_TARGET_FLAG="--target GemmBenchTests"
-        elif [[ "$RUN_TESTS" == "true" ]]; then
-            BUILD_TARGET_FLAG=""
-        fi
-
-        cmake --build "${BUILD_DIR}" ${BUILD_TARGET_FLAG} --parallel
 
         if [[ "$RUN_TESTS" == "true" ]]; then
             echo
