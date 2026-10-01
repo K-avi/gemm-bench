@@ -73,6 +73,22 @@ CRR microkernels use a column-major packed $A$ panel (leading dimension $= M_R$)
 > Server/desktop Zen 5 incorporates dual native 512-bit FMA units ($32\text{ DP FLOP/cycle}$), AMD's mobile Strix Point SoC implements dual 256-bit physical datapaths (*double-pumped* 512-bit FMA, identical to Zen 4), yielding a physical ceiling of **$16\text{ DP FLOP/cycle}$**.
 > If you own a Zen5 with 512-bit native FMA units and don't know what to do with it, I'd be very happy if you provided benchmarks results on the existing microkernels :o .
 
+### Methodological Scope & Current Limitations
+
+To interpret the reported throughput figures accurately, several methodological and architectural boundaries of the current benchmark suite must be highlighted:
+
+1. **Isolated Microkernel Scope (In-Cache / Single-Panel)**:
+   - Benchmarks evaluate the innermost $K$-loop on pre-packed micropanels $A$ ($M_R \times K$, column-major) and $B$ ($K \times N_R$, row-major) accumulating into an in-register tile ($M_R \times N_R$) and writing to $C$.
+   - Overheads of the 5-loop cache-blocking hierarchy (GotoBLAS / BLIS: $J_C, P_C, I_C, J_R, I_R$) and dynamic matrix repacking into memory buffers ($M_C \times K_C$, $K_C \times N_C$) are **not** included. End-to-end DGEMM performance within BLIS is part of ongoing integration work.
+2. **Canonical GEMM Regime**:
+   - Reported peak throughputs strictly evaluate the compute-bound canonical form $\alpha = 1.0, \beta = 0.0$ ($C \leftarrow AB$). Non-canonical operations ($\beta \neq 0.0$) introduce load-scale-accumulate overheads on $C$ that are supported functionally but not evaluated for peak throughput.
+3. **Tile Geometry & Edge Handling (Tails / Fringes)**:
+   - Peak pipeline saturation requires dimensions $M, N$ to be exact multiples of the register tile $M_R, N_R$ and depth $K$ to align with loop unrolling (typically 4). While all microkernels include functional scalar/vector remainder handling for unit-test validation, fringe handling in production BLAS is typically offloaded to dedicated edge kernels or zero-padded buffers.
+4. **Single-Thread & Precision Scope**:
+   - All measurements are strictly single-thread IEEE-754 double precision (`double` / FP64). Multi-threaded scaling and memory bus contention are not covered in this phase.
+5. **Clock Frequency Baseline**:
+   - Efficiencies are computed against the architectural theoretical ceiling ($\text{FLOP/cycle} \times \text{Frequency}$) using fixed nominal or verified sustained turbo frequencies. Direct empirical FPU pipeline ceilings (e.g. via isolated FMA throughput loops) will be integrated in future revisions.
+
 ---
 
 ## Hardware Platforms & Compiler Toolchains
