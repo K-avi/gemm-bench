@@ -20,9 +20,10 @@ __pycache__/
 env/
 venv/
 
-# Generated plot artifacts (not tracked)
+# Generated plot artifacts (not tracked, except documentation visuals)
 plots/
-plots_crr/
+plots_crr/*
+!plots_crr/cross_uarch_crr_efficiency_comparison.svg
 test_plots/
 
 # IDE and Editor
@@ -43,6 +44,7 @@ third_party/
 tools/install_cluster_catch2.sh
 
 # Local artifacts and disassembly dumps
+results/
 GemmBench_*
 dump_gemmbench_*/
 k3-6.pdf

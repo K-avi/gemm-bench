@@ -46,14 +46,14 @@ CRR microkernels use a column-major packed $A$ panel (leading dimension $= M_R$)
 
 | SIMD | Microarchitecture | CPU / SoC Model | Freq (GHz) | Peak FLOP/cyc | Comp | Peak GFLOP/s | DGEMM FLOP/cyc | % of Peak |
 | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **AVX-512** | **AMD Zen 5 Strix Point** | Ryzen AI 9 HX 370 | 5.1 | 16.0 | GCC | 81.4 | 15.95 | **99.7 %** |
-| **NEON** | **Apple M1 Firestorm** | M1 Ultra (P-core) | 3.0 | 16.0 | GCC | 48.2 | 15.89 | **99.3 %** |
-| **NEON** | **Cortex-A76** | Raspberry Pi 5 | 2.4 | 8.0 | Clang | 18.9 | 7.89 | **98.7 %** |
-| **AVX-512** | **AMD Zen 4** | Ryzen 9 7900X | 5.4 | 16.0 | GCC | 84.5 | 15.66 | **97.8 %** |
-| **RVV 1.0** | **SpacemiT X100** | K3 SoC (VLEN=256) | 2.4 | 8.0 | Clang | 18.7 | 7.78 | **97.3 %** |
-| **AVX2** | **Intel Meteor Lake** | Redwood Cove P-Core | 5.1** | 16.0 | Clang | 74.5 | 14.60 | **91.3 %** |
-| **AVX2** | **Intel Skylake** | Core i5-6200U | 2.3 | 16.0 | Clang | 33.5 | 14.57 | **91.0 %** |
-| **RVV 1.0** | **SpacemiT A100** | K3 SoC (VLEN=1024) | 2.0 | 8.0 | GCC | 13.2 | 6.62 | **82.8 %** |
+| **NEON** | **Apple M1 Firestorm** | M1 Ultra (P-core) | 3.0 | 16.0 | GCC | 48.3 | 15.90 | **99.4 %** |
+| **AVX-512** | **AMD Zen 5 Strix Point** | Ryzen AI 9 HX 370 | 5.1 | 16.0 | GCC | 81.0 | 15.88 | **99.3 %** |
+| **NEON** | **Cortex-A76** | Raspberry Pi 5 | 2.4 | 8.0 | Clang | 18.9 | 7.87 | **98.4 %** |
+| **AVX-512** | **AMD Zen 4** | Ryzen 9 7900X | 5.4 | 16.0 | GCC | 84.4 | 15.64 | **97.7 %** |
+| **RVV 1.0** | **SpacemiT X100** | K3 SoC (VLEN=256) | 2.4 | 8.0 | Clang | 18.5 | 7.70 | **96.2 %** |
+| **AVX2** | **Intel Skylake** | Core i5-6200U | 2.3 | 16.0 | Clang | 35.0 | 15.21 | **95.0 %** |
+| **AVX2** | **Intel Meteor Lake** | Redwood Cove P-Core | 5.1** | 16.0 | Clang | 74.4 | 14.59 | **91.2 %** |
+| **RVV 1.0** | **SpacemiT A100** | K3 SoC (VLEN=1024) | 2.0 | 8.0 | GCC | 13.2 | 6.62 | **82.7 %** |
 | **RVV 1.0** | **SpacemiT X60** | BPI-F3 SoC (VLEN=256)| 1.6 | 8.0 | Clang* | 7.7 | 4.79 | **59.9 %** |
 
 > [!NOTE]
@@ -98,10 +98,13 @@ To ensure empirical reproducibility, benchmarks are compiled with modern toolcha
 
 ## Performance Visualizations
 
-Plots are generated locally by `plot_results.py` (RRR) and `plot_results_crr.py` (CRR). Run the plotting scripts to regenerate them (see [Plotting & Performance Analysis](#plotting--performance-analysis) below).
+The executive comparison below summarizes peak double-precision efficiency achieved across all 9 target CPU microarchitectures under the **CRR layout** (GotoBLAS / BLIS column-major packed $A$ panel), grouped by SIMD family:
 
-<!-- Note: plots/ and plots_crr/ are gitignored and generated locally. -->
-<!-- To view them, clone the repo and run the plotting scripts. -->
+<p align="center">
+  <img src="plots_crr/cross_uarch_crr_efficiency_comparison.svg" alt="GEMMBench Cross-Microarchitecture CRR Efficiency Comparison" width="100%">
+</p>
+
+Detailed individual microarchitecture breakdown plots and RRR comparisons can be generated locally via the plotting suite (see [Plotting & Performance Analysis](#plotting--performance-analysis) below).
 
 ---
 
