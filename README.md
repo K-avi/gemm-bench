@@ -17,28 +17,7 @@ This suite evaluates DGEMM microkernels written in C++ with MIPPv2 across **9 di
 
 The benchmark evaluates single-thread, compute-bound double-precision GEMM throughput against the hardware theoretical peak ($\text{FLOP/cycle} \times \text{Frequency}$).
 
-> [!IMPORTANT]
-> **Benchmark specifications & precision**:
-> - **Datatype**: Strictly **IEEE-754 double precision (`double` / FP64)**, *not* single precision (`float` / FP32).
-> - **Canonical DGEMM Formulation**: All reported performance metrics evaluate the canonical matrix multiply form $C \leftarrow \alpha (A \times B) + \beta C$ with **$\alpha = 1.0$** and **$\beta = 0.0$** ($C \leftarrow A \times B$).
-> - **Non-Canonical Overhead**: Non-canonical configurations ($\beta \neq 0.0$, $\alpha \neq 1.0$) typically incur a performance penalty. Using non-canonical configurations is supported. The performance for it has not yet been evaluated.
-> - **Operation Count**: Floating-point throughput is strictly computed as $\text{GFLOP/s} = \frac{2 \times M \times N \times K}{\text{Time (seconds)} \times 10^9}$.
-
-Across all target ISA families (x86_64 AVX2 & AVX-512, ARM NEON, RISC-V Vector), some microkernels achieve **>90% of theoretical peak performance** (reaching up to **>98%** on some uarchs):
-
-### RRR Layout (Row-Major A, B, C)
-
-| SIMD | Microarchitecture | CPU / SoC Model | Freq (GHz) | Peak FLOP/cyc | Comp | Peak GFLOP/s | DGEMM FLOP/cyc | % of Peak |
-| :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **AVX-512** | **AMD Zen 4** | Ryzen 9 7900X | 5.4 | 16.0 | GCC | 85.4 | 15.82 | **98.9 %** |
-| **AVX-512** | **AMD Zen 5 Strix Point** | Ryzen AI 9 HX 370 | 5.1 | 16.0 | GCC | 80.4 | 15.77 | **98.6 %** |
-| **AVX2** | **Intel Meteor Lake** | Redwood Cove P-Core | 5.1** | 16.0 | GCC | 74.8 | 14.66 | **91.6 %** |
-| **AVX2** | **Intel Skylake** | Core i5-6200U | 2.3 | 16.0 | Clang | 33.4 | 14.53 | **90.8 %** |
-| **NEON** | **Apple M1 Firestorm** | M1 Ultra (P-core) | 3.0 | 16.0 | GCC | 47.5 | 15.83 | **98.9 %** |
-| **NEON** | **Cortex-A76** | Raspberry Pi 5 | 2.4 | 8.0 | GCC | 18.0 | 7.49 | **93.6 %** |
-| **RVV 1.0** | **SpacemiT X100** | K3 SoC (VLEN=256) | 2.4 | 8.0 | Clang | 17.8 | 7.42 | **92.8 %** |
-| **RVV 1.0** | **SpacemiT A100** | K3 SoC (VLEN=1024) | 2.0 | 8.0 | GCC | 13.0 | 6.48 | **81.0 %** |
-| **RVV 1.0** | **SpacemiT X60** | BPI-F3 SoC (VLEN=256)| 1.6 | 8.0 | GCC | 6.2 | 3.89 | **48.7 %** |
+Across all target ISA families (x86_64 AVX2 & AVX-512, ARM NEON, RISC-V Vector), some microkernels achieve **>90% of theoretical peak performance** (reaching up to **>99%** on some uarchs):
 
 ### CRR Layout (Col-Major A, Row-Major B, C) — GotoBLAS / BLIS packing
 
@@ -55,11 +34,6 @@ CRR microkernels use a column-major packed $A$ panel (leading dimension $= M_R$)
 | **AVX2** | **Intel Meteor Lake** | Redwood Cove P-Core | 5.1** | 16.0 | Clang | 74.4 | 14.59 | **91.2 %** |
 | **RVV 1.0** | **SpacemiT A100** | K3 SoC (VLEN=1024) | 2.0 | 8.0 | GCC | 13.2 | 6.62 | **82.7 %** |
 | **RVV 1.0** | **SpacemiT X60** | BPI-F3 SoC (VLEN=256)| 1.6 | 8.0 | Clang* | 7.7 | 4.79 | **59.9 %** |
-
-> [!NOTE]
-> **Roadmap & perspectives: empirical hardware peak measurement**:
-> - Currently, all efficiencies are reported against the **theoretical peak** ($\text{FLOP/cycle}$), calculated from the architectural port layout (e.g. $2 \times 4 \times 2 = 16\text{ DP FLOP/cycle}$ for AVX2).
-> - **Ongoing work**: Incorporating a benchmark (generalized from `x100_uarch_exp/broadcast_bench.cpp`) directly into the driver suite to measure the empirical hardware FPU ceiling on each target machine and isolate pure FMA pipeline saturation.
 
 > [!IMPORTANT]
 > **Intel Meteor Lake frequency characteristics (burst vs. sustained)**:
@@ -80,14 +54,14 @@ To interpret the reported throughput figures accurately, several methodological 
 1. **Isolated Microkernel Scope (In-Cache / Single-Panel)**:
    - Benchmarks evaluate the innermost $K$-loop on pre-packed micropanels $A$ ($M_R \times K$, column-major) and $B$ ($K \times N_R$, row-major) accumulating into an in-register tile ($M_R \times N_R$) and writing to $C$.
    - Overheads of the 5-loop cache-blocking hierarchy (GotoBLAS / BLIS: $J_C, P_C, I_C, J_R, I_R$) and dynamic matrix repacking into memory buffers ($M_C \times K_C$, $K_C \times N_C$) are **not** included. End-to-end DGEMM performance within BLIS is part of ongoing integration work.
-2. **Canonical GEMM Regime**:
-   - Reported peak throughputs strictly evaluate the compute-bound canonical form $\alpha = 1.0, \beta = 0.0$ ($C \leftarrow AB$). Non-canonical operations ($\beta \neq 0.0$) introduce load-scale-accumulate overheads on $C$ that are supported functionally but not evaluated for peak throughput.
+2. **Canonical GEMM Regime & Throughput Formulation**:
+   - Reported peak throughputs strictly evaluate the compute-bound canonical form $\alpha = 1.0, \beta = 0.0$ ($C \leftarrow AB$), where throughput is computed as $\text{GFLOP/s} = \frac{2 \times M \times N \times K}{\text{Time (seconds)} \times 10^9}$. Non-canonical operations ($\beta \neq 0.0$) introduce load-scale-accumulate overheads on $C$ that are supported functionally but not evaluated for peak throughput.
 3. **Tile Geometry & Edge Handling (Tails / Fringes)**:
    - Peak pipeline saturation requires dimensions $M, N$ to be exact multiples of the register tile $M_R, N_R$ and depth $K$ to align with loop unrolling (typically 4). While all microkernels include functional scalar/vector remainder handling for unit-test validation, fringe handling in production BLAS is typically offloaded to dedicated edge kernels or zero-padded buffers.
 4. **Single-Thread & Precision Scope**:
    - All measurements are strictly single-thread IEEE-754 double precision (`double` / FP64). Multi-threaded scaling and memory bus contention are not covered in this phase.
-5. **Clock Frequency Baseline**:
-   - Efficiencies are computed against the architectural theoretical ceiling ($\text{FLOP/cycle} \times \text{Frequency}$) using fixed nominal or verified sustained turbo frequencies. Direct empirical FPU pipeline ceilings (e.g. via isolated FMA throughput loops) will be integrated in future revisions.
+5. **Clock Frequency Baseline & Empirical FPU Ceilings**:
+   - Efficiencies are computed against the architectural theoretical ceiling ($\text{FLOP/cycle} \times \text{Frequency}$) using fixed nominal or verified sustained turbo frequencies. Direct empirical FPU pipeline ceiling measurements (generalized from `x100_uarch_exp/broadcast_bench.cpp`) will be integrated directly into the suite to isolate pure FMA pipeline saturation on each machine.
 
 ---
 
@@ -394,16 +368,16 @@ In [`uarch_config.json`](file:///home/ivan/Files/projets/gemm_bench/uarch_config
   }
 }
 ```
-Run `python3 plot_results.py --input-dir gemm-bench-results` to generate updated cross-architecture graphs.
+Run `python3 plot_results.py --input-dir gemm-bench-results/rrr` to generate updated cross-architecture graphs.
 
 ---
 
 **Current Focus & Roadmap (Prioritized TODO)**:
- 1. **Comparison against production BLAS (BLIS & OpenBLAS)\***: Benchmark MIPPv2 microkernels against real BLAS libraries across all platforms. To do so the repo will need to be extended to a proper GEMM benchmark suite. And not just implement microkernels.
- 1. **Single-Precision Support (SGEMM / FP32)**: Extend the benchmark suite to evaluate FP32 as well.
- 2. **Comparison with Hand-Written Native Intrinsics**: Implement intrinsics baselines (native RVV `riscv_vector.h`, AVX-512 `immintrin.h`, NEON `arm_neon.h`) to measure the exact abstraction overhead introduced by MIPPv2.
- 3. **Cross-SIMD Abstraction Comparisons**: Benchmark against alternative SIMD abstraction frameworks, like **Google Highway**, **EVE**, and **`std::simd`**.
- 4. **Non-Canonical GEMM Evaluation**: Benchmark throughput and epilogue overhead for non-canonical forms ($\beta \neq 0.0$, $\alpha \neq 1.0$) to quantify the cost of $C$ tile reloads and scaling.
+1. **Comparison against production BLAS (BLIS & OpenBLAS)\***: Benchmark MIPPv2 microkernels against real BLAS libraries across all platforms. To do so the repo will need to be extended to a proper GEMM benchmark suite. And not just implement microkernels.
+2. **Single-Precision Support (SGEMM / FP32)**: Extend the benchmark suite to evaluate FP32 as well.
+3. **Comparison with Hand-Written Native Intrinsics**: Implement intrinsics baselines (native RVV `riscv_vector.h`, AVX-512 `immintrin.h`, NEON `arm_neon.h`) to measure the exact abstraction overhead introduced by MIPPv2.
+4. **Cross-SIMD Abstraction Comparisons**: Benchmark against alternative SIMD abstraction frameworks, like **Google Highway**, **EVE**, and **`std::simd`**.
+5. **Non-Canonical GEMM Evaluation**: Benchmark throughput and epilogue overhead for non-canonical forms ($\beta \neq 0.0$, $\alpha \neq 1.0$) to quantify the cost of $C$ tile reloads and scaling.
 
 > [!NOTE]
 > BLIS/OpenBLAS for RVV: Ongoing vendor and community work on RVV-optimized BLAS kernels reportedly outperforms current upstream public releases of BLIS and OpenBLAS, but these patches are not yet fully merged/streamlined in mainline distributions. Benchmarking methodology should evaluate both upstream releases and patched branches.
