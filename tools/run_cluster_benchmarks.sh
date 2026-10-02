@@ -298,8 +298,8 @@ run_target() {
             srun_extra="--exclusive"
             ;;
         zen4)
-            partition="az4-a7900"
-            node="az4-a7900-3"
+            partition="az4-n4090"
+            node="az4-n4090-0"
             platform="avx512"
             out_prefix="zen4_avx512"
             pre_cmd="module load catch2 2>/dev/null || true;"
