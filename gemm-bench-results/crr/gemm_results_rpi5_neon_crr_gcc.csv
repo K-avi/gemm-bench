@@ -1,7 +1,7 @@
-Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS
-native,mippv2_a76_mr6_nr4_fmaddi_crr,6,8,32,1,0,1.75513e-07,17.503
-native,mippv2_a76_mr6_nr4_fmaddi_crr,6,8,64,1,0,3.37017e-07,18.2305
-native,mippv2_a76_mr6_nr4_fmaddi_crr,6,8,128,1,0,6.58755e-07,18.6534
-native,mippv2_a76_mr6_nr4_fmaddi_crr,6,8,256,1,0,1.30098e-06,18.8903
-native,mippv2_a76_mr6_nr4_fmaddi_crr,6,8,512,1,0,2.61683e-06,18.783
-native,mippv2_a76_mr6_nr4_fmaddi_crr,6,8,1024,1,0,5.43588e-06,18.0843
+Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS,Time_min_s,GFLOPS_peak,GFLOPS_stddev,GFLOPS_cv_pct,Repetitions
+native,mippv2_a76_mr6_nr4_fmaddi_crr,6,8,32,1,0,1.753995642e-07,17.5143,1.75388838e-07,17.5154,0.0021,0.01,15
+native,mippv2_a76_mr6_nr4_fmaddi_crr,6,8,64,1,0,3.375248204e-07,18.2031,3.374512204e-07,18.2071,0.0025,0.01,15
+native,mippv2_a76_mr6_nr4_fmaddi_crr,6,8,128,1,0,6.595147008e-07,18.6319,6.593433064e-07,18.6367,0.0025,0.01,15
+native,mippv2_a76_mr6_nr4_fmaddi_crr,6,8,256,1,0,1.30136316167e-06,18.8848,1.30129714167e-06,18.8858,0.0018,0.01,15
+native,mippv2_a76_mr6_nr4_fmaddi_crr,6,8,512,1,0,2.58831798333e-06,18.9899,2.58810940333e-06,18.9915,0.0054,0.03,15
+native,mippv2_a76_mr6_nr4_fmaddi_crr,6,8,1024,1,0,5.40557728e-06,18.1857,5.40330071333e-06,18.1933,0.0069,0.04,15
