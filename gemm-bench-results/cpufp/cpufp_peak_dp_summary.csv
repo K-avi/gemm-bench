@@ -1,0 +1,6 @@
+Target,UArchName,CpuModel,FreqGHz,ISA,VectorLength,Computation,Peak_DP_GFLOPS,Measured_FLOP_per_cycle,Theo_FLOP_per_cycle,Efficiency_pct
+m1,Apple M1,Firestorm,3.036,asimd,,fmla.vs(f64,f64,f64),48.492,15.97,16.0,99.8
+meteorlake,Intel Meteor Lake,Redwood Cove P-core,5.1,FMA,256b,FMA(f64,f64,f64),73.160,14.35,16.0,89.7
+skylake,Intel Skylake,i5-6200U,2.3,FMA,256b,FMA(f64,f64,f64),33.082,14.38,16.0,89.9
+zen4,AMD Zen 4,Ryzen 9 7900X,5.4,AVX512F,512b,FMA(f64,f64,f64),86.753,16.07,16.0,100.4
+zen5,AMD Zen 5 Strix Point,Ryzen AI 9 HX 370,5.1,AVX512F,512b,FMA(f64,f64,f64),82.356,16.15,16.0,100.9

@@ -1,0 +1,19 @@
+Number Threads: 1
+Thread Pool Binding: 0
+------------------------------------------------------------------------------
+| Instruction Set | Vector Length | Core Computation      | Peak Performance |
+|-----------------|---------------|-----------------------|------------------|
+| AVX_VNNI        | 256b          | DP4A(s32,u8,s8)       | 607.87 GOPS      |
+| AVX_VNNI        | 256b          | DP2A(s32,s16,s16)     | 302.64 GOPS      |
+| FMA             | 256b          | FMA(f32,f32,f32)      | 151.52 GFLOPS    |
+| FMA             | 256b          | FMA(f64,f64,f64)      | 73.16 GFLOPS     |
+| AVX             | 256b          | ADD(MUL(f32,f32),f32) | 112.87 GFLOPS    |
+| AVX             | 256b          | ADD(MUL(f64,f64),f64) | 56.195 GFLOPS    |
+|-----------------|---------------|-----------------------|------------------|
+| AVX_VNNI        | 128b          | DP4A(s32,u8,s8)       | 303.95 GOPS      |
+| AVX_VNNI        | 128b          | DP2A(s32,s16,s16)     | 152.2 GOPS       |
+| FMA             | 128b          | FMA(f32,f32,f32)      | 76.294 GFLOPS    |
+| FMA             | 128b          | FMA(f64,f64,f64)      | 31.165 GFLOPS    |
+| SSE             | 128b          | ADD(MUL(f32,f32),f32) | 54.475 GFLOPS    |
+| SSE2            | 128b          | ADD(MUL(f64,f64),f64) | 28.512 GFLOPS    |
+------------------------------------------------------------------------------

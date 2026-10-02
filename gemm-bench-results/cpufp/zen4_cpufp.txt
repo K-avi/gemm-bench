@@ -1,0 +1,29 @@
+Number Threads: 1
+Thread Pool Binding: 0
+------------------------------------------------------------------------------
+| Instruction Set | Vector Length | Core Computation      | Peak Performance |
+|-----------------|---------------|-----------------------|------------------|
+| AVX512_VNNI     | 512b          | DP4A(s32,u8,s8)       | 694.01 GOPS      |
+| AVX512_VNNI     | 512b          | DP2A(s32,s16,s16)     | 347.01 GOPS      |
+| AVX512_BF16     | 512b          | DP2A(f32,bf16,bf16)   | 347.01 GFLOPS    |
+| AVX512F         | 512b          | FMA(f32,f32,f32)      | 173.51 GFLOPS    |
+| AVX512F         | 512b          | FMA(f64,f64,f64)      | 86.753 GFLOPS    |
+| AVX512F         | 512b          | ADD(MUL(f32,f32),f32) | 150.29 GFLOPS    |
+| AVX512F         | 512b          | ADD(MUL(f64,f64),f64) | 75.273 GFLOPS    |
+|-----------------|---------------|-----------------------|------------------|
+| AVX512_VNNI     | 256b          | DP4A(s32,u8,s8)       | 694.06 GOPS      |
+| AVX512_VNNI     | 256b          | DP2A(s32,s16,s16)     | 347.02 GOPS      |
+| AVX512_BF16     | 256b          | DP2A(f32,bf16,bf16)   | 347.03 GFLOPS    |
+| FMA             | 256b          | FMA(f32,f32,f32)      | 173.51 GFLOPS    |
+| FMA             | 256b          | FMA(f64,f64,f64)      | 86.747 GFLOPS    |
+| AVX             | 256b          | ADD(MUL(f32,f32),f32) | 173.04 GFLOPS    |
+| AVX             | 256b          | ADD(MUL(f64,f64),f64) | 83.588 GFLOPS    |
+|-----------------|---------------|-----------------------|------------------|
+| AVX512_VNNI     | 128b          | DP4A(s32,u8,s8)       | 347 GOPS         |
+| AVX512_VNNI     | 128b          | DP2A(s32,s16,s16)     | 173.5 GOPS       |
+| AVX512_BF16     | 128b          | DP2A(f32,bf16,bf16)   | 173.51 GFLOPS    |
+| FMA             | 128b          | FMA(f32,f32,f32)      | 86.747 GFLOPS    |
+| FMA             | 128b          | FMA(f64,f64,f64)      | 43.377 GFLOPS    |
+| SSE             | 128b          | ADD(MUL(f32,f32),f32) | 85.472 GFLOPS    |
+| SSE2            | 128b          | ADD(MUL(f64,f64),f64) | 43.049 GFLOPS    |
+------------------------------------------------------------------------------

@@ -1,0 +1,33 @@
+Number Threads: 1
+Thread Pool Binding: 0
+------------------------------------------------------------------------------
+| Instruction Set | Vector Length | Core Computation      | Peak Performance |
+|-----------------|---------------|-----------------------|------------------|
+| AVX512_VNNI     | 512b          | DP4A(s32,u8,s8)       | 658.8 GOPS       |
+| AVX512_VNNI     | 512b          | DP2A(s32,s16,s16)     | 329.48 GOPS      |
+| AVX512_BF16     | 512b          | DP2A(f32,bf16,bf16)   | 329.36 GFLOPS    |
+| AVX512F         | 512b          | FMA(f32,f32,f32)      | 164.8 GFLOPS     |
+| AVX512F         | 512b          | FMA(f64,f64,f64)      | 82.356 GFLOPS    |
+| AVX512F         | 512b          | ADD(MUL(f32,f32),f32) | 164.68 GFLOPS    |
+| AVX512F         | 512b          | ADD(MUL(f64,f64),f64) | 82.342 GFLOPS    |
+|-----------------|---------------|-----------------------|------------------|
+| AVX512_VNNI     | 256b          | DP4A(s32,u8,s8)       | 658.69 GOPS      |
+| AVX_VNNI        | 256b          | DP4A(s32,u8,s8)       | 658.57 GOPS      |
+| AVX512_VNNI     | 256b          | DP2A(s32,s16,s16)     | 329.37 GOPS      |
+| AVX_VNNI        | 256b          | DP2A(s32,s16,s16)     | 329.39 GOPS      |
+| AVX512_BF16     | 256b          | DP2A(f32,bf16,bf16)   | 329.35 GFLOPS    |
+| FMA             | 256b          | FMA(f32,f32,f32)      | 164.71 GFLOPS    |
+| FMA             | 256b          | FMA(f64,f64,f64)      | 82.34 GFLOPS     |
+| AVX             | 256b          | ADD(MUL(f32,f32),f32) | 164.29 GFLOPS    |
+| AVX             | 256b          | ADD(MUL(f64,f64),f64) | 82.324 GFLOPS    |
+|-----------------|---------------|-----------------------|------------------|
+| AVX512_VNNI     | 128b          | DP4A(s32,u8,s8)       | 329.2 GOPS       |
+| AVX_VNNI        | 128b          | DP4A(s32,u8,s8)       | 329.35 GOPS      |
+| AVX512_VNNI     | 128b          | DP2A(s32,s16,s16)     | 164.65 GOPS      |
+| AVX_VNNI        | 128b          | DP2A(s32,s16,s16)     | 164.63 GOPS      |
+| AVX512_BF16     | 128b          | DP2A(f32,bf16,bf16)   | 164.65 GFLOPS    |
+| FMA             | 128b          | FMA(f32,f32,f32)      | 82.324 GFLOPS    |
+| FMA             | 128b          | FMA(f64,f64,f64)      | 41.17 GFLOPS     |
+| SSE             | 128b          | ADD(MUL(f32,f32),f32) | 82.302 GFLOPS    |
+| SSE2            | 128b          | ADD(MUL(f64,f64),f64) | 41.163 GFLOPS    |
+------------------------------------------------------------------------------

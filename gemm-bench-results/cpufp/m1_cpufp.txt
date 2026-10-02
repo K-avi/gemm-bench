@@ -1,0 +1,15 @@
+Number Threads: 1
+Thread Pool Binding: 3
+----------------------------------------------------------------
+| Instruction Set | Core Computation        | Peak Performance |
+| asimd_dp        | dp4a.vs(s32,s8,s8)      | 387.81 GOPS      |
+| asimd_dp        | dp4a.vv(s32,s8,s8)      | 387.84 GOPS      |
+| asimd_dp        | dp4a.vs(u32,u8,u8)      | 387.88 GOPS      |
+| asimd_dp        | dp4a.vv(u32,u8,u8)      | 387.86 GOPS      |
+| asimd_hp        | fmla.vs(fp16,fp16,fp16) | 193.6 GFLOPS     |
+| asimd_hp        | fmla.vv(fp16,fp16,fp16) | 193.82 GFLOPS    |
+| asimd           | fmla.vs(f32,f32,f32)    | 96.973 GFLOPS    |
+| asimd           | fmla.vv(f32,f32,f32)    | 96.876 GFLOPS    |
+| asimd           | fmla.vs(f64,f64,f64)    | 48.492 GFLOPS    |
+| asimd           | fmla.vv(f64,f64,f64)    | 48.478 GFLOPS    |
+----------------------------------------------------------------
