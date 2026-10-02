@@ -20,6 +20,7 @@ struct BenchConfig
     size_t K = 0;
 
     size_t iterations = 100;
+    size_t repetitions = 15;
     size_t warmup = 10;
 
     size_t packet_size = mipp::N<double, 1>();
@@ -84,6 +85,7 @@ inline void parseArgs(int argc,
                       << "  --beta, -b <val>    Beta parameter (default: 0.0)\n"
                       << "  --kernel <name>     Kernel name (default: ijk)\n"
                       << "  --iterations <N>    Benchmark iterations (default: 100)\n"
+                      << "  --repetitions, -r <N> Benchmark repetitions (default: 15)\n"
                       << "  --warmup <N>        Warmup iterations (default: 10)\n"
                       << "  --packet-size <N>   SIMD packet size (default: 4)\n"
                       << "  --lmul <N>          RVV/MIPP LMUL factor (default: 1)\n"
@@ -107,6 +109,8 @@ inline void parseArgs(int argc,
             cfg.beta = next_double();
         else if(arg == "--iterations")
             cfg.iterations = next_ulong();
+        else if(arg == "--repetitions" || arg == "-r")
+            cfg.repetitions = next_ulong();
         else if(arg == "--warmup")
             cfg.warmup = next_ulong();
         else if(arg == "--packet-size")

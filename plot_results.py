@@ -102,6 +102,8 @@ class UArchSpec:
     peak_flop_per_cycle: float
     expected_best_kernel: str
     csv_pattern: str
+    expected_best_kernel_crr: Optional[str] = None
+    crr_csv_pattern: Optional[str] = None
     measured_peak_flop_per_cycle: Optional[float] = None
     hardware_max_frequency_ghz: Optional[float] = None
     notes: Optional[str] = None
@@ -130,7 +132,9 @@ def load_uarch_config(config_path: Path) -> Dict[str, UArchSpec]:
                 frequency_ghz=float(spec.get("frequency_ghz", 1.0)),
                 peak_flop_per_cycle=float(spec.get("peak_flop_per_cycle", 1.0)),
                 expected_best_kernel=spec.get("expected_best_kernel", ""),
+                expected_best_kernel_crr=spec.get("expected_best_kernel_crr"),
                 csv_pattern=spec.get("csv_pattern", f"*gemm_results_{uarch_id}_*.csv"),
+                crr_csv_pattern=spec.get("crr_csv_pattern"),
                 measured_peak_flop_per_cycle=float(spec["measured_peak_flop_per_cycle"]) if "measured_peak_flop_per_cycle" in spec else None,
                 hardware_max_frequency_ghz=float(spec["hardware_max_frequency_ghz"]) if "hardware_max_frequency_ghz" in spec else None,
                 notes=spec.get("notes"),
@@ -229,7 +233,11 @@ class UArchChampion:
     measured_efficiency_pct: Optional[float]
     matches_expected: bool
     data: pd.DataFrame
-    peak_m: int = 128
+    peak_dim: int = 128
+    sweep_col: str = "M"
+    cv_percent: Optional[float] = None
+    gflops_stddev: Optional[float] = None
+    expected_kernel: str = ""
 
 
 def analyze_uarch(df: pd.DataFrame, spec: UArchSpec) -> Optional[UArchChampion]:
@@ -243,15 +251,24 @@ def analyze_uarch(df: pd.DataFrame, spec: UArchSpec) -> Optional[UArchChampion]:
     best_kernel = best_row["Kernel"]
     best_compiler = best_row["Compiler"]
 
-    champion_data = df[(df["Kernel"] == best_kernel) & (df["Compiler"] == best_compiler)].sort_values("M")
+    sweep_col = "K" if ("K" in df.columns and "M" in df.columns and df["K"].nunique() > df["M"].nunique()) else "M"
+    champion_data = df[(df["Kernel"] == best_kernel) & (df["Compiler"] == best_compiler)].sort_values(sweep_col)
     peak_row = champion_data.sort_values("GFLOPS", ascending=False).iloc[0]
     peak_gflops = float(peak_row["GFLOPS"])
     peak_flop_per_cycle = float(peak_row["FLOP_per_cycle"])
-    peak_m = int(peak_row["M"])
+    peak_dim = int(peak_row[sweep_col]) if sweep_col in peak_row else 128
+
+    cv_pct = float(peak_row["GFLOPS_cv_pct"]) if "GFLOPS_cv_pct" in peak_row and pd.notna(peak_row["GFLOPS_cv_pct"]) else None
+    stddev = float(peak_row["GFLOPS_stddev"]) if "GFLOPS_stddev" in peak_row and pd.notna(peak_row["GFLOPS_stddev"]) else None
 
     efficiency_pct = (peak_flop_per_cycle / spec.peak_flop_per_cycle) * 100.0
     measured_eff = (peak_flop_per_cycle / spec.measured_peak_flop_per_cycle * 100.0) if spec.measured_peak_flop_per_cycle else None
-    matches_expected = (best_kernel == spec.expected_best_kernel)
+    expected_kernel = (
+        spec.expected_best_kernel_crr
+        if (sweep_col == "K" and spec.expected_best_kernel_crr)
+        else spec.expected_best_kernel
+    )
+    matches_expected = (best_kernel == expected_kernel)
 
     return UArchChampion(
         uarch_id=spec.uarch_id,
@@ -264,7 +281,11 @@ def analyze_uarch(df: pd.DataFrame, spec: UArchSpec) -> Optional[UArchChampion]:
         measured_efficiency_pct=measured_eff,
         matches_expected=matches_expected,
         data=champion_data,
-        peak_m=peak_m,
+        peak_dim=peak_dim,
+        sweep_col=sweep_col,
+        cv_percent=cv_pct,
+        gflops_stddev=stddev,
+        expected_kernel=expected_kernel,
     )
 
 
@@ -343,9 +364,9 @@ def plot_cross_uarch_efficiency(champions: List[UArchChampion], output_path: Pat
         eff = champ.efficiency_pct
         gflops = champ.peak_gflops
         flop_cyc = champ.peak_flop_per_cycle
-        m_dim = champ.peak_m
+        dim_lbl = f"{champ.sweep_col}={champ.peak_dim}"
 
-        text_label = f" {eff:.1f}%  ({gflops:.1f} GFLOP/s @ M={m_dim} | {flop_cyc:.2f} FLOP/cyc)"
+        text_label = f" {eff:.1f}%  ({gflops:.1f} GFLOP/s @ {dim_lbl} | {flop_cyc:.2f} FLOP/cyc)"
         ax.text(
             1.2,
             idx,
@@ -565,7 +586,8 @@ def plot_uarch_overview(df: pd.DataFrame, champ: UArchChampion, output_path: Pat
     peak_gflops = champ.spec.peak_gflops
     peak_flop_per_cycle = champ.spec.peak_flop_per_cycle
 
-    sorted_sizes = sorted(df["M"].unique())
+    sweep_col = champ.sweep_col
+    sorted_sizes = sorted(df[sweep_col].unique())
 
     # Theoretical peak horizontal line
     ax1.axhline(
@@ -603,7 +625,7 @@ def plot_uarch_overview(df: pd.DataFrame, champ: UArchChampion, output_path: Pat
     line_markers = ["s", "^", "D", "v"]
 
     for idx, k_info in enumerate(panel_kernels):
-        k_df = df[(df["Kernel"] == k_info["kernel"]) & (df["Compiler"] == k_info["compiler"])].sort_values("M")
+        k_df = df[(df["Kernel"] == k_info["kernel"]) & (df["Compiler"] == k_info["compiler"])].sort_values(sweep_col)
         is_champ = k_info["is_champ"]
         is_scalar = k_info["is_scalar"]
 
@@ -615,29 +637,47 @@ def plot_uarch_overview(df: pd.DataFrame, champ: UArchChampion, output_path: Pat
 
         lbl = f"{k_info['kernel']} [{k_info['compiler']}]"
         if is_champ:
-            lbl = f"★ {lbl} (Champion — Peak: {champ.peak_gflops:.1f} GFLOP/s @ M={champ.peak_m})"
+            lbl = f"★ {lbl} (Champion — Peak: {champ.peak_gflops:.1f} GFLOP/s @ {champ.sweep_col}={champ.peak_dim})"
         elif is_scalar:
             lbl = f"ijk (Scalar Baseline) [{k_info['compiler']}]"
 
-        ax1.plot(
-            k_df["M"],
-            k_df["GFLOPS"],
-            label=lbl,
-            color=c,
-            marker=m,
-            markersize=ms,
-            linewidth=lw,
-            linestyle=ls,
-            zorder=4 if is_champ else 3,
-        )
+        has_stddev = "GFLOPS_stddev" in k_df.columns and k_df["GFLOPS_stddev"].notna().any()
+        if has_stddev and is_champ:
+            ax1.errorbar(
+                k_df[sweep_col],
+                k_df["GFLOPS"],
+                yerr=k_df["GFLOPS_stddev"],
+                label=lbl,
+                color=c,
+                marker=m,
+                markersize=ms,
+                linewidth=lw,
+                linestyle=ls,
+                capsize=3,
+                capthick=1.2,
+                zorder=4,
+            )
+        else:
+            ax1.plot(
+                k_df[sweep_col],
+                k_df["GFLOPS"],
+                label=lbl,
+                color=c,
+                marker=m,
+                markersize=ms,
+                linewidth=lw,
+                linestyle=ls,
+                zorder=4 if is_champ else 3,
+            )
 
         if is_champ:
-            ax1.fill_between(k_df["M"], 0, k_df["GFLOPS"], color=c, alpha=0.06, zorder=1)
+            ax1.fill_between(k_df[sweep_col], 0, k_df["GFLOPS"], color=c, alpha=0.06, zorder=1)
 
     ax1.set_xscale("log", base=2)
     ax1.set_xticks(sorted_sizes)
     ax1.set_xticklabels([str(s) for s in sorted_sizes], fontsize=10)
-    ax1.set_xlabel("Matrix dimension M=N=K", fontsize=10.5, fontweight="bold", labelpad=8)
+    x_lbl = f"Inner dimension {sweep_col} (BLIS compact tile)" if sweep_col == "K" else "Matrix dimension M=N=K"
+    ax1.set_xlabel(x_lbl, fontsize=10.5, fontweight="bold", labelpad=8)
     ax1.set_ylabel("Throughput (GFLOP/s)", fontsize=10.5, fontweight="bold", labelpad=8)
     ax1.set_ylim(0, peak_gflops * 1.08)
 
@@ -669,7 +709,7 @@ def plot_uarch_overview(df: pd.DataFrame, champ: UArchChampion, output_path: Pat
     title = f"{champ.spec.name} ({champ.spec.cpu_model}) — {champ.spec.simd.upper()} @ {freq:.1f} GHz"
     subtitle = (
         f"Champion: {champ.kernel} [{champ.compiler}] | "
-        f"Peak Throughput: {champ.peak_gflops:.1f} GFLOP/s ({champ.efficiency_pct:.1f}% of Peak @ M={champ.peak_m})"
+        f"Peak Throughput: {champ.peak_gflops:.1f} GFLOP/s ({champ.efficiency_pct:.1f}% of Peak @ {champ.sweep_col}={champ.peak_dim})"
     )
     ax1.set_title(f"{title}\n{subtitle}", fontsize=12, fontweight="bold", pad=12)
 
@@ -688,19 +728,22 @@ def plot_uarch_overview(df: pd.DataFrame, champ: UArchChampion, output_path: Pat
 
 def print_summary_table(champions: List[UArchChampion]) -> None:
     """Prints a formatted comparative table in the console."""
-    print("\n" + "=" * 135)
+    print("\n" + "=" * 145)
     print("  GEMMBench — Microarchitectural Performance & Peak Efficiency Summary")
-    print("=" * 135)
+    print("=" * 145)
     header = (
         f"{'SIMD':<8} | {'Microarchitecture':<22} | {'Champion Kernel':<34} | "
-        f"{'Comp':<5} | {'Peak GFLOP/s':<12} | {'FLOP/cyc':<9} | {'% Theo':<8} | {'% Meas':<8} | {'Expected Match?':<15}"
+        f"{'Comp':<5} | {'Peak GFLOP/s':<12} | {'FLOP/cyc':<9} | {'% Theo':<8} | {'CV (%)':<7} | {'% Meas':<8} | {'Expected Match?':<15}"
     )
     print(header)
-    print("-" * 135)
+    print("-" * 145)
 
     for champ in champions:
-        match_str = "✓ MATCH" if champ.matches_expected else f"✗ MISMATCH ({champ.spec.expected_best_kernel})"
+        exp_target = champ.expected_kernel if champ.expected_kernel else champ.spec.expected_best_kernel
+        match_str = "✓ MATCH" if champ.matches_expected else f"✗ MISMATCH ({exp_target})"
         meas_str = f"{champ.measured_efficiency_pct:.1f}%" if champ.measured_efficiency_pct is not None else "N/A"
+        cv_str = f"{champ.cv_percent:.2f}%" if champ.cv_percent is not None else "N/A"
+        dim_lbl = f"{champ.sweep_col}={champ.peak_dim}"
         row = (
             f"{champ.spec.simd:<8} | "
             f"{champ.spec.name:<22} | "
@@ -709,11 +752,12 @@ def print_summary_table(champions: List[UArchChampion]) -> None:
             f"{champ.peak_gflops:<12.1f} | "
             f"{champ.peak_flop_per_cycle:<9.2f} | "
             f"{champ.efficiency_pct:<7.1f}% | "
+            f"{cv_str:<7} | "
             f"{meas_str:<8} | "
             f"{match_str}"
         )
         print(row)
-    print("=" * 135 + "\n")
+    print("=" * 145 + "\n")
 
 
 # ==============================================================================
@@ -721,6 +765,8 @@ def print_summary_table(champions: List[UArchChampion]) -> None:
 # ==============================================================================
 
 def main() -> None:
+    default_input = Path("results/crr") if Path("results/crr").is_dir() else Path("gemm-bench-results")
+
     parser = argparse.ArgumentParser(
         description="Analyze and plot GEMM benchmarks with automatic best-kernel selection and FLOP/cycle efficiency."
     )
@@ -733,8 +779,14 @@ def main() -> None:
     parser.add_argument(
         "--input-dir",
         type=Path,
-        default=Path("gemm-bench-results"),
-        help="Directory containing benchmark CSV files (default: gemm-bench-results)",
+        default=default_input,
+        help=f"Directory containing benchmark CSV files (default: {default_input})",
+    )
+    parser.add_argument(
+        "--layout",
+        choices=["crr", "rrr", "all"],
+        default="crr" if Path("results/crr").is_dir() else "all",
+        help="Select layout subfolder if input-dir is 'results' (default: crr)",
     )
     parser.add_argument(
         "--output",

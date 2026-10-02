@@ -1,32 +1,79 @@
 #include "Alloc.h"
 #include "GemmUKernel.h"
 
+#include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstring>
 #include <iomanip>
 #include <iostream>
 #include <string>
+#include <vector>
 
 #include "BenchConfig.h"
 
 using namespace GEMMBench;
 
+struct BenchmarkStats {
+  double time_median_s = 0.0;
+  double time_min_s    = 0.0;
+  double time_max_s    = 0.0;
+  double gflops_median = 0.0;
+  double gflops_peak   = 0.0;
+  double gflops_stddev = 0.0;
+  double cv_percent    = 0.0;
+  size_t repetitions   = 0;
+};
+
+inline BenchmarkStats compute_stats(std::vector<double> &samples, double ops) {
+  const size_t R = samples.size();
+  std::sort(samples.begin(), samples.end());
+
+  const double median_time = samples[R / 2];
+  const double min_time    = samples.front();
+  const double max_time    = samples.back();
+
+  double sum = 0.0;
+  for (double t : samples) sum += t;
+  const double mean_time = sum / R;
+
+  double var_sum = 0.0;
+  for (double t : samples) var_sum += (t - mean_time) * (t - mean_time);
+  const double stddev_time = (R > 1) ? std::sqrt(var_sum / (R - 1)) : 0.0;
+
+  BenchmarkStats s;
+  s.time_median_s = median_time;
+  s.time_min_s    = min_time;
+  s.time_max_s    = max_time;
+  s.gflops_median = (median_time > 0.0) ? ((ops / median_time) / 1e9) : 0.0;
+  s.gflops_peak   = (min_time > 0.0) ? ((ops / min_time) / 1e9) : 0.0;
+  s.gflops_stddev = (mean_time > 0.0) ? ((ops / mean_time / 1e9) * (stddev_time / mean_time)) : 0.0;
+  s.cv_percent    = (mean_time > 0.0) ? ((stddev_time / mean_time) * 100.0) : 0.0;
+  s.repetitions   = R;
+  return s;
+}
+
 #define BENCH_KERNEL(CALL)                                                     \
   do {                                                                         \
-    for (size_t i = 0; i < cfg.warmup; ++i)                                    \
+    for (size_t w = 0; w < cfg.warmup; ++w) {                                  \
       CALL;                                                                    \
+    }                                                                          \
                                                                                \
-    const auto start = std::chrono::high_resolution_clock::now();              \
-                                                                               \
-    for (size_t i = 0; i < cfg.iterations; ++i)                                \
-      CALL;                                                                    \
-                                                                               \
-    const auto end = std::chrono::high_resolution_clock::now();                \
-                                                                               \
-    const auto duration =                                                      \
-        std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);     \
-                                                                               \
-    return duration.count();                                                   \
+    const size_t reps = (cfg.repetitions > 0) ? cfg.repetitions : 1;           \
+    std::vector<double> samples_s(reps);                                       \
+    for (size_t r = 0; r < reps; ++r) {                                        \
+      const auto start = std::chrono::high_resolution_clock::now();            \
+      for (size_t i = 0; i < cfg.iterations; ++i) {                            \
+        CALL;                                                                  \
+      }                                                                        \
+      const auto end = std::chrono::high_resolution_clock::now();              \
+      asm volatile("" ::: "memory");                                           \
+      const auto duration =                                                    \
+          std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);   \
+      samples_s[r] = (duration.count() * 1e-9) / cfg.iterations;               \
+    }                                                                          \
+    const double ops = 2.0 * cfg.M * cfg.N * cfg.K;                           \
+    return compute_stats(samples_s, ops);                                      \
   } while (false)
 
 #define BENCH_KERNEL_FASTPATH(CALL_FAST, CALL_FULL)                            \
@@ -39,9 +86,9 @@ using namespace GEMMBench;
   } while (false)
 
 template <typename T>
-inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
-                     const PackedRowMajor<T> &A, const PackedRowMajor<T> &B,
-                     PackedRowMajor<T> &C) {
+inline BenchmarkStats run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
+                          const PackedRowMajor<T> &A, const PackedRowMajor<T> &B,
+                          PackedRowMajor<T> &C) {
   switch (cfg.kernel) {
   // Production / Champion kernels
   case UKernelType::IJK:
@@ -221,9 +268,9 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
 }
 
 template <typename T>
-inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
-                     const PackedRowMajor<T> &A, const PackedColMajor<T> &B,
-                     PackedRowMajor<T> &C) {
+inline BenchmarkStats run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
+                          const PackedRowMajor<T> &A, const PackedColMajor<T> &B,
+                          PackedRowMajor<T> &C) {
   switch (cfg.kernel) {
 #ifdef GEMMBENCH_ENABLE_EXPLO
   case UKernelType::IJK_RC:
@@ -242,9 +289,9 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
 }
 
 template <typename T>
-inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
-                     const PackedColMajor<T> &A, const PackedRowMajor<T> &B,
-                     PackedRowMajor<T> &C) {
+inline BenchmarkStats run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
+                          const PackedColMajor<T> &A, const PackedRowMajor<T> &B,
+                          PackedRowMajor<T> &C) {
   switch (cfg.kernel) {
   case UKernelType::mippv2_meteorlake_mr4_nr3_crr:
     BENCH_KERNEL_FASTPATH(
@@ -335,13 +382,7 @@ inline long long run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
 
 template <typename T>
 void printResults(const BenchConfig &cfg,
-                  long long time) { // time is in nanoseconds
-
-  const double ops = 2.0 * cfg.M * cfg.N * cfg.K;
-
-  const double time_s = (time * 1e-9) / cfg.iterations;
-
-  const double gflops = ops / time_s / 1e9;
+                  const BenchmarkStats &stats) {
 
   if (!cfg.csv_mode) {
     std::cout << "M: " << cfg.M << "\n"
@@ -349,12 +390,23 @@ void printResults(const BenchConfig &cfg,
               << "K: " << cfg.K << "\n"
               << "Alpha: " << cfg.alpha << "\n"
               << "Beta: " << cfg.beta << "\n"
-              << "Time(s): " << std::setprecision(12) << time_s << "\n"
-              << "GFLOP/s: " << gflops << "\n";
+              << "Time(s) [median]: " << std::setprecision(12) << stats.time_median_s << "\n"
+              << "Time(s) [min]:    " << std::setprecision(12) << stats.time_min_s << "\n"
+              << "GFLOP/s [median]: " << std::fixed << std::setprecision(4) << stats.gflops_median << "\n"
+              << "GFLOP/s [peak]:   " << std::fixed << std::setprecision(4) << stats.gflops_peak << "\n"
+              << "GFLOP/s [stddev]: " << std::fixed << std::setprecision(4) << stats.gflops_stddev << "\n"
+              << "CV (%):           " << std::fixed << std::setprecision(2) << stats.cv_percent << " %\n"
+              << "Repetitions:      " << stats.repetitions << "\n";
   } else {
     std::cout << cfg.kernel_name << "," << cfg.M << "," << cfg.N << "," << cfg.K
-              << "," << cfg.alpha << "," << cfg.beta << "," << time_s << ","
-              << gflops << "\n";
+              << "," << cfg.alpha << "," << cfg.beta << ","
+              << std::defaultfloat << std::setprecision(12) << stats.time_median_s << ","
+              << std::fixed << std::setprecision(4) << stats.gflops_median << ","
+              << std::defaultfloat << std::setprecision(12) << stats.time_min_s << ","
+              << std::fixed << std::setprecision(4) << stats.gflops_peak << ","
+              << std::fixed << std::setprecision(4) << stats.gflops_stddev << ","
+              << std::fixed << std::setprecision(2) << stats.cv_percent << ","
+              << stats.repetitions << "\n";
   }
 }
 
@@ -400,9 +452,9 @@ void runBenchmark(BenchConfig &cfg) {
     std::cout << "C.ld = " << C.ld << "\n";
   }
 
-  const auto time = run<T>(cfg, gemm, A, B, C);
+  const auto stats = run<T>(cfg, gemm, A, B, C);
 
-  printResults<T>(cfg, time);
+  printResults<T>(cfg, stats);
 
   alloc.freePacked(A);
   alloc.freePacked(B);

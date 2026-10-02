@@ -78,6 +78,8 @@ ${BOLD}Options :${NC}
   --rebuild         Forcer la recompilation complète sur les nœuds
   --crr-only        Exécuter uniquement les variantes CRR des champions
   --rrr-only        Exécuter uniquement les variantes RRR des champions
+  -r, --repetitions <N> Nombre de répétitions par mesure (défaut: 15)
+  --cooldown <sec>  Temps de pause thermique après grandes tailles (défaut: 0.5)
   -k, --kernel <n>  Exécuter un kernel spécifique (répétable, remplace le champion par défaut)
   --run-all         Exécuter tous les kernels (champions + exploration) et la version scalaire
   -s, --sizes \"...\" Tailles de matrices pour les benchmarks (ex: \"32 64 96 128\")
@@ -101,6 +103,8 @@ CRR_ONLY=false
 RRR_ONLY=false
 REBUILD_FLAG=""
 CUSTOM_SIZES=""
+CUSTOM_REPETITIONS=""
+CUSTOM_COOLDOWN=""
 CUSTOM_KERNELS=()
 SELECTED_TARGETS=()
 
@@ -141,6 +145,14 @@ while [[ $# -gt 0 ]]; do
         --rrr-only)
             RRR_ONLY=true
             shift
+            ;;
+        -r|--repetitions)
+            CUSTOM_REPETITIONS="$2"
+            shift 2
+            ;;
+        --cooldown)
+            CUSTOM_COOLDOWN="$2"
+            shift 2
             ;;
         -k|--kernel)
             CUSTOM_KERNELS+=("$2")
@@ -318,6 +330,8 @@ run_target() {
     [[ -n "$out_prefix" ]] && bench_flags+="-o ${out_prefix} "
     [[ -n "$REBUILD_FLAG" ]] && bench_flags+="${REBUILD_FLAG} "
     [[ -n "$CUSTOM_SIZES" ]] && bench_flags+="${CUSTOM_SIZES} "
+    [[ -n "$CUSTOM_REPETITIONS" ]] && bench_flags+="-r ${CUSTOM_REPETITIONS} "
+    [[ -n "$CUSTOM_COOLDOWN" ]] && bench_flags+="--cooldown ${CUSTOM_COOLDOWN} "
     [[ "$CRR_ONLY" == "true" ]] && bench_flags+="--crr-only "
     [[ "$RRR_ONLY" == "true" ]] && bench_flags+="--rrr-only "
 

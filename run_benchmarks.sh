@@ -28,6 +28,8 @@ Options:
   -k, --kernel <name>     Run only specified kernel(s) (can be repeated)
   -s, --size <N>          Run only specified size(s) (can be repeated)
   --sizes "N1 N2 ..."     Run specified list of sizes
+  -r, --repetitions <N>   Number of independent repetitions per measurement (default: 15)
+  --cooldown <sec>        Cooldown pause in seconds after large sizes (default: 0.5)
   -o, --output <prefix>   Prefix for result CSV filename (e.g. --output zen4 -> zen4_gemm_results_gcc.csv)
   -a, --alpha <val>       Alpha parameter (default: 1.0)
   -b, --beta <val>        Beta parameter (default: 0.0)
@@ -111,6 +113,8 @@ OUTPUT_PREFIX=""
 CRR_ONLY=false
 RRR_ONLY=false
 NUM_RUNS=3
+REPETITIONS=15
+COOLDOWN_SEC=0.5
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -183,6 +187,14 @@ while [[ $# -gt 0 ]]; do
             NUM_RUNS="$2"
             shift 2
             ;;
+        -r|--repetitions)
+            REPETITIONS="$2"
+            shift 2
+            ;;
+        --cooldown)
+            COOLDOWN_SEC="$2"
+            shift 2
+            ;;
         -h|--help)
             show_help
             exit 0
@@ -229,6 +241,29 @@ if [[ -n "$PIN_CORE" ]]; then
     fi
 else
     echo "Core pinning disabled or unconfigured."
+fi
+
+# Passive inspection of CPU frequency and governor (no sudo required)
+if command -v cpupower &>/dev/null && sudo -n true 2>/dev/null; then
+    sudo -n cpupower frequency-set -g performance &>/dev/null || true
+fi
+
+CPU_GOV="unknown"
+if [[ -f /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor ]]; then
+    CPU_GOV=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || echo "unknown")
+elif [[ -f /sys/devices/system/cpu/cpufreq/scaling_governor ]]; then
+    CPU_GOV=$(cat /sys/devices/system/cpu/cpufreq/scaling_governor 2>/dev/null || echo "unknown")
+fi
+
+CPU_FREQ_STR=""
+if [[ -f /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq ]]; then
+    CPU_FREQ_KHZ=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq 2>/dev/null || echo "0")
+    if (( CPU_FREQ_KHZ > 0 )); then
+        CPU_FREQ_STR=" (${CPU_GOV} @ $(( CPU_FREQ_KHZ / 1000 )) MHz)"
+    fi
+fi
+if [[ -n "$CPU_FREQ_STR" ]]; then
+    echo "CPU Status: ${CPU_FREQ_STR}"
 fi
 
 ################################################################################
@@ -409,7 +444,7 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
         CSV="results/${CSV_PREFIX}${file_suffix}_${COMPILER_TAG}.csv"
     fi
     mkdir -p "$(dirname "$CSV")"
-    echo "Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS" > "$CSV"
+    echo "Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS,Time_min_s,GFLOPS_peak,GFLOPS_stddev,GFLOPS_cv_pct,Repetitions" > "$CSV"
 
     # Determine whether exploratory kernels are required
     NEED_EXPLO=false
@@ -595,6 +630,7 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
                         --alpha "${ALPHA}" \
                         --beta "${BETA}" \
                         --iterations "${ITERS}" \
+                        --repetitions "${REPETITIONS}" \
                         --warmup "${WARMUP}" \
                         --csv)
                     DESC_STR="K=${SIZE}"
@@ -608,6 +644,7 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
                         --alpha "${ALPHA}" \
                         --beta "${BETA}" \
                         --iterations "${ITERS}" \
+                        --repetitions "${REPETITIONS}" \
                         --warmup "${WARMUP}" \
                         --legacy \
                         --csv)
@@ -618,7 +655,7 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
                 BEST_TIME=""
                 for (( run_idx=1; run_idx<=NUM_RUNS; run_idx++ )); do
                     if CUR_LINE=$("${BENCH_CMD[@]}"); then
-                        CUR_TIME=$(echo "$CUR_LINE" | awk -F',' '{print $(NF-1)}')
+                        CUR_TIME=$(echo "$CUR_LINE" | awk -F',' '{print $7}')
                         if [[ -z "$BEST_TIME" ]] || awk "BEGIN {exit !($CUR_TIME < $BEST_TIME)}"; then
                             BEST_TIME="$CUR_TIME"
                             BEST_LINE="$CUR_LINE"
@@ -631,6 +668,10 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
                     echo "[${COMPILER_TAG}] ${VERSION} ${KERNEL} (${DESC_STR})"
                 else
                     echo "[${COMPILER_TAG}] ${VERSION} ${KERNEL} (${DESC_STR}) FAILED" >&2
+                fi
+
+                if (( SIZE >= 256 )) && (( $(echo "${COOLDOWN_SEC} > 0" | bc -l 2>/dev/null || echo 0) )); then
+                    sleep "${COOLDOWN_SEC}"
                 fi
             done
         done
