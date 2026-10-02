@@ -37,6 +37,7 @@ JOB_K3=$(sbatch --parsable << 'EOF'
 #SBATCH -o logs/slurm_k3_%j.out
 #SBATCH -e logs/slurm_k3_%j.err
 
+export PATH="$HOME/bin:$PATH"
 cd "$HOME/Files/gemm-bench"
 
 echo "=== [1/3] Precompiling X60 Clang on mono-sip-k3 ==="
@@ -48,8 +49,8 @@ cmake -B build_rvv_x60_clang_rvv -S . -DCMAKE_BUILD_TYPE=Release \
 echo "=== [2/3] Running X100 (256-bit RVV) CRR Benchmarks ==="
 PLATFORM_TAG=x100 ./run_benchmarks.sh rvv_x100 -o x100_rvv --crr-only --rebuild -k mippv2_x100_register_blocked_apack4_crr gcc clang
 
-echo "=== [3/3] Running A100 (1024-bit RVV) CRR Benchmarks ==="
-PLATFORM_TAG=a100 ./run_benchmarks.sh rvv_a100 -o a100_rvv --crr-only --rebuild -k mippv2_a100_mr7_nr2_lmul2_pipe_crr gcc clang
+echo "=== [3/3] Running A100 (1024-bit RVV via ai) CRR Benchmarks ==="
+PLATFORM_TAG=a100 ai ./run_benchmarks.sh rvv_a100 -o a100_rvv --crr-only --rebuild -k mippv2_a100_mr7_nr2_lmul2_pipe_crr gcc clang
 EOF
 )
 echo "✓ Submitted K3 (X100 + A100) -> Slurm Job ID: ${JOB_K3}"
@@ -64,6 +65,7 @@ JOB_X60=$(sbatch --parsable --dependency=afterok:"${JOB_K3}" << 'EOF'
 #SBATCH -o logs/slurm_x60_%j.out
 #SBATCH -e logs/slurm_x60_%j.err
 
+export PATH="$HOME/bin:$PATH"
 cd "$HOME/Files/gemm-bench"
 module load gcc 2>/dev/null || true
 echo "=== Running X60 (256-bit RVV) CRR Benchmarks on $(hostname) ==="

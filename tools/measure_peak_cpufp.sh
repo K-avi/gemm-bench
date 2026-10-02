@@ -173,7 +173,7 @@ run_cluster_target() {
             partition="mono"
             node="mono-sip-k3"
             arch="riscv64"
-            wrapper=""
+            wrapper="ai "
             core=8
             srun_extra="-c 8"
             ;;
@@ -191,6 +191,7 @@ run_cluster_target() {
 
     local remote_script="
 set -euo pipefail
+export PATH=\"\$HOME/bin:\$PATH\"
 REMOTE_BASE=\"\${DALEK_DIR:-\$HOME/Files/gemm-bench}\"
 CPUFP_SRC=\"\${CPUFP_SRC:-\$HOME/cpufp-fix}\"
 BUILD_DIR=\"\${REMOTE_BASE}/build_cpufp_${target}\"
