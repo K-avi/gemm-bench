@@ -315,7 +315,7 @@ run_target() {
             ;;
         meteorlake)
             partition="iml-ia770"
-            node="iml-ia770-3"
+            node="iml-ia770-0"
             platform="avx2"
             out_prefix="meteorlake_avx2"
             pre_cmd="module load catch2 2>/dev/null || true;"
