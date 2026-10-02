@@ -1,7 +1,7 @@
-Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS,Time_min_s,GFLOPS_peak,GFLOPS_stddev,GFLOPS_cv_pct,Repetitions
-native,mippv2_meteorlake_mr4_nr3_crr,4,12,32,1,0,9.90504674e-08,31.0145,9.86331742e-08,31.1457,0.6390,2.07,15
-native,mippv2_meteorlake_mr4_nr3_crr,4,12,64,1,0,1.868072636e-07,32.8895,1.856413596e-07,33.0961,0.6189,1.89,15
-native,mippv2_meteorlake_mr4_nr3_crr,4,12,128,1,0,3.611129824e-07,34.0281,3.60428168e-07,34.0928,0.4493,1.33,15
-native,mippv2_meteorlake_mr4_nr3_crr,4,12,256,1,0,7.20658825e-07,34.1021,7.18802456667e-07,34.1902,1.3124,3.91,15
-native,mippv2_meteorlake_mr4_nr3_crr,4,12,512,1,0,1.45468777e-06,33.7887,1.44772592667e-06,33.9512,1.5807,4.80,15
-native,mippv2_meteorlake_mr4_nr3_crr,4,12,1024,1,0,2.96610806667e-06,33.1424,2.93713352667e-06,33.4694,1.4152,4.39,15
+Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS,Time_min_s,GFLOPS_peak,GFLOPS_stddev,GFLOPS_cv_pct,Repetitions,InterRun_CV_pct
+native,mippv2_meteorlake_mr4_nr3_crr,4,12,32,1,0,1.032694688e-07,29.7474,1.01041907e-07,30.4032,1.2471,4.24,15,2.72
+native,mippv2_meteorlake_mr4_nr3_crr,4,12,64,1,0,1.925139696e-07,31.9146,1.895529e-07,32.4131,2.1442,6.89,15,0.29
+native,mippv2_meteorlake_mr4_nr3_crr,4,12,128,1,0,3.729347216e-07,32.9495,3.675280248e-07,33.4342,1.3800,4.24,15,3.28
+native,mippv2_meteorlake_mr4_nr3_crr,4,12,256,1,0,7.25022066667e-07,33.8969,7.2042659e-07,34.1131,2.9524,9.09,15,4.73
+native,mippv2_meteorlake_mr4_nr3_crr,4,12,512,1,0,1.44997906e-06,33.8984,1.44516650333e-06,34.0113,0.1195,0.35,15,0.42
+native,mippv2_meteorlake_mr4_nr3_crr,4,12,1024,1,0,2.88508684667e-06,34.0732,2.86936759333e-06,34.2598,0.6543,1.93,15,1.65

@@ -1,7 +1,7 @@
-Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS,Time_min_s,GFLOPS_peak,GFLOPS_stddev,GFLOPS_cv_pct,Repetitions
-native,mippv2_x60_mr6_nr4_fmaddi_crr,6,8,32,1,0,6.82621528e-08,45.0030,6.82499194e-08,45.0110,0.0136,0.03,15
-native,mippv2_x60_mr6_nr4_fmaddi_crr,6,8,64,1,0,1.315989808e-07,46.6873,1.315874312e-07,46.6914,0.0117,0.03,15
-native,mippv2_x60_mr6_nr4_fmaddi_crr,6,8,128,1,0,2.626163632e-07,46.7907,2.625667968e-07,46.7995,0.0167,0.04,15
-native,mippv2_x60_mr6_nr4_fmaddi_crr,6,8,256,1,0,5.15973561667e-07,47.6303,5.15902311667e-07,47.6369,0.0171,0.04,15
-native,mippv2_x60_mr6_nr4_fmaddi_crr,6,8,512,1,0,1.02274707e-06,48.0588,1.02262095667e-06,48.0647,0.0125,0.03,15
-native,mippv2_x60_mr6_nr4_fmaddi_crr,6,8,1024,1,0,2.03653332e-06,48.2703,2.03630415333e-06,48.2757,0.0103,0.02,15
+Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS,Time_min_s,GFLOPS_peak,GFLOPS_stddev,GFLOPS_cv_pct,Repetitions,InterRun_CV_pct
+native,mippv2_x60_mr6_nr4_fmaddi_crr,6,8,32,1,0,6.82611094e-08,45.0037,6.82540094e-08,45.0083,0.0104,0.02,15,0.00
+native,mippv2_x60_mr6_nr4_fmaddi_crr,6,8,64,1,0,1.316047948e-07,46.6852,1.315874948e-07,46.6914,0.0099,0.02,15,0.00
+native,mippv2_x60_mr6_nr4_fmaddi_crr,6,8,128,1,0,2.626127552e-07,46.7913,2.625627552e-07,46.8002,0.0099,0.02,15,0.00
+native,mippv2_x60_mr6_nr4_fmaddi_crr,6,8,256,1,0,5.15974375e-07,47.6303,5.15882361667e-07,47.6388,0.0068,0.01,15,0.00
+native,mippv2_x60_mr6_nr4_fmaddi_crr,6,8,512,1,0,1.02272040333e-06,48.0601,1.02258957e-06,48.0662,0.0133,0.03,15,0.00
+native,mippv2_x60_mr6_nr4_fmaddi_crr,6,8,1024,1,0,2.03662378e-06,48.2681,2.03629850667e-06,48.2758,0.0175,0.04,15,0.00
