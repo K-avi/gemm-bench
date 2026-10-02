@@ -15,7 +15,7 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 FRONT_HOST="${DALEK_FRONT:-front.dalek.lip6}"
 REMOTE_DIR="${DALEK_DIR:-$HOME/Files/gemm-bench}"
 CPUFP_REMOTE_SRC="${CPUFP_REMOTE_SRC:-$HOME/cpufp-fix}"
-OUTPUT_DIR="${ROOT_DIR}/results/cpufp"
+OUTPUT_DIR="${ROOT_DIR}/gemm-bench-results/cpufp"
 
 # Colors
 RED='\033[0;31m'
@@ -235,7 +235,7 @@ import json
 import re
 from pathlib import Path
 
-results_dir = Path("results/cpufp")
+results_dir = Path("gemm-bench-results/cpufp") if Path("gemm-bench-results/cpufp").is_dir() else Path("results/cpufp")
 config_path = Path("uarch_config.json")
 
 with open(config_path, "r", encoding="utf-8") as f:
