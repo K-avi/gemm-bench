@@ -363,6 +363,8 @@ def format_crr_axis_label(c: UArchChampionCRR) -> str:
     model = c.spec.cpu_model
     if "Strix Point" in name and "HX 370" in model:
         line1 = "AMD Zen 5 (Ryzen AI 9 HX 370)"
+    elif "Meteor Lake" in name:
+        line1 = "Intel Meteor Lake (Core Ultra 9 185H)"
     elif model and model not in name:
         line1 = f"{name} ({model})"
     else:
@@ -492,11 +494,11 @@ def plot_crr_cross_uarch_efficiency(champions: List[UArchChampionCRR], output_pa
     ax.xaxis.grid(True, color=GRID_COLOR, linestyle="--", alpha=0.9)
     ax.yaxis.grid(False)
 
-    plt.subplots_adjust(top=0.91, bottom=0.10, left=0.28, right=0.96)
+    plt.subplots_adjust(top=0.91, bottom=0.10, left=0.30, right=0.96)
     if output_path.suffix == ".png":
-        fig.savefig(output_path, format="png", dpi=150)
+        fig.savefig(output_path, format="png", dpi=150, bbox_inches="tight")
     else:
-        fig.savefig(output_path, format="svg")
+        fig.savefig(output_path, format="svg", bbox_inches="tight")
     plt.close(fig)
     print(f"Generated: {output_path}")
 
@@ -524,16 +526,27 @@ def plot_crr_cross_uarch_flop_per_cycle(champions: List[UArchChampionCRR], outpu
     for idx, (champ, bar) in enumerate(zip(sorted_champs, bars)):
         val = champ.peak_flop_per_cycle
         tile_str = f"{champ.mr}x{champ.nr}"
-        text_label = f" {val:.2f} FLOP/cyc (MRxNR={tile_str} | Peak: {champ.peak_gflops:.1f} GFLOP/s)"
+        if val >= 10.0:
+            text_label = f" {val:.2f} FLOP/cyc (Tile: {tile_str} | Peak: {champ.peak_gflops:.1f} GFLOP/s)"
+            fsize = 9.5
+        elif val >= 7.0:
+            text_label = f" {val:.2f} FLOP/cyc ({tile_str} | {champ.peak_gflops:.1f} GFLOP/s)"
+            fsize = 8.5
+        elif val >= 6.0:
+            text_label = f" {val:.2f} FLOP/cyc ({tile_str} | {champ.peak_gflops:.1f} GFLOP/s)"
+            fsize = 8.5
+        else:
+            text_label = f" {val:.2f} FLOP/cyc ({tile_str} | {champ.peak_gflops:.1f} GFLOP/s)"
+            fsize = 7.5
         ax.text(
-            0.2,
+            0.15,
             idx,
             text_label,
             va="center",
             ha="left",
             color="#ffffff",
             fontweight="bold",
-            fontsize=10,
+            fontsize=fsize,
             zorder=5,
         )
 
@@ -629,11 +642,11 @@ def plot_crr_cross_uarch_flop_per_cycle(champions: List[UArchChampionCRR], outpu
     ax.xaxis.grid(True, color=GRID_COLOR, linestyle="--", alpha=0.9)
     ax.yaxis.grid(False)
 
-    plt.subplots_adjust(top=0.91, bottom=0.10, left=0.28, right=0.96)
+    plt.subplots_adjust(top=0.91, bottom=0.10, left=0.30, right=0.96)
     if output_path.suffix == ".png":
-        fig.savefig(output_path, format="png", dpi=150)
+        fig.savefig(output_path, format="png", dpi=150, bbox_inches="tight")
     else:
-        fig.savefig(output_path, format="svg")
+        fig.savefig(output_path, format="svg", bbox_inches="tight")
     plt.close(fig)
     print(f"Generated: {output_path}")
 
@@ -888,11 +901,11 @@ def plot_crr_vs_rrr_comparison(pairs: List[ComparisonPair], output_path: Path) -
     ax.xaxis.grid(True, color=GRID_COLOR, linestyle="--", alpha=0.9)
     ax.yaxis.grid(False)
 
-    plt.subplots_adjust(top=0.91, bottom=0.10, left=0.28, right=0.96)
+    plt.subplots_adjust(top=0.91, bottom=0.10, left=0.30, right=0.96)
     if output_path.suffix == ".png":
-        fig.savefig(output_path, format="png", dpi=150)
+        fig.savefig(output_path, format="png", dpi=150, bbox_inches="tight")
     else:
-        fig.savefig(output_path, format="svg")
+        fig.savefig(output_path, format="svg", bbox_inches="tight")
     plt.close(fig)
     print(f"Generated: {output_path}")
 

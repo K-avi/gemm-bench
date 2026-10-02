@@ -14,7 +14,7 @@
     },
     "meteorlake": {
       "name": "Intel Meteor Lake",
-      "cpu_model": "Core Ultra 9 185H (Redwood Cove P-core)",
+      "cpu_model": "Core Ultra 9 185H",
       "frequency_ghz": 4.78,
       "nominal_frequency_ghz": 5.1,
       "peak_flop_per_cycle": 16.0,

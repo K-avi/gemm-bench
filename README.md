@@ -60,8 +60,30 @@ To interpret the reported throughput figures accurately, several methodological 
    - Peak pipeline saturation requires dimensions $M, N$ to be exact multiples of the register tile $M_R, N_R$ and depth $K$ to align with loop unrolling (typically 4). While all microkernels include functional scalar/vector remainder handling for unit-test validation, fringe handling in production BLAS is typically offloaded to dedicated edge kernels or zero-padded buffers.
 4. **Single-Thread & Precision Scope**:
    - All measurements are strictly single-thread IEEE-754 double precision (`double` / FP64). Multi-threaded scaling and memory bus contention are not covered in this phase.
-5. **Clock Frequency Baseline & Empirical FPU Ceilings**:
-   - Efficiencies are computed against the architectural theoretical ceiling ($\text{FLOP/cycle} \times \text{Frequency}$) using fixed nominal or verified sustained turbo frequencies. Direct empirical FPU pipeline ceiling measurements (generalized from `x100_uarch_exp/broadcast_bench.cpp`) will be integrated directly into the suite to isolate pure FMA pipeline saturation on each machine.
+5. **Clock Frequency Baseline & Empirical FPU Ceilings (`cpufp`)**:
+   - Efficiencies are reported against both the architectural theoretical ceiling ($\text{FLOP/cycle} \times \text{Frequency}$) and empirical double-precision peak throughput measured via [`cpufp`](https://github.com/pigirons/cpufp).
+   - Rather than relying on transient single-core boost clocks that throttle under dense vector FMA workloads, sustained operating frequencies and empirical FP64 ceilings are benchmarked directly and recorded in [`uarch_config.json`](uarch_config.json).
+
+### Robust Measurement Protocol & Statistical Rigor
+
+To prevent common benchmarking pitfalls in microkernel evaluation (frequency throttling, compiler optimization artifacts, timing jitter, and cold cache effects), the suite implements a multi-layer measurement protocol:
+
+1. **Multi-Repetition Sampling & Median Filtering**:
+   - Each measurement point collects $R = 15$ timed samples (configurable via `-r / --repetitions`).
+   - Timings report the **median** duration (less sensitive to OS interrupts than mean) alongside min, max, stddev, and intra-run coefficient of variation ($\text{CV}\% = \frac{\sigma}{\mu} \times 100$).
+2. **Multi-Run Replication & Inter-Run CV Monitoring**:
+   - Benchmarks execute $N_{\text{runs}} = 3$ independent passes per configuration (`--runs 3`).
+   - The driver selects the best median execution time across passes and computes the inter-run variation ($\text{InterRun\_CV\_pct}$). An automatic warning (`⚠ inter-run CV > 5%`) is raised if runs exhibit significant variance.
+3. **Compiler Optimization & Timing Barriers**:
+   - High-resolution timestamps (`std::chrono::high_resolution_clock::now()`) are strictly isolated by `asm volatile("" ::: "memory")` compiler barriers to prevent reordering across timing boundaries.
+   - Dead-code elimination (DCE) of computation is prevented via an intra-loop read barrier on the destination matrix pointer (`asm volatile("" :: "r"(C.data) : "memory")`), verified by assembly inspection to introduce zero register spills or loop overhead.
+4. **Passive CPU Frequency Monitoring & Throttle Detection**:
+   - Does not require `sudo` / root privileges, enabling reliable execution on shared HPC clusters (e.g. the Dalek cluster) where governors cannot be forced to `performance`.
+   - The driver queries `/sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq` before and after each kernel evaluation, logging initial frequencies and warning if thermal or power throttling causes a $> 5\%$ drop during benchmarking.
+5. **Adaptive Thermal Cooldown**:
+   - A configurable pause (default: $2.0\,\text{s}$ via `--cooldown 2.0`) is inserted between matrix sizes for $K \ge 256$, preventing heat buildup and thermal frequency degradation during intensive sweeps.
+6. **Hardware Core Pinning**:
+   - Benchmark processes are pinned to an isolated physical core via `taskset` (configurable via `-c / --core`, default core 0) to prevent OS thread migration and cache-thrashing penalties.
 
 ---
 
@@ -142,8 +164,8 @@ Always specify `-o <uarch>_<simd>` to ensure non-colliding, standardized result 
 # Benchmark Intel Meteor Lake (AVX2) on specific matrix sizes
 ./run_benchmarks.sh avx2 -o meteorlake_avx2 -s 32 -s 64 -s 96 -s 128 gcc clang
 
-# Benchmark AMD Zen 4 (AVX-512) pinned to core 0
-./run_benchmarks.sh avx512 -o zen4_avx512 -c 0 gcc clang
+# Benchmark AMD Zen 4 (AVX-512) pinned to core 0 with 15 repetitions and 3 runs
+./run_benchmarks.sh avx512 -o zen4_avx512 -c 0 -r 15 --runs 3 gcc clang
 
 # Benchmark SpacemiT X100 with clean rebuild
 ./run_benchmarks.sh rvv_x100 -o x100_rvv --rebuild clang
@@ -152,9 +174,29 @@ Always specify `-o <uarch>_<simd>` to ensure non-colliding, standardized result 
 ./run_benchmarks.sh avx512 --crr -o zen4_avx512 gcc clang
 ```
 
+### Benchmark Driver CLI Options
+
+| Flag | Argument | Description | Default |
+| :--- | :--- | :--- | :--- |
+| `-o, --output, --prefix` | `<prefix>` | Suffix tag for generated CSV files (`results/gemm_results_<prefix>_...`) | `""` |
+| `--crr, --crr-only` | — | Benchmark only CRR microkernels (GotoBLAS / BLIS register tile layout) | `false` |
+| `--rrr, --rrr-only` | — | Benchmark only legacy RRR baseline microkernels | `false` |
+| `-r, --repetitions` | `<N>` | Number of timed repetitions per size/kernel sample | `15` |
+| `--runs, --repeats` | `<N>` | Number of full benchmark passes to compute inter-run CV | `3` |
+| `--cooldown` | `<sec>` | Cooldown sleep between sizes for $K \ge 256$ (thermal throttle mitigation) | `2.0` |
+| `-c, --core` | `<id>` | Pin benchmark execution to a specific CPU core via `taskset` | Auto / Core 0 |
+| `--no-pin` | — | Disable core affinity pinning | `false` |
+| `-s, --size` | `<K>` | Evaluate specific panel depth $K$ (can be repeated) | Config defaults |
+| `-k, --kernel` | `<name>` | Benchmark only a specific microkernel | All in config |
+| `--rebuild` | — | Force clean rebuild of target executables before benchmarking | `false` |
+| `--tests` | — | Build and run Catch2 unit tests before benchmarking | `false` |
+| `--tests-only` | — | Build and run Catch2 unit tests only, then exit | `false` |
+
 ---
 
 ## Plotting & Performance Analysis
+
+All figures are generated as clean, publication-ready vector **SVG** graphics with automatically trimmed bounding boxes (`bbox_inches="tight"`).
 
 ### RRR Plots
 
@@ -178,10 +220,10 @@ python3 plot_results.py --input-dir gemm-bench-results --freq zen4=5.4,m1=3.0
 
 ```bash
 # Generate all CRR plots (auto-detects gemm-bench-results/crr/)
-python3 plot_results_crr.py --output plots_crr --png
+python3 plot_results_crr.py --output plots_crr
 
 # With side-by-side CRR vs RRR comparison
-python3 plot_results_crr.py --output plots_crr --compare-rrr gemm-bench-results --png
+python3 plot_results_crr.py --output plots_crr --compare-rrr gemm-bench-results
 
 # Filter specific architectures
 python3 plot_results_crr.py --uarch zen4 m1 x100 --output plots_crr
@@ -373,16 +415,20 @@ Run `python3 plot_results.py --input-dir gemm-bench-results/rrr` to generate upd
 ---
 
 **Current Focus & Roadmap (Prioritized TODO)**:
-1. **Comparison against production BLAS (BLIS & OpenBLAS)\***: Benchmark MIPPv2 microkernels against real BLAS libraries across all platforms. To do so the repo will need to be extended to a proper GEMM benchmark suite. And not just implement microkernels.
-2. **Single-Precision Support (SGEMM / FP32)**: Extend the benchmark suite to evaluate FP32 as well.
-3. **Comparison with Hand-Written Native Intrinsics**: Implement intrinsics baselines (native RVV `riscv_vector.h`, AVX-512 `immintrin.h`, NEON `arm_neon.h`) to measure the exact abstraction overhead introduced by MIPPv2.
-4. **Cross-SIMD Abstraction Comparisons**: Benchmark against alternative SIMD abstraction frameworks, like **Google Highway**, **EVE**, and **`std::simd`**.
-5. **Non-Canonical GEMM Evaluation**: Benchmark throughput and epilogue overhead for non-canonical forms ($\beta \neq 0.0$, $\alpha \neq 1.0$) to quantify the cost of $C$ tile reloads and scaling.
+1. **Direct Microkernel Comparison Against BLIS (`bli_dgemm_ukernel_*`)**: Integrate native BLIS microkernels directly into the `GemmBench` in-cache harness (under iso-packing Col-Row-Row layouts) across supported microarchitectures (x86_64, AArch64) to quantify the exact performance delta between MIPPv2 C++ microkernels and hand-tuned assembly microkernels.
+2. **Cluster-Wide Benchmark Refresh (Dalek)**: Re-run the full multi-architecture sweep under the hardened protocol ($R = 15$, $N_{\text{runs}} = 3$, passive throttling checks) to update all reference datasets.
+3. **Single-Precision Support (SGEMM / FP32)**: Extend the benchmark suite and microkernel generators to evaluate FP32 as well.
+4. **Comparison with Hand-Written Native Intrinsics**: Implement intrinsics baselines (native RVV `riscv_vector.h`, AVX-512 `immintrin.h`, NEON `arm_neon.h`) to measure the exact abstraction overhead introduced by MIPPv2.
+5. **Cross-SIMD Abstraction Comparisons**: Benchmark against alternative SIMD abstraction frameworks, like **Google Highway**, **EVE**, and **`std::simd`**.
+6. **Non-Canonical GEMM Evaluation**: Benchmark throughput and epilogue overhead for non-canonical forms ($\beta \neq 0.0$, $\alpha \neq 1.0$) to quantify the cost of $C$ tile reloads and scaling.
+
+> [!NOTE]
+> **Completed Milestones**:
+> - Empirical hardware FPU ceiling and sustained clock calibration via `cpufp` integrated into `uarch_config.json`.
+> - Statistical robustness framework (median filtering across 15 repetitions, 3-run replication with inter-run CV tracking, compiler memory barriers, passive CPU throttling monitoring, thermal cooldown pauses).
 
 > [!NOTE]
 > BLIS/OpenBLAS for RVV: Ongoing vendor and community work on RVV-optimized BLAS kernels reportedly outperforms current upstream public releases of BLIS and OpenBLAS, but these patches are not yet fully merged/streamlined in mainline distributions. Benchmarking methodology should evaluate both upstream releases and patched branches.
-
-All of this is a lot of work. And I'm theoretically on vacations. I'm pretty sure I will do it eventually. But idk when.
 
 ---
 
