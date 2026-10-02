@@ -3,13 +3,13 @@ Thread Pool Binding: 0
 ------------------------------------------------------------------------------
 | Instruction Set | Vector Length | Core Computation      | Peak Performance |
 |-----------------|---------------|-----------------------|------------------|
-| FMA             | 256b          | FMA(f32,f32,f32)      | 68.063 GFLOPS    |
-| FMA             | 256b          | FMA(f64,f64,f64)      | 33.082 GFLOPS    |
-| AVX             | 256b          | ADD(MUL(f32,f32),f32) | 31.594 GFLOPS    |
-| AVX             | 256b          | ADD(MUL(f64,f64),f64) | 13.907 GFLOPS    |
+| FMA             | 256b          | FMA(f32,f32,f32)      | 69.868 GFLOPS    |
+| FMA             | 256b          | FMA(f64,f64,f64)      | 34.723 GFLOPS    |
+| AVX             | 256b          | ADD(MUL(f32,f32),f32) | 33.771 GFLOPS    |
+| AVX             | 256b          | ADD(MUL(f64,f64),f64) | 17.25 GFLOPS     |
 |-----------------|---------------|-----------------------|------------------|
-| FMA             | 128b          | FMA(f32,f32,f32)      | 34.229 GFLOPS    |
-| FMA             | 128b          | FMA(f64,f64,f64)      | 16.902 GFLOPS    |
-| SSE             | 128b          | ADD(MUL(f32,f32),f32) | 15.899 GFLOPS    |
-| SSE2            | 128b          | ADD(MUL(f64,f64),f64) | 8.6131 GFLOPS    |
+| FMA             | 128b          | FMA(f32,f32,f32)      | 35.671 GFLOPS    |
+| FMA             | 128b          | FMA(f64,f64,f64)      | 17.767 GFLOPS    |
+| SSE             | 128b          | ADD(MUL(f32,f32),f32) | 17.632 GFLOPS    |
+| SSE2            | 128b          | ADD(MUL(f64,f64),f64) | 8.2343 GFLOPS    |
 ------------------------------------------------------------------------------

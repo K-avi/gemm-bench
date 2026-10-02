@@ -114,7 +114,7 @@ CRR_ONLY=false
 RRR_ONLY=false
 NUM_RUNS=3
 REPETITIONS=15
-COOLDOWN_SEC=0.5
+COOLDOWN_SEC=2.0
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -264,6 +264,22 @@ if [[ -f /sys/devices/system/cpu/cpu0/cpufreq/scaling_cur_freq ]]; then
 fi
 if [[ -n "$CPU_FREQ_STR" ]]; then
     echo "CPU Status: ${CPU_FREQ_STR}"
+fi
+
+# Helper: read current CPU frequency in kHz for the pinned core (or cpu0 fallback)
+read_cpu_freq_khz() {
+    local core="${PIN_CORE:-0}"
+    local fpath="/sys/devices/system/cpu/cpu${core}/cpufreq/scaling_cur_freq"
+    if [[ -f "$fpath" ]]; then
+        cat "$fpath" 2>/dev/null || echo "0"
+    else
+        echo "0"
+    fi
+}
+
+INITIAL_FREQ_KHZ=$(read_cpu_freq_khz)
+if (( INITIAL_FREQ_KHZ > 0 )); then
+    echo "Initial CPU frequency (core ${PIN_CORE:-0}): $(( INITIAL_FREQ_KHZ / 1000 )) MHz"
 fi
 
 ################################################################################
@@ -444,7 +460,7 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
         CSV="results/${CSV_PREFIX}${file_suffix}_${COMPILER_TAG}.csv"
     fi
     mkdir -p "$(dirname "$CSV")"
-    echo "Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS,Time_min_s,GFLOPS_peak,GFLOPS_stddev,GFLOPS_cv_pct,Repetitions" > "$CSV"
+    echo "Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS,Time_min_s,GFLOPS_peak,GFLOPS_stddev,GFLOPS_cv_pct,Repetitions,InterRun_CV_pct" > "$CSV"
 
     # Determine whether exploratory kernels are required
     NEED_EXPLO=false
@@ -653,9 +669,11 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
 
                 BEST_LINE=""
                 BEST_TIME=""
+                ALL_TIMES=()
                 for (( run_idx=1; run_idx<=NUM_RUNS; run_idx++ )); do
                     if CUR_LINE=$("${BENCH_CMD[@]}"); then
                         CUR_TIME=$(echo "$CUR_LINE" | awk -F',' '{print $7}')
+                        ALL_TIMES+=("$CUR_TIME")
                         if [[ -z "$BEST_TIME" ]] || awk "BEGIN {exit !($CUR_TIME < $BEST_TIME)}"; then
                             BEST_TIME="$CUR_TIME"
                             BEST_LINE="$CUR_LINE"
@@ -663,11 +681,42 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
                     fi
                 done
 
+                # Compute inter-run CV (coefficient of variation across NUM_RUNS medians)
+                INTER_CV=""
+                if [[ ${#ALL_TIMES[@]} -ge 2 ]]; then
+                    INTER_CV=$(printf '%s\n' "${ALL_TIMES[@]}" | awk '{
+                        x[NR]=$1; s+=$1; s2+=$1*$1
+                    } END {
+                        if (NR>=2) {
+                            m=s/NR; v=(s2/NR)-(m*m);
+                            if (v<0) v=0;
+                            printf "%.2f", (sqrt(v)/m)*100
+                        } else { print "0.00" }
+                    }')
+                else
+                    INTER_CV="0.00"
+                fi
+
                 if [[ -n "$BEST_LINE" ]]; then
-                    echo "${VERSION},${BEST_LINE}" >> "${CSV}"
-                    echo "[${COMPILER_TAG}] ${VERSION} ${KERNEL} (${DESC_STR})"
+                    echo "${VERSION},${BEST_LINE},${INTER_CV}" >> "${CSV}"
+                    INTER_CV_MSG=""
+                    if awk "BEGIN {exit !(${INTER_CV} > 5.0)}" 2>/dev/null; then
+                        INTER_CV_MSG=" ⚠ inter-run CV=${INTER_CV}%"
+                    fi
+                    echo "[${COMPILER_TAG}] ${VERSION} ${KERNEL} (${DESC_STR})${INTER_CV_MSG}"
                 else
                     echo "[${COMPILER_TAG}] ${VERSION} ${KERNEL} (${DESC_STR}) FAILED" >&2
+                fi
+
+                # Post-measurement frequency check (throttle detection)
+                if (( INITIAL_FREQ_KHZ > 0 )); then
+                    POST_FREQ_KHZ=$(read_cpu_freq_khz)
+                    if (( POST_FREQ_KHZ > 0 )); then
+                        FREQ_DROP_PCT=$(awk "BEGIN {printf \"%.1f\", (1.0 - ${POST_FREQ_KHZ}/${INITIAL_FREQ_KHZ})*100}")
+                        if awk "BEGIN {exit !(${FREQ_DROP_PCT} > 5.0)}" 2>/dev/null; then
+                            echo "  ⚠ CPU freq dropped ${FREQ_DROP_PCT}% ($(( INITIAL_FREQ_KHZ/1000 )) → $(( POST_FREQ_KHZ/1000 )) MHz) — possible thermal throttling" >&2
+                        fi
+                    fi
                 fi
 
                 if (( SIZE >= 256 )) && (( $(echo "${COOLDOWN_SEC} > 0" | bc -l 2>/dev/null || echo 0) )); then
@@ -679,6 +728,19 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
 done
 
 echo
+
+# Final frequency check
+if (( INITIAL_FREQ_KHZ > 0 )); then
+    FINAL_FREQ_KHZ=$(read_cpu_freq_khz)
+    if (( FINAL_FREQ_KHZ > 0 )); then
+        echo "CPU frequency: $(( INITIAL_FREQ_KHZ / 1000 )) MHz (start) → $(( FINAL_FREQ_KHZ / 1000 )) MHz (end)"
+        FINAL_DROP=$(awk "BEGIN {printf \"%.1f\", (1.0 - ${FINAL_FREQ_KHZ}/${INITIAL_FREQ_KHZ})*100}")
+        if awk "BEGIN {exit !(${FINAL_DROP} > 5.0)}" 2>/dev/null; then
+            echo "⚠ WARNING: CPU frequency dropped ${FINAL_DROP}% during benchmarks — results may be affected by thermal throttling"
+        fi
+    fi
+fi
+
 echo "================================================================================"
 echo "Benchmarking complete."
 echo "Results saved in results/"

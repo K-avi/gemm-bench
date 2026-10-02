@@ -173,8 +173,8 @@ run_cluster_target() {
             partition="mono"
             node="mono-sip-k3"
             arch="riscv64"
-            wrapper="ai "
-            core=0
+            wrapper=""
+            core=8
             srun_extra="-c 8"
             ;;
         x60)
@@ -201,6 +201,7 @@ if [[ \"${FORCE_REBUILD}\" == \"true\" || ! -f \"\${BUILD_DIR}/cpufp\" ]]; then
     ./build_${arch}.sh >/dev/null 2>&1
 fi
 cd \"\${BUILD_DIR}\"
+[[ -e /proc/set_ai_thread ]] && echo \$\$ > /proc/set_ai_thread 2>/dev/null || true
 ${wrapper}./cpufp --thread_pool=[${core}]
 "
 
@@ -330,7 +331,7 @@ if records:
     with open(csv_path, "w", encoding="utf-8") as f:
         f.write("Target,UArchName,CpuModel,FreqGHz,ISA,VectorLength,Computation,Peak_DP_GFLOPS,Measured_FLOP_per_cycle,Theo_FLOP_per_cycle,Efficiency_pct\n")
         for r in records:
-            f.write(f"{r['target']},{r['uarch_name']},{r['cpu_model']},{r['freq_ghz']},{r['isa']},{r['vlen']},{r['computation']},{r['peak_dp_gflops']:.3f},{r['measured_flop_per_cycle']:.2f},{r['theo_flop_per_cycle']:.1f},{r['efficiency_pct']:.1f}\n")
+            f.write(f"{r['target']},{r['uarch_name']},{r['cpu_model']},{r['freq_ghz']},{r['isa']},{r['vlen']},\"{r['computation']}\",{r['peak_dp_gflops']:.3f},{r['measured_flop_per_cycle']:.2f},{r['theo_flop_per_cycle']:.1f},{r['efficiency_pct']:.1f}\n")
     print(f"✓ Synthèse CSV générée dans : {csv_path}\n")
 
     # Print summary table

@@ -62,10 +62,14 @@ inline BenchmarkStats compute_stats(std::vector<double> &samples, double ops) {
     const size_t reps = (cfg.repetitions > 0) ? cfg.repetitions : 1;           \
     std::vector<double> samples_s(reps);                                       \
     for (size_t r = 0; r < reps; ++r) {                                        \
+      asm volatile("" ::: "memory");                                           \
       const auto start = std::chrono::high_resolution_clock::now();            \
+      asm volatile("" ::: "memory");                                           \
       for (size_t i = 0; i < cfg.iterations; ++i) {                            \
         CALL;                                                                  \
+        asm volatile("" :: "r"(C.data) : "memory");                            \
       }                                                                        \
+      asm volatile("" ::: "memory");                                           \
       const auto end = std::chrono::high_resolution_clock::now();              \
       asm volatile("" ::: "memory");                                           \
       const auto duration =                                                    \

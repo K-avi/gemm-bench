@@ -5,31 +5,34 @@
       "cpu_model": "i5-6200U",
       "frequency_ghz": 2.3,
       "peak_flop_per_cycle": 16.0,
-      "measured_peak_flop_per_cycle": 16.0,
+      "measured_peak_flop_per_cycle": 15.1,
       "expected_best_kernel": "mippv2_meteorlake_mr4_nr3",
       "expected_best_kernel_crr": "mippv2_meteorlake_mr4_nr3_crr",
       "csv_pattern": "*gemm_results_*skylake*_{compiler}.csv",
-      "crr_csv_pattern": "*gemm_results_*skylake*crr*_{compiler}.csv"
+      "crr_csv_pattern": "*gemm_results_*skylake*crr*_{compiler}.csv",
+      "notes": "Core i5-6200U (2.3 GHz nominal, sustained 256b AVX2 throttles to ~2.25 GHz under powersave governor)"
     },
     "meteorlake": {
       "name": "Intel Meteor Lake",
-      "cpu_model": "Redwood Cove P-core",
-      "frequency_ghz": 5.1,
+      "cpu_model": "Core Ultra 9 185H (Redwood Cove P-core)",
+      "frequency_ghz": 4.78,
+      "nominal_frequency_ghz": 5.1,
       "peak_flop_per_cycle": 16.0,
-      "measured_peak_flop_per_cycle": 16.0,
+      "measured_peak_flop_per_cycle": 15.96,
       "expected_best_kernel": "mippv2_meteorlake_mr4_nr3",
       "expected_best_kernel_crr": "mippv2_meteorlake_mr4_nr3_crr",
       "csv_pattern": "*gemm_results_*meteorlake*_{compiler}.csv",
-      "crr_csv_pattern": "*gemm_results_*meteorlake*crr*_{compiler}.csv"
+      "crr_csv_pattern": "*gemm_results_*meteorlake*crr*_{compiler}.csv",
+      "notes": "Redwood Cove P-core has a 5.10 GHz light-load burst ceiling; sustained 256-bit AVX2 FMA execution operates at 4.78 GHz effective due to thermal/power limits."
     }
   },
   "avx512": {
     "zen4": {
       "name": "AMD Zen 4",
-      "cpu_model": "Ryzen 9 7900X",
-      "frequency_ghz": 5.4,
+      "cpu_model": "Ryzen 9 7945HX",
+      "frequency_ghz": 5.463,
       "peak_flop_per_cycle": 16.0,
-      "measured_peak_flop_per_cycle": 16.0,
+      "measured_peak_flop_per_cycle": 15.88,
       "expected_best_kernel": "mippv2_firestorm_mr4_nr4_fmaddi",
       "expected_best_kernel_crr": "mippv2_firestorm_mr4_nr4_fmaddi_crr",
       "csv_pattern": "*gemm_results_*zen4*_{compiler}.csv",
@@ -38,14 +41,14 @@
     "zen5": {
       "name": "AMD Zen 5 Strix Point",
       "cpu_model": "Ryzen AI 9 HX 370",
-      "frequency_ghz": 5.1,
+      "frequency_ghz": 5.158,
       "peak_flop_per_cycle": 16.0,
-      "measured_peak_flop_per_cycle": 16.0,
+      "measured_peak_flop_per_cycle": 15.97,
       "expected_best_kernel": "mippv2_firestorm_mr4_nr4_fmaddi",
       "expected_best_kernel_crr": "mippv2_firestorm_mr4_nr4_fmaddi_crr",
       "csv_pattern": "*gemm_results_*zen5*_{compiler}.csv",
       "crr_csv_pattern": "*gemm_results_*zen5*crr*_{compiler}.csv",
-      "notes": "Strix Point implements dual 256-bit FPU pipelines (double-pumped 512-bit FMA, 16 DP FLOP/cyc max)"
+      "notes": "Strix Point implements dual 256-bit FPU pipelines (double-pumped 512-bit FMA, 16 DP FLOP/cyc max; 5.158 GHz hardware boost)"
     }
   },
   "neon": {
@@ -55,7 +58,7 @@
       "frequency_ghz": 3.036,
       "hardware_max_frequency_ghz": 3.036,
       "peak_flop_per_cycle": 16.0,
-      "measured_peak_flop_per_cycle": 16.0,
+      "measured_peak_flop_per_cycle": 15.97,
       "expected_best_kernel": "mippv2_x60_mr6_nr4_fmaddi",
       "expected_best_kernel_crr": "mippv2_x60_mr6_nr4_fmaddi_crr",
       "csv_pattern": "*gemm_results_*m1*_{compiler}.csv",
