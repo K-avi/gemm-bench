@@ -64,7 +64,7 @@ ARCH_FLAGS[native]="
 
 # Auto-detect P-core on big.LITTLE architectures
 platform_setup() {
-    if [[ "$AUTO_PIN" == "true" && -z "$PIN_CORE" ]]; then
+    if [[ "${AUTO_PIN:-false}" == "true" && -z "${PIN_CORE:-}" ]]; then
         if command -v taskset &>/dev/null; then
             local max_f=0
             local best_core=""
