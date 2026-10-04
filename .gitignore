@@ -24,6 +24,8 @@ venv/
 plots/
 plots_crr/*
 !plots_crr/cross_uarch_crr_efficiency_comparison.svg
+!plots_crr/cross_uarch_crr_flop_cycle_comparison.svg
+!plots_crr/crr_hardware_summary_table.md
 test_plots/
 
 # IDE and Editor
