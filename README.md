@@ -25,22 +25,21 @@ CRR microkernels use a column-major packed $A$ panel (leading dimension $= M_R$)
 
 | SIMD | Microarchitecture | CPU / SoC Model | Freq (GHz) | Peak FLOP/cyc | Comp | Peak GFLOP/s | DGEMM FLOP/cyc | % of Peak |
 | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **NEON** | **Apple M1 Firestorm** | M1 Ultra (P-core) | 3.0 | 16.0 | GCC | 48.3 | 15.90 | **99.4 %** |
-| **AVX-512** | **AMD Zen 5 Strix Point** | Ryzen AI 9 HX 370 | 5.1 | 16.0 | GCC | 81.0 | 15.88 | **99.3 %** |
-| **NEON** | **Cortex-A76** | Raspberry Pi 5 | 2.4 | 8.0 | Clang | 18.9 | 7.87 | **98.4 %** |
-| **AVX-512** | **AMD Zen 4** | Ryzen 9 7900X | 5.4 | 16.0 | GCC | 84.4 | 15.64 | **97.7 %** |
-| **RVV 1.0** | **SpacemiT X100** | K3 SoC (VLEN=256) | 2.4 | 8.0 | Clang | 18.5 | 7.70 | **96.2 %** |
-| **AVX2** | **Intel Skylake** | Core i5-6200U | 2.3 | 16.0 | Clang | 35.0 | 15.21 | **95.0 %** |
-| **AVX2** | **Intel Meteor Lake** | Redwood Cove P-Core | 5.1** | 16.0 | Clang | 74.4 | 14.59 | **91.2 %** |
-| **RVV 1.0** | **SpacemiT A100** | K3 SoC (VLEN=1024) | 2.0 | 8.0 | GCC | 13.2 | 6.62 | **82.7 %** |
-| **RVV 1.0** | **SpacemiT X60** | BPI-F3 SoC (VLEN=256)| 1.6 | 8.0 | Clang* | 7.7 | 4.79 | **59.9 %** |
+| **NEON** | **Apple M1 Firestorm** | M1 Ultra (P-core) | 3.036 | 16.0 | GCC | 48.3 | 15.90 | **99.4 %** |
+| **NEON** | **Cortex-A76** | Raspberry Pi 5 | 2.400 | 8.0 | Clang | 18.9 | 7.88 | **98.5 %** |
+| **AVX-512** | **AMD Zen 4** | Ryzen 9 7945HX | 5.463 | 16.0 | GCC | 85.3 | 15.62 | **97.6 %** |
+| **AVX2** | **Intel Meteor Lake** | Redwood Cove P-Core | 4.780** | 16.0 | Clang | 74.5 | 15.58 | **97.4 %** |
+| **AVX-512** | **AMD Zen 5 Strix Point** | Ryzen AI 9 HX 370 | 5.158 | 16.0 | GCC | 80.1 | 15.54 | **97.1 %** |
+| **RVV 1.0** | **SpacemiT X100** | K3 SoC (VLEN=256) | 2.400 | 8.0 | Clang | 18.5 | 7.71 | **96.4 %** |
+| **AVX2** | **Intel Skylake** | Core i5-6200U | 2.300 | 16.0 | Clang | 35.2 | 15.32 | **95.7 %** |
+| **RVV 1.0** | **SpacemiT A100** | K3 SoC (VLEN=1024) | 2.000 | 8.0 | GCC | 13.2 | 6.60 | **82.5 %** |
+| **RVV 1.0** | **SpacemiT X60** | BPI-F3 SoC (VLEN=256)| 1.600 | 8.0 | Clang* | 7.7 | 4.79 | **59.9 %** |
 
 > [!IMPORTANT]
-> **Intel Meteor Lake frequency characteristics (burst vs. sustained)**:
-> - **5.10 GHz** is the peak single-core turbo frequency of the Redwood Cove P-core.
-> - Under sustained heavy compute loads, thermal and power limits typically throttle the core frequency to **~4.70 GHz**.
-> - For our reported champion microkernel measurements, we verified via hardware frequency monitoring that the core sustained the full **5.10 GHz** burst clock during the benchmark runs.
-> - i.e we made sure that the core is actually running @ 5.1GhZ for the microkernels we expected to perform well. But not for **all** of them. 
+> **Intel Meteor Lake frequency calibration (sustained AVX2 operating frequency)**:
+> - **5.10 GHz** is the single-core burst ceiling of the Redwood Cove P-core under light load.
+> - Under sustained dense 256-bit AVX2 FMA execution, power and thermal management stabilize operating frequency at **4.78 GHz**, as calibrated empirically via `cpufp` (76.27 GFLOP/s empirical ceiling).
+> - Evaluating against 4.78 GHz yields 15.58 FLOP/cycle (97.4% theoretical efficiency, 97.6% of empirical `cpufp` peak). 
 
 > [!NOTE]
 > **Zen 5 Strix Point Datapath Note**:

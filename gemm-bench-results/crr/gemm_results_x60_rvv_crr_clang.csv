@@ -1,7 +1,7 @@
-Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS
-rvv,mippv2_a100_mr7_nr4_pipe_crr,7,16,32,1,0,1.08058e-06,6.63347
-rvv,mippv2_a100_mr7_nr4_pipe_crr,7,16,64,1,0,1.96572e-06,7.29299
-rvv,mippv2_a100_mr7_nr4_pipe_crr,7,16,128,1,0,3.73929e-06,7.66777
-rvv,mippv2_a100_mr7_nr4_pipe_crr,7,16,256,1,0,9.4722e-06,6.05392
-rvv,mippv2_a100_mr7_nr4_pipe_crr,7,16,512,1,0,1.80805e-05,6.3432
-rvv,mippv2_a100_mr7_nr4_pipe_crr,7,16,1024,1,0,3.49103e-05,6.57045
+Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS,Time_min_s,GFLOPS_peak,GFLOPS_stddev,GFLOPS_cv_pct,Repetitions,InterRun_CV_pct
+rvv,mippv2_a100_mr7_nr4_pipe_crr,7,16,32,1,0,1.0811950822e-06,6.6297,1.0810014496e-06,6.6309,0.0701,1.06,15,1.28
+rvv,mippv2_a100_mr7_nr4_pipe_crr,7,16,64,1,0,1.9666542676e-06,7.2895,1.966367692e-06,7.2906,0.1036,1.44,15,1.40
+rvv,mippv2_a100_mr7_nr4_pipe_crr,7,16,128,1,0,3.7391791808e-06,7.6680,3.7387383248e-06,7.6689,0.0521,0.68,15,0.00
+rvv,mippv2_a100_mr7_nr4_pipe_crr,7,16,256,1,0,9.48720302e-06,6.0444,9.48486626667e-06,6.0458,0.0006,0.01,15,0.92
+rvv,mippv2_a100_mr7_nr4_pipe_crr,7,16,512,1,0,1.81309182833e-05,6.3255,1.77387391967e-05,6.4654,0.0397,0.63,15,0.48
+rvv,mippv2_a100_mr7_nr4_pipe_crr,7,16,1024,1,0,3.47804052667e-05,6.5950,3.45559896467e-05,6.6378,0.0226,0.34,15,0.62

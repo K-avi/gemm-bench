@@ -1,7 +1,7 @@
-Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS
-rvv,mippv2_a100_mr7_nr2_lmul2_pipe_crr,7,64,32,1,0,2.39626e-06,11.9653
-rvv,mippv2_a100_mr7_nr2_lmul2_pipe_crr,7,64,64,1,0,4.624e-06,12.4014
-rvv,mippv2_a100_mr7_nr2_lmul2_pipe_crr,7,64,128,1,0,9.06838e-06,12.647
-rvv,mippv2_a100_mr7_nr2_lmul2_pipe_crr,7,64,256,1,0,1.83699e-05,12.4865
-rvv,mippv2_a100_mr7_nr2_lmul2_pipe_crr,7,64,512,1,0,3.66543e-05,12.5156
-rvv,mippv2_a100_mr7_nr2_lmul2_pipe_crr,7,64,1024,1,0,7.30979e-05,12.5517
+Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS,Time_min_s,GFLOPS_peak,GFLOPS_stddev,GFLOPS_cv_pct,Repetitions,InterRun_CV_pct
+rvv,mippv2_a100_mr7_nr2_lmul2_pipe_crr,7,64,32,1,0,2.3982843088e-06,11.9552,2.3973592722e-06,11.9598,0.0065,0.05,15,0.02
+rvv,mippv2_a100_mr7_nr2_lmul2_pipe_crr,7,64,64,1,0,4.626701666e-06,12.3941,4.6238177528e-06,12.4019,0.0043,0.03,15,0.12
+rvv,mippv2_a100_mr7_nr2_lmul2_pipe_crr,7,64,128,1,0,9.068027928e-06,12.6475,9.0661731696e-06,12.6501,0.0037,0.03,15,0.01
+rvv,mippv2_a100_mr7_nr2_lmul2_pipe_crr,7,64,256,1,0,1.83721900383e-05,12.4850,1.83695143083e-05,12.4868,0.0040,0.03,15,0.01
+rvv,mippv2_a100_mr7_nr2_lmul2_pipe_crr,7,64,512,1,0,3.66227860967e-05,12.5264,3.661440885e-05,12.5293,0.0085,0.07,15,0.19
+rvv,mippv2_a100_mr7_nr2_lmul2_pipe_crr,7,64,1024,1,0,7.30949897333e-05,12.5522,7.30855673333e-05,12.5538,0.0031,0.02,15,0.23
