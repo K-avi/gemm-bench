@@ -562,7 +562,7 @@ def plot_crr_cross_uarch_flop_per_cycle(champions: List[UArchChampionCRR], outpu
     for idx, (champ, bar) in enumerate(zip(sorted_champs, bars)):
         val = champ.peak_flop_per_cycle
         text_label = f"{val:.2f} FLOP/cyc"
-        if val >= 5.0:
+        if val >= 3.0:
             ax.text(
                 val - 0.35,
                 idx,
