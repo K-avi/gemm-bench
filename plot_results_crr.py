@@ -494,8 +494,8 @@ def plot_crr_cross_uarch_efficiency(champions: List[UArchChampionCRR], output_pa
         ha="left",
     )
     fig.text(
-        0.04, 0.935,
-        "FP64 BLIS-like Micro-Kernel (A PackedColMajor, B PackedRowMajor) | Single tile MRxNR streaming over K ∈ [32..1024] | Normalized to theoretical peak GFLOP/s",
+        0.04, 0.930,
+        "FP64 BLIS-like Micro-Kernel (A PackedColMajor, B PackedRowMajor) | Single tile MRxNR streaming over K ∈ [32..1024]",
         fontsize=9.5,
         color=TEXT_SECONDARY,
         ha="left",
@@ -511,7 +511,7 @@ def plot_crr_cross_uarch_efficiency(champions: List[UArchChampionCRR], output_pa
     fig.legend(
         handles=legend_elements,
         loc="upper right",
-        bbox_to_anchor=(0.96, 0.97),
+        bbox_to_anchor=(0.96, 0.978),
         ncol=4,
         framealpha=0.92,
         edgecolor=BORDER_COLOR,
@@ -526,7 +526,7 @@ def plot_crr_cross_uarch_efficiency(champions: List[UArchChampionCRR], output_pa
     ax.xaxis.grid(True, color=GRID_COLOR, linestyle="--", alpha=0.9)
     ax.yaxis.grid(False)
 
-    plt.subplots_adjust(top=0.91, bottom=0.10, left=0.30, right=0.96)
+    plt.subplots_adjust(top=0.89, bottom=0.10, left=0.30, right=0.96)
     if output_path.suffix == ".png":
         fig.savefig(output_path, format="png", dpi=150, bbox_inches="tight")
     else:
