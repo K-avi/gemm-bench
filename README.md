@@ -69,10 +69,10 @@ To prevent common benchmarking pitfalls in microkernel evaluation (frequency thr
 
 1. **Multi-Repetition Sampling & Median Filtering**:
    - Each measurement point collects $R = 15$ timed samples (configurable via `-r / --repetitions`).
-   - Timings report the **median** duration (less sensitive to OS interrupts than mean) alongside min, max, stddev, and intra-run coefficient of variation ($\text{CV}\% = \frac{\sigma}{\mu} \times 100$).
+   - Timings report the **median** duration (less sensitive to OS interrupts than mean) alongside min, max, stddev, and intra-run coefficient of variation ($\text{CV} = \frac{\sigma}{\mu} \times 100\,\%$, reported as `GFLOPS_cv_pct`).
 2. **Multi-Run Replication & Inter-Run CV Monitoring**:
    - Benchmarks execute $N_{\text{runs}} = 3$ independent passes per configuration (`--runs 3`).
-   - The driver selects the best median execution time across passes and computes the inter-run variation ($\text{InterRun\_CV\_pct}$). An automatic warning (`⚠ inter-run CV > 5%`) is raised if runs exhibit significant variance.
+   - The driver selects the best median execution time across passes and computes the inter-run variation (`InterRun_CV_pct`). An automatic warning (`⚠ inter-run CV > 5%`) is raised if runs exhibit significant variance.
 3. **Compiler Optimization & Timing Barriers**:
    - High-resolution timestamps (`std::chrono::high_resolution_clock::now()`) are strictly isolated by `asm volatile("" ::: "memory")` compiler barriers to prevent reordering across timing boundaries.
    - Dead-code elimination (DCE) of computation is prevented via an intra-loop read barrier on the destination matrix pointer (`asm volatile("" :: "r"(C.data) : "memory")`), verified by assembly inspection to introduce zero register spills or loop overhead.
