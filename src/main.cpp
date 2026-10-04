@@ -43,6 +43,14 @@ public:
     if (fd_ >= 0) {
       ioctl(fd_, PERF_EVENT_IOC_RESET, 0);
       ioctl(fd_, PERF_EVENT_IOC_ENABLE, 0);
+    } else {
+      static bool warned = false;
+      if (!warned) {
+        warned = true;
+        std::cerr << "Notice: perf_event_open CPU cycles counter unavailable (errno: "
+                  << errno << " - " << std::strerror(errno)
+                  << "). Cycle-derived metrics (Eff_GHz, FLOP_per_cycle) will be 0.\n";
+      }
     }
 #endif
   }

@@ -197,9 +197,9 @@ def load_crr_dataset_for_uarch(input_dir: Path, spec: UArchSpecCRR) -> pd.DataFr
                 continue
 
             if "FLOP_per_cycle" in df.columns and (pd.to_numeric(df["FLOP_per_cycle"], errors="coerce") > 0).any():
-                flop_per_cycle = pd.to_numeric(df["FLOP_per_cycle"], errors="coerce").fillna(df["GFLOPS"] / spec.frequency_ghz)
+                flop_per_cycle = pd.to_numeric(df["FLOP_per_cycle"], errors="coerce")
             else:
-                flop_per_cycle = df["GFLOPS"] / spec.frequency_ghz
+                flop_per_cycle = pd.Series(np.nan, index=df.index)
             
             # Efficiency relative to rated theoretical peak GFLOP/s (frequency_ghz * peak_flop_per_cycle)
             efficiency_pct = (df["GFLOPS"] / spec.peak_gflops) * 100.0
@@ -263,9 +263,9 @@ def load_rrr_dataset_for_uarch(rrr_dir: Path, spec: UArchSpecCRR) -> pd.DataFram
                 continue
 
             if "FLOP_per_cycle" in df.columns and (pd.to_numeric(df["FLOP_per_cycle"], errors="coerce") > 0).any():
-                flop_per_cycle = pd.to_numeric(df["FLOP_per_cycle"], errors="coerce").fillna(df["GFLOPS"] / spec.frequency_ghz)
+                flop_per_cycle = pd.to_numeric(df["FLOP_per_cycle"], errors="coerce")
             else:
-                flop_per_cycle = df["GFLOPS"] / spec.frequency_ghz
+                flop_per_cycle = pd.Series(np.nan, index=df.index)
             efficiency_pct = (df["GFLOPS"] / spec.peak_gflops) * 100.0
             pipeline_efficiency_pct = (flop_per_cycle / spec.peak_flop_per_cycle) * 100.0
 
@@ -346,12 +346,12 @@ def analyze_crr_uarch(df: pd.DataFrame, spec: UArchSpecCRR) -> Optional[UArchCha
     mr = int(peak_row["M"])
     nr = int(peak_row["N"])
 
-    if "Eff_GHz" in peak_row and pd.notna(peak_row["Eff_GHz"]):
+    if "Eff_GHz" in peak_row and pd.notna(peak_row["Eff_GHz"]) and float(peak_row["Eff_GHz"]) > 0:
         eff_ghz = float(peak_row["Eff_GHz"])
-    elif "Cycles" in peak_row and "Time_s" in peak_row and float(peak_row["Time_s"]) > 0:
+    elif "Cycles" in peak_row and "Time_s" in peak_row and float(peak_row["Time_s"]) > 0 and float(peak_row["Cycles"]) > 0:
         eff_ghz = float(peak_row["Cycles"]) / (float(peak_row["Time_s"]) * 1e9)
     else:
-        eff_ghz = peak_gflops / peak_flop_per_cycle if peak_flop_per_cycle > 0 else spec.frequency_ghz
+        eff_ghz = np.nan
 
     efficiency_pct = (peak_gflops / spec.peak_gflops) * 100.0
     pipeline_efficiency_pct = (peak_flop_per_cycle / spec.peak_flop_per_cycle) * 100.0
@@ -393,11 +393,13 @@ def format_crr_axis_label(c: UArchChampionCRR) -> str:
         line1 = f"{name} ({model})"
     else:
         line1 = name
-    line2 = f"{c.spec.simd.upper()} @ {c.spec.frequency_ghz:.1f} GHz"
-    return f"{line1}\n{line2}"
+    simd_name = c.spec.simd.upper()
+    if simd_name == "RVV":
+        simd_name = "RVV 1.0"
+    return f"{line1}\n{simd_name}"
 
 
-def group_crr_champions_by_family(champions: List[UArchChampionCRR], sort_metric: str = "efficiency") -> List[UArchChampionCRR]:
+def group_crr_champions_by_family(champions: List[UArchChampionCRR], sort_metric: str = "pipeline_efficiency") -> List[UArchChampionCRR]:
     """Groups champions by family: AVX-512, AVX2, NEON, RVV.
 
     Returns the list sorted so that AVX-512 appears at the top of a barh chart.
@@ -406,7 +408,9 @@ def group_crr_champions_by_family(champions: List[UArchChampionCRR], sort_metric
     grouped: List[UArchChampionCRR] = []
     for fam in family_order:
         fam_champs = [c for c in champions if c.spec.simd == fam]
-        if sort_metric == "efficiency":
+        if sort_metric == "pipeline_efficiency":
+            fam_champs.sort(key=lambda c: c.pipeline_efficiency_pct, reverse=True)
+        elif sort_metric == "efficiency":
             fam_champs.sort(key=lambda c: c.efficiency_pct, reverse=True)
         else:
             fam_champs.sort(key=lambda c: c.peak_flop_per_cycle, reverse=True)
@@ -419,7 +423,7 @@ def plot_crr_cross_uarch_efficiency(champions: List[UArchChampionCRR], output_pa
     """Generates an executive horizontal ranking bar chart grouped by SIMD family for CRR micro-kernels."""
     fig, ax = plt.subplots(figsize=(14.0, 7.5))
 
-    sorted_champs = group_crr_champions_by_family(champions, sort_metric="efficiency")
+    sorted_champs = group_crr_champions_by_family(champions, sort_metric="pipeline_efficiency")
     y_positions = np.arange(len(sorted_champs))
     bar_height = 0.58
 
@@ -427,7 +431,7 @@ def plot_crr_cross_uarch_efficiency(champions: List[UArchChampionCRR], output_pa
 
     bars = ax.barh(
         y_positions,
-        [c.efficiency_pct for c in sorted_champs],
+        [c.pipeline_efficiency_pct for c in sorted_champs],
         height=bar_height,
         color=bar_colors,
         edgecolor=BORDER_COLOR,
@@ -435,12 +439,12 @@ def plot_crr_cross_uarch_efficiency(champions: List[UArchChampionCRR], output_pa
         zorder=3,
     )
 
-    # 100% Theoretical Peak reference line
+    # 100% Architectural FMA Peak reference line
     ax.axvline(100.0, color="#1e293b", linestyle="--", linewidth=1.5, zorder=4)
     ax.text(
         100.2,
         len(sorted_champs) - 0.45,
-        "100% Theoretical Peak",
+        "100% Architectural Peak",
         color="#1e293b",
         fontsize=9,
         fontweight="bold",
@@ -449,7 +453,7 @@ def plot_crr_cross_uarch_efficiency(champions: List[UArchChampionCRR], output_pa
     )
 
     for idx, (champ, bar) in enumerate(zip(sorted_champs, bars)):
-        eff = champ.efficiency_pct
+        eff = champ.pipeline_efficiency_pct
         text_label = f"{eff:.1f}%"
         if eff > 15.0:
             ax.text(
@@ -483,7 +487,7 @@ def plot_crr_cross_uarch_efficiency(champions: List[UArchChampionCRR], output_pa
     ax.set_xlim(0, 108)
     ax.set_xticks([0, 20, 40, 60, 80, 100])
     ax.set_xticklabels(["0%", "20%", "40%", "60%", "80%", "100%"], fontsize=10)
-    ax.set_xlabel("Peak Efficiency (% of Theoretical Peak GFLOP/s: R_peak = f_boost × Peak_FLOP/cycle)", fontsize=11, fontweight="bold", labelpad=10)
+    ax.set_xlabel("Microarchitectural Efficiency (% of Theoretical Peak FP64 FLOP / cycle)", fontsize=11, fontweight="bold", labelpad=10)
 
     fig.text(
         0.04, 0.965,
@@ -495,7 +499,7 @@ def plot_crr_cross_uarch_efficiency(champions: List[UArchChampionCRR], output_pa
     )
     fig.text(
         0.04, 0.930,
-        "FP64 BLIS-like Micro-Kernel (A PackedColMajor, B PackedRowMajor) | Single tile MRxNR streaming over K ∈ [32..1024]",
+        "FP64 BLIS-like Micro-Kernel (A PackedColMajor, B PackedRowMajor) | Single tile MRxNR streaming over K ∈ [32..1024] | Measured via hardware PMU cycles",
         fontsize=9.5,
         color=TEXT_SECONDARY,
         ha="left",
@@ -947,35 +951,35 @@ def plot_crr_vs_rrr_comparison(pairs: List[ComparisonPair], output_path: Path) -
 # ==============================================================================
 
 def sort_champions_for_display(champions: List[UArchChampionCRR]) -> List[UArchChampionCRR]:
-    """Sorts champions by SIMD family (AVX-512, AVX2, NEON, RVV) and efficiency descending."""
+    """Sorts champions by SIMD family (AVX-512, AVX2, NEON, RVV) and pipeline efficiency descending."""
     family_order = ["avx512", "avx2", "neon", "rvv"]
     sorted_list: List[UArchChampionCRR] = []
     for fam in family_order:
         fam_champs = [c for c in champions if c.spec.simd == fam]
-        fam_champs.sort(key=lambda c: c.efficiency_pct, reverse=True)
+        fam_champs.sort(key=lambda c: c.pipeline_efficiency_pct, reverse=True)
         sorted_list.extend(fam_champs)
     return sorted_list
 
 
 def print_crr_summary_table(champions: List[UArchChampionCRR]) -> None:
     """Prints a formatted comparative table in the console reporting effective frequency and microarchitectural metrics."""
-    print("\n" + "=" * 175)
-    print("  GEMMBench — Microarchitectural Performance, Measured Effective Frequency & Efficiency Summary (CRR BLIS Micro-Kernels)")
-    print("=" * 175)
+    print("\n" + "=" * 180)
+    print("  GEMMBench — Microarchitectural Efficiency & Hardware Execution Summary (CRR BLIS Micro-Kernels)")
+    print("=" * 180)
     header = (
         f"{'SIMD':<8} | {'Microarchitecture':<22} | {'CPU Model':<22} | {'Tile':<7} | {'Comp':<5} | "
-        f"{'f_boost':<10} | {'f_eff':<10} | {'Peak Theo':<10} | {'Achieved':<9} | {'% Peak':<8} | "
-        f"{'FLOP/cyc':<11} | {'Pipe Sat':<9} | {'Expected Match?':<15}"
+        f"{'FLOP/cyc':<11} | {'Pipe Sat':<10} | {'f_eff':<10} | {'f_boost':<10} | {'Achieved':<9} | "
+        f"{'Peak Theo':<10} | {'% Peak':<8} | {'Expected Match?':<15}"
     )
     print(header)
-    print("-" * 175)
+    print("-" * 180)
 
     ordered_champs = sort_champions_for_display(champions)
     for champ in ordered_champs:
         match_str = "✓ MATCH" if champ.matches_expected else f"✗ MISMATCH ({champ.spec.expected_best_kernel})"
         tile_str = f"{champ.mr}x{champ.nr}"
         f_boost_str = f"{champ.spec.frequency_ghz:.2f} GHz"
-        f_eff_str = f"{champ.eff_ghz:.2f} GHz"
+        f_eff_str = f"{champ.eff_ghz:.2f} GHz" if pd.notna(champ.eff_ghz) else "N/A"
         peak_theo_str = f"{champ.spec.peak_gflops:.1f}"
         achieved_str = f"{champ.peak_gflops:.1f}"
         flop_cyc_str = f"{champ.peak_flop_per_cycle:.2f}/{champ.spec.peak_flop_per_cycle:.0f}"
@@ -985,17 +989,17 @@ def print_crr_summary_table(champions: List[UArchChampionCRR]) -> None:
             f"{champ.spec.cpu_model:<22} | "
             f"{tile_str:<7} | "
             f"{champ.compiler:<5} | "
-            f"{f_boost_str:<10} | "
-            f"{f_eff_str:<10} | "
-            f"{peak_theo_str:<10} | "
-            f"{achieved_str:<9} | "
-            f"{champ.efficiency_pct:<7.1f}% | "
             f"{flop_cyc_str:<11} | "
-            f"{champ.pipeline_efficiency_pct:<8.1f}% | "
+            f"{champ.pipeline_efficiency_pct:<8.1f}%  | "
+            f"{f_eff_str:<10} | "
+            f"{f_boost_str:<10} | "
+            f"{achieved_str:<9} | "
+            f"{peak_theo_str:<10} | "
+            f"{champ.efficiency_pct:<7.1f}% | "
             f"{match_str}"
         )
         print(row)
-    print("=" * 175 + "\n")
+    print("=" * 180 + "\n")
 
 
 def export_crr_markdown_table(champions: List[UArchChampionCRR], output_path: Path) -> None:
@@ -1003,7 +1007,7 @@ def export_crr_markdown_table(champions: List[UArchChampionCRR], output_path: Pa
     lines = [
         "# GEMMBench — Cross-Microarchitecture CRR Performance & Hardware Execution Summary",
         "",
-        "| SIMD | Microarchitecture | CPU Model | Champion Kernel | Tile ($M_R \\times N_R$) | Comp | $f_{\\text{boost}}$ (GHz) | $f_{\\text{eff}}$ (GHz) | Peak Theo (GFLOP/s) | Achieved (GFLOP/s) | % Peak Theo | FLOP/cycle | Pipe Saturation (%) |",
+        "| SIMD | Microarchitecture | CPU Model | Champion Kernel | Tile ($M_R \\times N_R$) | Comp | Pipe Saturation (%) | FLOP/cycle | $f_{\\text{eff}}$ (GHz) | $f_{\\text{boost}}$ (GHz) | Achieved (GFLOP/s) | Peak Theo (GFLOP/s) | % Peak Theo |",
         "|:---|:---|:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|",
     ]
 
@@ -1011,6 +1015,7 @@ def export_crr_markdown_table(champions: List[UArchChampionCRR], output_path: Pa
     for champ in ordered_champs:
         tile_str = f"{champ.mr}x{champ.nr}"
         flop_cyc_str = f"{champ.peak_flop_per_cycle:.2f} / {champ.spec.peak_flop_per_cycle:.0f}"
+        f_eff_str = f"{champ.eff_ghz:.2f}" if pd.notna(champ.eff_ghz) else "N/A"
         lines.append(
             f"| {champ.spec.simd.upper()} "
             f"| {champ.spec.name} "
@@ -1018,24 +1023,24 @@ def export_crr_markdown_table(champions: List[UArchChampionCRR], output_path: Pa
             f"| `{champ.kernel}` "
             f"| {tile_str} "
             f"| {champ.compiler} "
-            f"| {champ.spec.frequency_ghz:.2f} "
-            f"| {champ.eff_ghz:.2f} "
-            f"| {champ.spec.peak_gflops:.1f} "
-            f"| {champ.peak_gflops:.1f} "
-            f"| **{champ.efficiency_pct:.1f}%** "
+            f"| **{champ.pipeline_efficiency_pct:.1f}%** "
             f"| {flop_cyc_str} "
-            f"| **{champ.pipeline_efficiency_pct:.1f}%** |"
+            f"| {f_eff_str} "
+            f"| {champ.spec.frequency_ghz:.2f} "
+            f"| {champ.peak_gflops:.1f} "
+            f"| {champ.spec.peak_gflops:.1f} "
+            f"| {champ.efficiency_pct:.1f}% |"
         )
 
     lines.extend([
         "",
-        "> **Notes on Microarchitectural Metrics:**",
-        "> - $f_{\\text{boost}}$: Rated single-core burst frequency (from processor specifications / sysfs).",
+        "> **Notes on Metrics:**",
+        "> - **Pipe Saturation**: Execution unit saturation $\\text{FLOP/cycle} / \\text{Peak\\_FLOP/cycle}$. Measures pure code generation and FMA port saturation independently of frequency scaling.",
         "> - $f_{\\text{eff}}$: Effective core frequency measured in-process during microkernel execution ($\\text{Cycles} / \\text{Time}$ using Linux `perf_event_open` hardware cycle counters).",
-        "> - **Peak Theo**: Rated theoretical ceiling $R_{\\text{peak}} = f_{\\text{boost}} \\times \\text{Peak\\_FLOP/cycle}$.",
+        "> - $f_{\\text{boost}}$: Rated single-core burst frequency (from processor specifications / sysfs).",
         "> - **Achieved**: Measured sustained performance $R_{\\text{achieved}} = 2MNK / t_{\\text{min}}$.",
-        "> - **% Peak Theo**: Absolute theoretical efficiency $R_{\\text{achieved}} / R_{\\text{peak}}$.",
-        "> - **Pipe Saturation**: Execution unit saturation $\\text{FLOP/cycle} / \\text{Peak\\_FLOP/cycle}$. For example, on AMD Zen 4, 15.95 / 16.0 FLOP/cycle corresponds to 99.7% pipeline saturation, while thermal/power limits under sustained AVX-512 drop $f_{\\text{eff}}$ from 5.46 GHz to 5.25 GHz, explaining the 95.9% of rated burst peak.",
+        "> - **Peak Theo**: Rated theoretical ceiling $R_{\\text{peak}} = f_{\\text{boost}} \\times \\text{Peak\\_FLOP/cycle}$.",
+        "> - **% Peak Theo**: Theoretical ceiling efficiency $R_{\\text{achieved}} / R_{\\text{peak}}$. Lower than Pipe Saturation when thermal or power scaling causes $f_{\\text{eff}} < f_{\\text{boost}}$ (e.g. Zen 4 operating at 5.25 GHz sustained vs 5.46 GHz burst).",
         "",
     ])
 
