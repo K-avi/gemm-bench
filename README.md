@@ -243,173 +243,236 @@ python3 plot_results_crr.py --uarch zen4 m1 x100 --output plots_crr
 
 ## Developer Tutorial: Adding a New Microkernel
 
-This end-to-end tutorial demonstrates how to implement, register, test, benchmark, and analyze a new GEMM microkernel across the entire pipeline.
+This guide walks through implementing, registering, testing, benchmarking, and analyzing a new GEMM microkernel across the entire pipeline. The repository supports two principal layouts:
+- **CRR (Recommended / State-of-the-Art)**: Column-major packed $A$ ($M_R \times K$, leading dimension $M_R$), Row-major $B$ ($K \times N_R$), Row-major $C$ ($M_R \times N_R$). This matches the GotoBLAS / BLIS register-tiled microkernel convention.
+- **RRR (Legacy)**: Row-major packed $A, B, C$.
 
-### Step 1: Implement the Kernel in C++
-Microkernels are implemented in `include/microkernels/GemmUKernel_opti_rrr.hpp` (RRR layout) or `include/microkernels/GemmUKernel_opti_crr.hpp` (CRR layout). Exploratory kernels go in `include/microkernels/GemmUKernel_explo.hpp`.
+---
 
-1. **Choose Register Tile Geometry ($M_R \times N_R$)**:
-   - In elements: $M_R$ rows $\times$ $N_R$ columns, where $N_R = N_V \times VL$ ($N_V$ vectors wide, $VL = \text{vlen}$).
-   - Accumulator vector registers required = $M_R \times N_V = M_R \times \lceil N_R / VL \rceil$.
-   - For example, a $2 \times 2VL$ tile ($M_R=2, N_V=2$): 4 accumulator registers.
-   - Total register budget $\approx (M_R \times N_V) + N_V + \min(M_R, 2)$ operands.
-   - Ensure the total budget fits within the architectural register file (16 registers on AVX2, 32 on AVX-512 / NEON / RVV) with zero spilling. On RVV, account for register grouping: physical registers = $\text{LMUL} \times \text{logical registers}$.
+### Step 1: Implement the Microkernel in C++
 
-> [!TIP]
-> - **Register Pressure vs. Loop Unrolling**: When unrolling loops (e.g. along $K$), declaring more intermediate variables than available architectural registers is often viable: modern compilers perform live-range analysis and can interleave register reuse without spilling to the stack. Maybe check the assembly though.
-> - **MIPPv2 LMUL Abstraction for Power-of-Two Tiles**: For configurations with power-of-two vector widths ($N_V \in \{2, 4, 8\}$, e.g. $2 \times 2VL$, $4 \times 2VL$, $8 \times 4VL$), you can leverage MIPPv2's `lmul` template parameter (`set0<T, lmul>()`, `load<T, lmul>()`, `fmadd()`). This produces concise, portable code across architectures: on RVV it maps directly to hardware vector register groups, while on fixed-width ISAs (AVX2, AVX-512, NEON) MIPPv2 automatically emulates LMUL by unrolling native SIMD registers under a unified API.
+CRR microkernels are implemented in [`include/microkernels/GemmUKernel_opti_crr.hpp`](include/microkernels/GemmUKernel_opti_crr.hpp). RRR microkernels reside in [`include/microkernels/GemmUKernel_opti_rrr.hpp`](include/microkernels/GemmUKernel_opti_rrr.hpp). Exploratory kernels go in [`include/microkernels/GemmUKernel_explo.hpp`](include/microkernels/GemmUKernel_explo.hpp).
 
-2. **Inner Loop Pattern**:
-   ```cpp
-   // In include/microkernels/GemmUKernel_opti_rrr.hpp (inside template <typename T> class GemmUKernel):
-   template <int lmul = 1, bool FastPath = false>
-   static inline void
-   gemm_mippv2_myukernel_core(const PackedRowMajor<T> &__restrict A,
+#### 1. Choose Register Tile Geometry ($M_R \times N_R$)
+- $M_R$ rows $\times$ $N_R$ columns, with $N_R = N_V \times VL$ ($N_V$ vectors wide, $VL = \text{vlen}$).
+- **Accumulator vector registers**: $M_R \times N_V = M_R \times \lceil N_R / VL \rceil$.
+  - Example: a $4 \times 3VL$ tile on AVX2 ($M_R=4, N_V=3$, 4 doubles/vector): $4 \times 3 = 12$ accumulator registers, leaving 4 registers for $B$ broadcast operands and memory addresses within the 16 architectural registers of x86-64.
+  - On 32-register architectures (AVX-512, AArch64 NEON, RVV), tiles like $4 \times 4VL$ (16 accumulators) or $6 \times 4VL$ (24 accumulators) provide optimal pipeline depth.
+- Ensure the accumulator budget plus operand registers fits within architectural limits with zero stack spilling.
+
+#### 2. CRR Implementation Pattern
+A production CRR microkernel features:
+1. **Single-Tile Fast Path**: Dedicated compute loop for $M = M_R$ and $N = N_R$, unrolled along $K$ (typically 4-way with `#pragma GCC unroll 4`) with a scalar cleanup loop for remainder $K \pmod 4$.
+2. **Multi-Tile Fallback & Fringes**: Outer $i, j$ loops with edge handling for complete matrix operations.
+3. **Epilogue Vector Stores**: `Epilogue::store<T, lmul, FastPath>()` handling both the canonical fast path ($\alpha = 1, \beta = 0$) and full $(\alpha, \beta)$ scaling/accumulation.
+
+```cpp
+// In include/microkernels/GemmUKernel_opti_crr.hpp (inside template <typename T> class GemmUKernel):
+template <int lmul = 1, bool FastPath = false>
+static inline void
+gemm_mippv2_mykernel_crr_core(const PackedColMajor<T> &__restrict A,
                               const PackedRowMajor<T> &__restrict B,
                               PackedRowMajor<T> &__restrict C,
                               T alpha = T{1}, T beta = T{0}) {
-     using namespace mipp;
+  using namespace mipp;
 
-     constexpr size_t VL = N<T, lmul>();
+  constexpr size_t VL = N<T, lmul>();
+  constexpr size_t MR = 4;
+  constexpr size_t NR = 3 * VL;
 
-     constexpr size_t MR = 2;
-     constexpr size_t NR = 2 * VL;
+  const size_t a_ld = A.ld;
+  const size_t b_ld = B.ld;
+  const size_t c_ld = C.ld;
+  const size_t K = A.cols;
 
-     for (size_t i = 0; i < A.rows; i += MR) {
-       for (size_t j = 0; j < B.cols; j += NR) {
-         /*
-          * 2x2VL register tile
-          *
-          * c00 c01
-          * c10 c11
-          */
+  // 1. Fast Path: Single micro-tile (in-cache microkernel benchmark mode)
+  if (__builtin_expect(A.rows == MR && B.cols == NR, 1)) {
+    const T *__restrict a_k = A.data;
+    const T *__restrict b_k = B.data;
 
-         auto c00 = set0<T, lmul>();
-         auto c01 = set0<T, lmul>();
+    auto c00 = set0<T, lmul>(); auto c01 = set0<T, lmul>(); auto c02 = set0<T, lmul>();
+    auto c10 = set0<T, lmul>(); auto c11 = set0<T, lmul>(); auto c12 = set0<T, lmul>();
+    auto c20 = set0<T, lmul>(); auto c21 = set0<T, lmul>(); auto c22 = set0<T, lmul>();
+    auto c30 = set0<T, lmul>(); auto c31 = set0<T, lmul>(); auto c32 = set0<T, lmul>();
 
-         auto c10 = set0<T, lmul>();
-         auto c11 = set0<T, lmul>();
+    const size_t K4 = (K / 4) * 4;
+    for (size_t k = 0; k < K4; k += 4) {
+      #pragma GCC unroll 4
+      for (size_t s = 0; s < 4; ++s) {
+        const auto b0 = load<T, lmul>(b_k + s * b_ld);
+        const auto b1 = load<T, lmul>(b_k + s * b_ld + VL);
+        const auto b2 = load<T, lmul>(b_k + s * b_ld + 2 * VL);
 
-         const auto a0_ptr = A[i + 0];
-         const auto a1_ptr = A[i + 1];
+        const T *a_s = a_k + s * a_ld;
+        const auto a0 = set1<T, lmul>(a_s[0]);
+        c00 = fmadd(a0, b0, c00); c01 = fmadd(a0, b1, c01); c02 = fmadd(a0, b2, c02);
 
-         for (size_t k = 0; k < A.cols; ++k) {
-           const auto b0 = load<T, lmul>(B[k] + j);
-           const auto b1 = load<T, lmul>(B[k] + j + VL);
+        const auto a1 = set1<T, lmul>(a_s[1]);
+        c10 = fmadd(a1, b0, c10); c11 = fmadd(a1, b1, c11); c12 = fmadd(a1, b2, c12);
 
-           const auto a0 = set1<T, lmul>(a0_ptr[k]);
-           const auto a1 = set1<T, lmul>(a1_ptr[k]);
+        const auto a2 = set1<T, lmul>(a_s[2]);
+        c20 = fmadd(a2, b0, c20); c21 = fmadd(a2, b1, c21); c22 = fmadd(a2, b2, c22);
 
-           c00 = fmadd(a0, b0, c00);
-           c01 = fmadd(a0, b1, c01);
+        const auto a3 = set1<T, lmul>(a_s[3]);
+        c30 = fmadd(a3, b0, c30); c31 = fmadd(a3, b1, c31); c32 = fmadd(a3, b2, c32);
+      }
+      b_k += 4 * b_ld;
+      a_k += 4 * a_ld;
+    }
 
-           c10 = fmadd(a1, b0, c10);
-           c11 = fmadd(a1, b1, c11);
-         }
+    // Remainder loop along K
+    for (size_t k = K4; k < K; ++k) {
+      const auto b0 = load<T, lmul>(b_k);
+      const auto b1 = load<T, lmul>(b_k + VL);
+      const auto b2 = load<T, lmul>(b_k + 2 * VL);
+      b_k += b_ld;
 
-         const auto c0_ptr = C[i + 0] + j;
-         const auto c1_ptr = C[i + 1] + j;
-         Epilogue::store<T, lmul, FastPath>(c0_ptr, c00, alpha, beta);
-         Epilogue::store<T, lmul, FastPath>(c0_ptr + VL, c01, alpha, beta);
+      const auto a0 = set1<T, lmul>(a_k[0]);
+      c00 = fmadd(a0, b0, c00); c01 = fmadd(a0, b1, c01); c02 = fmadd(a0, b2, c02);
+      // ... repeat for a1, a2, a3 ...
+      a_k += a_ld;
+    }
 
-         Epilogue::store<T, lmul, FastPath>(c1_ptr, c10, alpha, beta);
-         Epilogue::store<T, lmul, FastPath>(c1_ptr + VL, c11, alpha, beta);
-       }
-     }
-   }
+    // Write back via epilogue
+    Epilogue::store<T, lmul, FastPath>(C[0] + 0 * VL, c00, alpha, beta);
+    Epilogue::store<T, lmul, FastPath>(C[0] + 1 * VL, c01, alpha, beta);
+    Epilogue::store<T, lmul, FastPath>(C[0] + 2 * VL, c02, alpha, beta);
+    // ... repeat stores for rows C[1], C[2], C[3] ...
+    return;
+  }
 
-   // Dispatch wrappers (inside GemmUKernel<T>):
-   template <int lmul = 1>
-   static inline void
-   gemm_mippv2_myukernel(const PackedRowMajor<T> &__restrict A,
+  // 2. Multi-tile loops and tail cleanup (for full matrix support) ...
+}
+
+// Dispatch wrappers:
+template <int lmul = 1>
+static inline void
+gemm_mippv2_mykernel_crr(const PackedColMajor<T> &__restrict A,
                          const PackedRowMajor<T> &__restrict B,
                          PackedRowMajor<T> &__restrict C) {
-     gemm_mippv2_myukernel_core<lmul, true>(A, B, C);
-   }
+  gemm_mippv2_mykernel_crr_core<lmul, true>(A, B, C);
+}
 
-   template <int lmul = 1>
-   static inline void
-   gemm_mippv2_myukernel(const PackedRowMajor<T> &__restrict A,
+template <int lmul = 1>
+static inline void
+gemm_mippv2_mykernel_crr(const PackedColMajor<T> &__restrict A,
                          const PackedRowMajor<T> &__restrict B,
                          PackedRowMajor<T> &__restrict C,
                          T alpha, T beta) {
-     if (__builtin_expect(alpha == T{1} && beta == T{0}, 1)) {
-       gemm_mippv2_myukernel_core<lmul, true>(A, B, C);
-     } else {
-       gemm_mippv2_myukernel_core<lmul, false>(A, B, C, alpha, beta);
-     }
-   }
-   ```
-
-### Step 2: Register in `include/microkernels/GemmUKernel.h`
-1. Add the enum identifier in `UKernelType`:
-   ```cpp
-   enum class UKernelType {
-       // ...
-       mippv2_myukernel,
-   };
-   ```
-
-2. Add a `KernelDescriptor` to `kernelTable`:
-   ```cpp
-   {UKernelType::mippv2_myukernel, "mippv2_myukernel", RRR, 64, 4, 3},
-   ```
-   - Specify layout: `RRR` (Row-major $A, B, C$) or `CRR` (Col-major $A$, Row-major $B, C$).
-   - `MR` and `NR_vec` define the register tile geometry for auto-sizing.
-   - Specify minimal tile size: typically `64`.
-
-### Step 3: Wire in `src/main.cpp`
-Add the kernel dispatch branch in the `switch (cfg.kernel)` statement in [`src/main.cpp`](file:///home/ivan/Files/projets/gemm_bench/src/main.cpp):
-```cpp
-case UKernelType::mippv2_myukernel:
-  BENCH_KERNEL_FASTPATH(
-      gemm.gemm_mippv2_myukernel(A, B, C),
-      gemm.gemm_mippv2_myukernel(A, B, C, cfg.alpha, cfg.beta));
-```
-
-### Step 4: Add Unit Tests in `tests/GemmUKernelTest.cpp`
-Add validation test cases for $C = A \times B$ in `testGemmSuite()` and for $C = \alpha (A \times B) + \beta C$ in `testGemmSuiteAlphaBeta()`:
-```cpp
-// In testGemmSuite():
-TEST_KERNEL("MIPPv2 MyUKernel",
-            gemm.gemm_mippv2_myukernel(A, B, C_test));
-
-// In testGemmSuiteAlphaBeta():
-SECTION("mippv2_myukernel") {
-  resetMatrix(C_test, C_init);
-  gemm.gemm_mippv2_myukernel(A, B, C_test, p.alpha, p.beta);
-  checkMatrixEqual(C_ref, C_test);
-}
-```
-Run `ctest --test-dir build --output-on-failure` to verify correctness and numerical precision.
-
-### Step 5: Shell Driver Integration (`run_benchmarks.sh`)
-In [`run_benchmarks.sh`](file:///home/ivan/Files/projets/gemm_bench/run_benchmarks.sh), add the kernel name to `UNIVERSAL_KERNELS`:
-```bash
-    mippv2_myukernel
-```
-
-### Step 6: Benchmark Execution
-Execute the benchmark specifying the output prefix and kernel:
-```bash
-./run_benchmarks.sh avx2 -o myarch_avx2 -k mippv2_myukernel gcc clang
-```
-
-### Step 7: Configure in `uarch_config.json` & Plot
-In [`uarch_config.json`](file:///home/ivan/Files/projets/gemm_bench/uarch_config.json), add or update the target entry under its SIMD family (e.g., `"avx2"`):
-```json
-"avx2": {
-  "myarch": {
-    "name": "My Architecture",
-    "cpu_model": "Custom Core",
-    "frequency_ghz": 3.5,
-    "peak_flop_per_cycle": 16.0,
-    "expected_best_kernel": "mippv2_myukernel",
-    "csv_pattern": "*gemm_results_*myarch*_{compiler}.csv"
+  if (__builtin_expect(alpha == T{1} && beta == T{0}, 1)) {
+    gemm_mippv2_mykernel_crr_core<lmul, true>(A, B, C);
+  } else {
+    gemm_mippv2_mykernel_crr_core<lmul, false>(A, B, C, alpha, beta);
   }
 }
 ```
-Run `python3 plot_results.py --input-dir gemm-bench-results/rrr` to generate updated cross-architecture graphs.
+
+---
+
+### Step 2: Register in `include/microkernels/GemmUKernel.h`
+
+1. **Add to `UKernelType`**:
+   ```cpp
+   enum class UKernelType {
+     // ...
+     mippv2_mykernel_crr,
+   };
+   ```
+
+2. **Add Descriptor to `kernelTable`**:
+   ```cpp
+   {UKernelType::mippv2_mykernel_crr, "mippv2_mykernel_crr", CRR, 64, 4, 3},
+   ```
+   - **Packing constant**: `CRR` (`{PLayout::Col, PLayout::Row, PLayout::Row}`) for Col-Row-Row, or `RRR` for Row-Row-Row.
+   - **Tile parameters**: `MR` (e.g. `4`) and `NR_vec` (e.g. `3` for $3 \times VL$). These values are used by `src/main.cpp` and `run_benchmarks.sh` to configure auto-sizing in CRR mode ($M = M_R, N = N_R \times VL$).
+
+---
+
+### Step 3: Wire Dispatch in `src/main.cpp`
+
+[`src/main.cpp`](src/main.cpp) defines **three distinct overloads** of `run()` based on matrix layout combinations:
+1. `run(cfg, gemm, PackedRowMajor<T> A, PackedRowMajor<T> B, PackedRowMajor<T> C)` $\rightarrow$ **RRR** kernels.
+2. `run(cfg, gemm, PackedRowMajor<T> A, PackedColMajor<T> B, PackedRowMajor<T> C)` $\rightarrow$ **RCR** kernels.
+3. `run(cfg, gemm, PackedColMajor<T> A, PackedRowMajor<T> B, PackedRowMajor<T> C)` $\rightarrow$ **CRR** kernels.
+
+> [!CAUTION]
+> You **must** add your CRR kernel dispatch branch inside the **3rd overload** (`PackedColMajor<T> A`):
+> ```cpp
+> case UKernelType::mippv2_mykernel_crr:
+>   BENCH_KERNEL_FASTPATH(
+>       gemm.gemm_mippv2_mykernel_crr(A, B, C),
+>       gemm.gemm_mippv2_mykernel_crr(A, B, C, cfg.alpha, cfg.beta));
+> ```
+> Adding a CRR kernel to the RRR overload will cause a runtime exception (`"Kernel incompatible with RRR packing"`).
+
+---
+
+### Step 4: Add Unit Tests in `tests/GemmUKernelTest.cpp`
+
+Unit tests use Catch2 v3. For a CRR kernel, register test cases in the CRR sections of [`tests/GemmUKernelTest.cpp`](tests/GemmUKernelTest.cpp):
+
+1. **Nominal & Edge Dimension Tests**:
+   ```cpp
+   // Inside testGemmSuite<T, PackedColMajor<T>, PackedRowMajor<T>, PackedRowMajor<T>>()
+   TEST_KERNEL("MIPPv2 MyKernel CRR",
+               gemm.gemm_mippv2_mykernel_crr(A, B, C_test));
+   ```
+2. **$\alpha, \beta$ Scaling & Accumulation Tests**:
+   ```cpp
+   // Inside testGemmSuiteAlphaBeta() for CRR
+   SECTION("mippv2_mykernel_crr") {
+     resetMatrix(C_test, C_init);
+     gemm.gemm_mippv2_mykernel_crr(A, B, C_test, p.alpha, p.beta);
+     checkMatrixEqual(C_ref, C_test);
+   }
+   ```
+3. **Execute the Test Suite**:
+   ```bash
+   cmake -B build -DGEMMBENCH_BUILD_TESTS=ON && cmake --build build
+   ctest --test-dir build --output-on-failure
+   ```
+
+---
+
+### Step 5: Benchmark Driver Integration
+
+1. In [`run_benchmarks.sh`](run_benchmarks.sh), add the kernel identifier to `UNIVERSAL_KERNELS`:
+   ```bash
+   mippv2_mykernel_crr
+   ```
+2. If the kernel is designated as the champion for an architecture, update `TARGET_CHAMPIONS` in [`tools/run_cluster_benchmarks.sh`](tools/run_cluster_benchmarks.sh):
+   ```bash
+   [myarch]="mippv2_mykernel_rrr mippv2_mykernel_crr"
+   ```
+3. Run the hardened benchmark driver locally or on cluster nodes:
+   ```bash
+   # Benchmark CRR microkernel only (K sweep on native register tile)
+   ./run_benchmarks.sh avx2 -o myarch_avx2 --crr-only -k mippv2_mykernel_crr gcc clang
+   ```
+
+---
+
+### Step 6: Configure in `uarch_config.json` & Plot
+
+In [`uarch_config.json`](uarch_config.json), configure the expected champion kernels and CSV patterns:
+```json
+"myarch": {
+  "name": "My Architecture",
+  "cpu_model": "Core Model",
+  "frequency_ghz": 3.5,
+  "peak_flop_per_cycle": 16.0,
+  "expected_best_kernel": "mippv2_mykernel",
+  "expected_best_kernel_crr": "mippv2_mykernel_crr",
+  "csv_pattern": "*gemm_results_*myarch*_{compiler}.csv",
+  "crr_csv_pattern": "*gemm_results_*myarch*crr*_{compiler}.csv"
+}
+```
+
+Generate updated publication figures:
+```bash
+# Generate CRR overview, cross-uarch comparison, and RRR speedup SVG plots:
+python3 plot_results_crr.py --output plots_crr --compare-rrr gemm-bench-results/rrr
+```
 
 ---
 
