@@ -1,129 +1,40 @@
-# GEMM Benchmark suite across modern microarchitectures using MIPPv2
+# GEMM Benchmark Suite Across Modern CPU Microarchitectures (MIPPv2)
 
 > [!WARNING]
-> **Work in progress (WIP)**: This repository is under active development. Microkernels, benchmark drivers, and analysis tools are actively worked on. Anything might change 
-> at anytime without notice.
+> **Work in progress (WIP)**: This repository is under active development. Microkernels, benchmark drivers, and analysis tools are subject to change.
 
-A high-performance General Matrix Multiply (DGEMM) microbenchmark and exploration suite built on top of [MIPPv2](https://github.com/aff3ct/MIPP/tree/develop) (MyIntrinsics++ v2).
+A double-precision General Matrix Multiply (DGEMM) microbenchmark and exploration suite built on [MIPPv2](https://github.com/aff3ct/MIPP/tree/develop) (MyIntrinsics++ v2).
 
-This suite evaluates DGEMM microkernels written in C++ with MIPPv2 across **9 distinct CPU microarchitectures** :  **x86_64 AVX2 & AVX-512**, **AArch64 NEON**, and **RISC-V Vector** (RVV).
+This suite evaluates DGEMM microkernels written in C++ with MIPPv2 across **9 CPU microarchitectures**: **x86_64 AVX2 & AVX-512**, **AArch64 NEON**, and **RISC-V Vector 1.0** (RVV).
 
 > [!NOTE]
-> **Origins & context**: This benchmark was originally written as part of a research internship at **LIP6** (Sorbonne Université), focusing on the design, implementation, and benchmarking of **RISC-V Vector 1.0 (RVV)** support for **MIPPv2** on the **SpacemiT X100** architecture and **AVX2** on the **Intel Skylake** architecture (because it's the one in my laptop).
+> **Context**: Developed at **LIP6** (Sorbonne Université), evaluating portable vector implementations of DGEMM microkernels using **MIPPv2** across x86-64, AArch64, and RISC-V Vector microarchitectures.
 
 ---
 
-## Microarchitectural Performance & Peak Efficiency
+## Microarchitectural Evaluation & Results
 
-The benchmark evaluates single-thread, compute-bound double-precision GEMM throughput against the hardware theoretical peak ($\text{FLOP/cycle} \times \text{Frequency}$).
+The suite evaluates single-core, compute-bound double-precision GEMM microkernels under the **CRR layout** (GotoBLAS / BLIS convention: column-major packed $A$ panel with leading dimension $M_R$, row-major $B$, row-major $C$) streaming over panel depths $K \in [32..1024]$ on register tiles ($M_R \times N_R$) empirically selected to maximize throughput on each target microarchitecture.
 
-Across all target ISA families (x86_64 AVX2 & AVX-512, ARM NEON, RISC-V Vector), some microkernels achieve **>90% of theoretical peak performance** (reaching up to **>99%** on some uarchs):
+### 1. Compute Density (DP FLOP / cycle)
 
-### CRR Layout (Col-Major A, Row-Major B, C) — GotoBLAS / BLIS packing
-
-CRR microkernels use a column-major packed $A$ panel (leading dimension $= M_R$), matching the access pattern of the GotoBLAS / BLIS macro-kernel inner loop. The benchmark evaluates a single register tile ($M_R \times N_R$) across panel depth $K \in \{32, 64, 128, 256, 512, 1024\}$.
-
-| SIMD | Microarchitecture | CPU / SoC Model | Freq (GHz) | Peak FLOP/cyc | Comp | Achieved GFLOP/s | DGEMM FLOP/cyc | % of Peak |
-| :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **NEON** | **Apple M1 Firestorm** | M1 Ultra (P-core) | 3.036 | 16.0 | GCC | 48.3 | 15.90 | **99.4 %** |
-| **NEON** | **Cortex-A76** | Raspberry Pi 5 | 2.400 | 8.0 | Clang | 18.9 | 7.88 | **98.5 %** |
-| **AVX-512** | **AMD Zen 4** | Ryzen 9 7945HX | 5.463 | 16.0 | GCC | 85.3 | 15.62 | **97.6 %** |
-| **AVX2** | **Intel Meteor Lake** | Redwood Cove P-Core | 4.780** | 16.0 | Clang | 74.5 | 15.58 | **97.4 %** |
-| **AVX-512** | **AMD Zen 5 Strix Point** | Ryzen AI 9 HX 370 | 5.158 | 16.0 | GCC | 80.1 | 15.54 | **97.1 %** |
-| **RVV 1.0** | **SpacemiT X100** | K3 SoC (VLEN=256) | 2.400 | 8.0 | Clang | 18.5 | 7.71 | **96.4 %** |
-| **AVX2** | **Intel Skylake** | Core i5-6200U | 2.300 | 16.0 | Clang | 35.2 | 15.32 | **95.7 %** |
-| **RVV 1.0** | **SpacemiT A100** | K3 SoC (VLEN=1024) | 2.000 | 8.0 | GCC | 13.2 | 6.60 | **82.5 %** |
-| **RVV 1.0** | **SpacemiT X60** | BPI-F3 SoC (VLEN=256)| 1.600 | 8.0 | Clang* | 7.7 | 4.79 | **59.9 %** |
-
-> [!IMPORTANT]
-> **Intel Meteor Lake frequency calibration (sustained AVX2 operating frequency)**:
-> - **5.10 GHz** is the single-core burst ceiling of the Redwood Cove P-core under light load.
-> - Under sustained dense 256-bit AVX2 FMA execution, power and thermal management stabilize operating frequency at **4.78 GHz**, as calibrated empirically via `cpufp` (76.27 GFLOP/s empirical ceiling).
-> - Evaluating against 4.78 GHz yields 15.58 FLOP/cycle (97.4% theoretical efficiency, 97.6% of empirical `cpufp` peak). 
-
-> [!NOTE]
-> **Zen 5 Strix Point Datapath Note**:
-> Server/desktop Zen 5 incorporates dual native 512-bit FMA units ($32\text{ DP FLOP/cycle}$), AMD's mobile Strix Point SoC implements dual 256-bit physical datapaths (*double-pumped* 512-bit FMA, identical to Zen 4), yielding a physical ceiling of **$16\text{ DP FLOP/cycle}$**.
-> If you own a Zen5 with 512-bit native FMA units and don't know what to do with it, I'd be very happy if you provided benchmarks results on the existing microkernels :o .
-
-### Methodological Scope & Current Limitations
-
-To interpret the reported throughput figures accurately, several methodological and architectural boundaries of the current benchmark suite must be highlighted:
-
-1. **Isolated Microkernel Scope (In-Cache / Single-Panel)**:
-   - Benchmarks evaluate the innermost $K$-loop on pre-packed micropanels $A$ ($M_R \times K$, column-major) and $B$ ($K \times N_R$, row-major) accumulating into an in-register tile ($M_R \times N_R$) and writing to $C$.
-   - Overheads of the 5-loop cache-blocking hierarchy (GotoBLAS / BLIS: $J_C, P_C, I_C, J_R, I_R$) and dynamic matrix repacking into memory buffers ($M_C \times K_C$, $K_C \times N_C$) are **not** included. End-to-end DGEMM performance within BLIS is part of ongoing integration work.
-2. **Canonical GEMM Regime & Throughput Formulation**:
-   - Reported peak throughputs strictly evaluate the compute-bound canonical form $\alpha = 1.0, \beta = 0.0$ ($C \leftarrow AB$), where throughput is computed as $\text{GFLOP/s} = \frac{2 \times M \times N \times K}{\text{Time (seconds)} \times 10^9}$. Non-canonical operations ($\beta \neq 0.0$) introduce load-scale-accumulate overheads on $C$ that are supported functionally but not evaluated for peak throughput.
-3. **Tile Geometry & Edge Handling (Tails / Fringes)**:
-   - Peak pipeline saturation requires dimensions $M, N$ to be exact multiples of the register tile $M_R, N_R$ and depth $K$ to align with loop unrolling (typically 4). While all microkernels include functional scalar/vector remainder handling for unit-test validation, fringe handling in production BLAS is typically offloaded to dedicated edge kernels or zero-padded buffers.
-4. **Single-Thread & Precision Scope**:
-   - All measurements are strictly single-thread IEEE-754 double precision (`double` / FP64). Multi-threaded scaling and memory bus contention are not covered in this phase.
-5. **Clock Frequency Baseline & Empirical FPU Ceilings (`cpufp`)**:
-   - Efficiencies are reported against both the architectural theoretical ceiling ($\text{FLOP/cycle} \times \text{Frequency}$) and empirical double-precision peak throughput measured via [`cpufp`](https://github.com/pigirons/cpufp).
-   - Rather than relying on transient single-core boost clocks that throttle under dense vector FMA workloads, sustained operating frequencies and empirical FP64 ceilings are benchmarked directly and recorded in [`uarch_config.json`](uarch_config.json).
-
-### Robust Measurement Protocol & Statistical Rigor
-
-To prevent common benchmarking pitfalls in microkernel evaluation (frequency throttling, compiler optimization artifacts, timing jitter, and cold cache effects), the suite implements a multi-layer measurement protocol:
-
-1. **Multi-Repetition Sampling & Median Filtering**:
-   - Each measurement point collects $R = 15$ timed samples (configurable via `-r / --repetitions`).
-   - Each sample measures steady-state execution over hundreds of thousands to millions of kernel invocations.
-   - Timings report the **median** duration (less sensitive to occasional background OS scheduling interrupts than the mean) alongside min, max, stddev, and intra-run coefficient of variation ($\text{CV} = \frac{\sigma}{\mu} \times 100\,\%$, reported as `GFLOPS_cv_pct`).
-2. **Multi-Run Replication & Inter-Run CV Monitoring**:
-   - Benchmarks execute $N_{\text{runs}} = 3$ independent processes per configuration (`--runs 3`).
-   - The driver selects the best median execution time across passes and computes the inter-run variation (`InterRun_CV_pct`, sample coefficient of variation across run medians). An automatic warning (`⚠ inter-run CV > 5%`) is raised if runs exhibit significant variance.
-3. **Compiler Optimization & Monotonic Timing Barriers**:
-   - High-resolution monotonic timestamps (`std::chrono::steady_clock::now()`) are strictly isolated by `asm volatile("" ::: "memory")` compiler barriers to prevent reordering across timing boundaries.
-   - Dead-code elimination (DCE) and loop-invariant hoisting are prevented via a clobbered read barrier on the destination matrix pointer (`asm volatile("" :: "r"(C.data) : "memory")`), forcing the compiler to re-evaluate the kernel on every iteration.
-4. **Hardware Cycle Counting & In-Process FLOP/Cycle**:
-   - On Linux systems, the harness uses unprivileged hardware performance counters (`perf_event_open` with `PERF_COUNT_HW_CPU_CYCLES`, accessible when `perf_event_paranoid <= 2`).
-   - This records the exact CPU cycles elapsed during the timed loop, computing true $\text{FLOP/cycle} = \frac{2 \times M \times N \times K}{\text{Cycles}}$ and measured effective operating frequency ($\text{Eff\_GHz} = \frac{\text{Cycles}}{\text{Time} \times 10^9}$) directly, removing reliance on nominal boost clock assumptions.
-5. **Passive CPU Frequency Monitoring & Throttle Detection**:
-   - Does not require `sudo` / root privileges, enabling reliable execution on shared HPC clusters (e.g. the Dalek cluster) where governors cannot be forced to `performance`.
-   - The driver logs governor state and reads `/sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq`, warning if core frequency drops by $> 5\%$ during benchmarks.
-6. **Thermal Cooldown Pauses**:
-   - A configurable pause (default: $2.0\,\text{s}$ via `--cooldown 2.0`) is inserted between matrix sizes for $K \ge 256$, preventing heat buildup and thermal frequency degradation during intensive sweeps.
-7. **Hardware Core Pinning**:
-   - Benchmark processes are pinned to a dedicated physical core via `taskset` (configurable via `-c / --core`, with per-platform defaults such as Core 1 on x86, Core 2 on RPi5, Core 3 on M1, and Core 8 on A100) to prevent OS thread migration and cache-thrashing penalties.
-8. **Numerical Accuracy Verification (`--validate`)**:
-   - Includes on-the-fly verification against a pure scalar IEEE-754 FP64 reference computation before benchmarking to ensure mathematical correctness within machine precision tolerance bounds.
-
----
-
-## Hardware Platforms & Compiler Toolchains
-
-To ensure empirical reproducibility, benchmarks are compiled with modern toolchains across all evaluated platforms. The table below lists the exact compiler versions and ISA configurations on each test machine:
-
-| Microarchitecture | Platform Tag | SoC / Model | ISA / Vector Unit | `g++` Version | `clang++` Version |
-| :--- | :--- | :--- | :--- | :--- | :--- |
-| **SpacemiT X100** | `x100` | SpacemiT K3 | RVV 1.0 (256-bit, VLEN=256) | 15.2.0 (Bianbu 15.2.0-16ubuntu1bb3) | 21.1.8 (Ubuntu 21.1.8-6ubuntu1) |
-| **SpacemiT A100** | `a100` | SpacemiT K3 | RVV 1.0 (1024-bit via `ai`) | 15.2.0 (Bianbu 15.2.0-16ubuntu1bb3) | 21.1.8 (Ubuntu 21.1.8-6ubuntu1) |
-| **SpacemiT X60** | `x60` | Banana Pi BPI-F3 | RVV 1.0 (256-bit, VLEN=256) | 15.2.0 (RISCstar 15.2-r1) | 21.1.8 (cross-built on X100)* |
-| **Raspberry Pi 5** | `rpi5` | Broadcom BCM2712 (Cortex-A76) | ARMv8-A NEON (128-bit) | 15.2.0 (Ubuntu 15.2.0-16ubuntu1) | 21.1.8 (Ubuntu 21.1.8-6ubuntu1) |
-| **Apple M1** | `m1` | Apple M1 Ultra (Firestorm) | ARMv8-A NEON (128-bit) | 16.1.1 (Red Hat 16.1.1-1) | 22.1.5 (Fedora 22.1.5-1.fc44) |
-| **AMD Zen 4** | `zen4` | Ryzen 9 7945HX | x86_64 AVX-512 | 13.3.0 (Ubuntu 13.3.0-6ubuntu2) | 18.1.3 (Ubuntu 18.1.3-1ubuntu1) |
-| **AMD Zen 5** | `zen5` | Ryzen AI 9 HX 370 | x86_64 AVX-512 (256-bit DP) | 13.3.0 (Ubuntu 13.3.0-6ubuntu2) | 18.1.3 (Ubuntu 18.1.3-1ubuntu1) |
-| **Intel Meteor Lake** | `meteorlake` | Core Ultra (Redwood Cove P-core) | x86_64 AVX2 / FMA | 13.3.0 (Ubuntu 13.3.0-6ubuntu2) | 18.1.3 (Ubuntu 18.1.3-1ubuntu1) |
-| **Intel Skylake** | `skylake` | Core i5-6200U (local laptop) | x86_64 AVX2 / FMA | 14.2.1 (GCC 14.2.1 20250405) | 21.1.8 (Clang 21.1.8) |
-
-> [!NOTE]
-> \* **SpacemiT X60 Clang Support**: The native distribution on the BPI-F3 board includes Bianbu Clang 18.1.8, which lacks functional RVV 1.0 intrinsic support. Because the X60 and X100 share the exact same vector ISA (`-march=rv64gcv_zvl256b -mrvv-vector-bits=zvl`) and access the shared NFS filesystem on the Dalek cluster, X60 Clang binaries are compiled on the X100 node with Ubuntu Clang 21.1.8 and then executed natively on the X60 hardware.
-
----
-
-## Performance Visualizations
-
-The executive comparison below summarizes peak double-precision efficiency achieved across all 9 target CPU microarchitectures under the **CRR layout** (GotoBLAS / BLIS column-major packed $A$ panel), grouped by SIMD family. Efficiency is measured as the ratio of observed floating-point operations per core clock cycle against the theoretical architectural FMA issue capacity:
+Figure 1 evaluates microarchitectural execution efficiency independently of core clock frequency, measuring physical floating-point operations completed per clock cycle against hardware FMA issue capacity :
 
 <p align="center">
-  <img src="plots_crr/cross_uarch_crr_efficiency_comparison.svg" alt="GEMMBench Cross-Microarchitecture CRR Efficiency Comparison" width="100%">
+  <img src="plots_crr/cross_uarch_crr_flop_cycle_comparison.svg" alt="GEMMBench Cross-Microarchitecture CRR Compute Density Comparison" width="100%">
+</p>
+
+### 2. Sustained DGEMM Efficiency (% of Theoretical Peak GFLOP/s)
+
+Figure 2 reports sustained throughput relative to rated single-core burst frequency ceilings ($R_{\text{achieved}} / R_{\text{peak}} \times 100$), reflecting frequency scaling and thermal dissipation under sustained dense vector execution:
+
+<p align="center">
+  <img src="plots_crr/cross_uarch_crr_efficiency_comparison.svg" alt="GEMMBench Cross-Microarchitecture CRR Sustained Efficiency Comparison" width="100%">
 </p>
 
 ### Microarchitectural Hardware Execution Summary
 
-The table below contrasts rated single-core burst frequencies ($f_{\text{boost}}$) against effective operating frequencies ($f_{\text{eff}}$) measured during sustained DGEMM computation via Linux `perf_event_open` hardware cycle counting. This highlights the distinction between pipeline execution unit saturation and overall thermal/frequency scaling:
+The table below reconciles execution unit pipeline saturation with rated system throughput by measuring effective operating frequency ($f_{\text{eff}} = \text{Cycles} / \text{Time}$) via Linux `perf_event_open` hardware cycle counters alongside rated burst clocks ($f_{\text{boost}}$):
 
 | SIMD | Microarchitecture | CPU Model | Champion Kernel | Tile ($M_R \times N_R$) | Comp | Pipe Saturation (%) | FLOP/cycle | $f_{\text{eff}}$ (GHz) | $f_{\text{boost}}$ (GHz) | Achieved (GFLOP/s) | Peak Theo (GFLOP/s) | % Peak Theo |
 |:---|:---|:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
@@ -137,11 +48,40 @@ The table below contrasts rated single-core burst frequencies ($f_{\text{boost}}
 | RVV | SpacemiT A100 | SpacemiT A100 | `mippv2_a100_mr7_nr2_lmul2_pipe_crr` | 7x64 | gcc | **83.8%** | 6.70 / 8 | 1.99 | 2.00 | 13.3 | 16.0 | 83.4% |
 | RVV | SpacemiT X60 | SpacemiT X60 | `mippv2_a100_mr7_nr4_pipe_crr` | 7x16 | clang | **58.1%** | 4.65 / 8 | 1.60 | 1.60 | 7.4 | 12.8 | 58.0% |
 
-> **Key takeaway on microarchitectural efficiency**:
-> - On Zen 4, the dual 512-bit FMA execution pipeline is virtually saturated (**15.95 / 16.0 FLOP/cycle = 99.7% pipeline saturation**). The 4.1% distance from the 87.4 GFLOP/s theoretical burst ceiling is purely due to thermal/power limits under sustained AVX-512 FMA execution throttling $f_{\text{eff}}$ from the 5.46 GHz single-core burst ceiling down to 5.25 GHz.
-> - Apple M1 Ultra and Zen 5 achieve near-complete theoretical efficiency (**99.6%** and **100.0%** of architectural FLOP/cycle capacity respectively). All tier-1 out-of-order vector cores (Zen 4, Zen 5, M1, Cortex-A76, Redwood Cove, Skylake) achieve >96% pipeline saturation through portable MIPPv2 abstractions.
+> **Microarchitectural Findings:**
+> - **Execution Pipeline Saturation vs. Thermal Scaling:** On AMD Zen 4, the vector FMA datapath reaches 15.95 / 16.0 FLOP/cycle (99.7% pipeline saturation). The 4.1% gap to the rated 87.4 GFLOP/s ceiling is attributable to clock throttling under continuous 512-bit vector execution ($f_{\text{eff}} = 5.25\text{ GHz}$ vs. $f_{\text{boost}} = 5.46\text{ GHz}$).
+> - **Out-of-Order Execution Efficiency:** Apple M1 (Firestorm), AMD Zen 5 (Strix Point), and ARM Cortex-A76 achieve $\ge 99\%$ pipeline issue saturation, indicating balanced register tiling and effective memory latency hiding in L1 cache.
+> - **Mobile Datapath Ceilings:** AMD Zen 5 on mobile Strix Point implements dual 256-bit physical FMA datapaths (double-pumped 512-bit execution), yielding a physical ceiling of 16 DP FLOP/cycle (identical to Zen 4) rather than the 32 DP FLOP/cycle ceiling of desktop/server Zen 5.
+> - **Intel Meteor Lake Frequency Stabilization:** Under sustained dense 256-bit AVX2 FMA execution, power management stabilizes the Redwood Cove P-core operating frequency at 4.78 GHz (calibrated empirically via `cpufp`, 76.5 GFLOP/s ceiling) compared to its 5.10 GHz light-load burst ceiling.
+> - **RISC-V Vector Scaling & In-Order Pipeline Constraints:** On SpacemiT X100, the kernel achieves 7.73 / 8.0 FLOP/cycle (96.6% saturation). In contrast, both SpacemiT X60 and A100 are **in-order dual-issue** microarchitectures where the lack of dynamic instruction reordering exposes load-to-use stalls, limiting pipeline saturation to 58.1% on X60 (4.65 / 8 FLOP/cycle) and 83.8% on A100 (6.70 / 8 FLOP/cycle).
 
-Detailed individual microarchitecture breakdown plots and RRR comparisons can be generated locally via the plotting suite (see [Plotting & Performance Analysis](#plotting--performance-analysis) below).
+---
+
+### Methodological Scope & Measurement Protocol
+
+To ensure reproducibility and isolate microarchitectural behavior, the benchmark suite enforces the following constraints:
+
+1. **In-Cache Register Tile Scope**:
+   - Evaluates the innermost $K$-loop on pre-packed panels $A$ ($M_R \times K$, column-major) and $B$ ($K \times N_R$, row-major) accumulating into an in-register tile ($M_R \times N_R$) and writing to $C$.
+   - Cache-blocking hierarchy overheads (GotoBLAS / BLIS: $J_C, P_C, I_C, J_R, I_R$) and dynamic matrix packing into memory buffers are excluded.
+2. **Canonical GEMM Regime**:
+   - Evaluates the compute-bound canonical form $\alpha = 1.0, \beta = 0.0$ ($C \leftarrow AB$), where throughput is computed as $\text{GFLOP/s} = \frac{2 \times M \times N \times K}{\text{Time (seconds)} \times 10^9}$. Non-canonical operations ($\beta \neq 0.0$) introduce load-scale-accumulate overheads on $C$ that are validated functionally but excluded from peak throughput claims.
+3. **Tile Geometry & Boundary Conditions**:
+   - Panel dimensions $M, N$ match the register tile $M_R, N_R$, and depth $K$ aligns with 4-way unrolling. While all kernels include scalar/vector fringe handling for functional correctness, edge handling is excluded from peak saturation measurements.
+4. **Single-Thread FP64 Scope**:
+   - All measurements evaluate single-thread IEEE-754 double precision (`double` / FP64).
+5. **Multi-Repetition Sampling & Median Filtering**:
+   - Each measurement collects $R = 15$ timed samples over hundreds of thousands to millions of kernel invocations. Timings report the median duration alongside standard deviation and intra-run coefficient of variation ($\text{CV} = \frac{\sigma}{\mu} \times 100\,\%$).
+6. **Multi-Run Replication & Inter-Run CV Monitoring**:
+   - Benchmarks execute $N_{\text{runs}} = 3$ independent processes per configuration. An automatic warning is raised if inter-run variation exceeds 5%.
+7. **Compiler Optimization & Monotonic Timing Barriers**:
+   - Monotonic timestamps (`std::chrono::steady_clock::now()`) are isolated by `asm volatile("" ::: "memory")` compiler barriers. Dead-code elimination is prevented via clobbered read barriers on matrix pointers (`asm volatile("" :: "r"(C.data) : "memory")`).
+8. **Hardware Cycle Counting via `perf_event_open`**:
+   - On Linux systems, unprivileged hardware performance counters (`PERF_COUNT_HW_CPU_CYCLES`) record exact CPU cycles elapsed during the timed loop, computing true $\text{FLOP/cycle} = \frac{2 \times M \times N \times K}{\text{Cycles}}$ and effective operating frequency ($f_{\text{eff}} = \frac{\text{Cycles}}{\text{Time} \times 10^9}$).
+9. **Platform Isolation & Thermal Management**:
+   - Processes are pinned to a dedicated physical core via `taskset`. Thermal cooldown pauses ($2.0\,\text{s}$) are inserted between sizes for $K \ge 256$ to mitigate heat accumulation. Core frequency is passively monitored via `cpufreq/scaling_cur_freq` to detect throttling.
+10. **Numerical Validation**:
+    - Microkernel output is verified against a pure scalar IEEE-754 FP64 reference computation before benchmarking.
 
 ---
 
@@ -263,8 +203,9 @@ python3 plot_results_crr.py --uarch zen4 m1 x100 --output plots_crr
   - `cross_uarch_flop_cycle_comparison.svg`: Multi-architecture comparison in **DP FLOP/cycle**.
   - `<simd>_<uarch>_overview.svg`: Per-architecture detailed breakdown.
 - **`plots_crr/`** (CRR):
-  - `cross_uarch_crr_efficiency_comparison.svg`: CRR efficiency across architectures.
-  - `cross_uarch_crr_flop_cycle_comparison.svg`: CRR FLOP/cycle comparison.
+  - `cross_uarch_crr_flop_cycle_comparison.svg`: CRR physical compute density (DP FLOP/cycle) against theoretical issue ceilings (8 and 16 FLOP/cyc).
+  - `cross_uarch_crr_efficiency_comparison.svg`: CRR sustained efficiency (% of theoretical peak GFLOP/s: Achieved / $R_{\text{peak}}$).
+  - `crr_hardware_summary_table.md`: Comprehensive microarchitectural hardware execution summary table.
   - `cross_uarch_crr_vs_rrr_comparison.svg`: CRR vs RRR speedup (with `--compare-rrr`).
   - `<simd>_<uarch>_crr_overview.svg`: Per-architecture CRR breakdown.
 
@@ -273,7 +214,7 @@ python3 plot_results_crr.py --uarch zen4 m1 x100 --output plots_crr
 ## Developer Tutorial: Adding a New Microkernel
 
 This guide walks through implementing, registering, testing, benchmarking, and analyzing a new GEMM microkernel across the entire pipeline. The repository supports two principal layouts:
-- **CRR (Recommended / State-of-the-Art)**: Column-major packed $A$ ($M_R \times K$, leading dimension $M_R$), Row-major $B$ ($K \times N_R$), Row-major $C$ ($M_R \times N_R$). This matches the GotoBLAS / BLIS register-tiled microkernel convention.
+- **CRR (GotoBLAS / BLIS packing)**: Column-major packed $A$ ($M_R \times K$, leading dimension $M_R$), Row-major $B$ ($K \times N_R$), Row-major $C$ ($M_R \times N_R$). This matches the GotoBLAS / BLIS register-tiled microkernel convention.
 - **RRR (Legacy)**: Row-major packed $A, B, C$.
 
 ---
@@ -540,17 +481,14 @@ Generative AI assistants (**Google Gemini** and **OpenAI ChatGPT**) were utilize
 - Benchmark driver CLI scaffolding, argument handling, and boilerplate wiring in C++.
 - Build system configuration and test suite plumbing.
 
-### Engineering Methodology & Kernel Design
+### Engineering Methodology & Kernel Exploration
 
-The foundational DGEMM microkernel designs tuned for **Intel Skylake** (AVX2 + FMA) and the **SpacemiT K3 X100** core are the result of multiple weeks of work and reflection on the underlying microarchitectures and platforms. And the best **X100** microkernels are, I think, some of the best results of my internship.
+The exploration space for DGEMM microkernels was structured around microarchitectural constraints:
+1. **Layout Convention**: Prioritizing the CRR layout (GotoBLAS / BLIS packing: column-major packed $A$ panel with leading dimension $M_R$, row-major $B$, row-major $C$) to eliminate runtime stride overheads and enable contiguous broadcast and FMA operations across panel depth $K$.
+2. **Inner-Loop Vectorization**: Comparing scalar broadcast patterns (`mipp::set1` + `mipp::fmadd`) against indexed FMA broadcast instructions (`mipp::fmaddi`) on architectures supporting indexed operations (such as AVX-512 and AArch64 NEON).
+3. **Register Tile Geometry ($M_R \times N_R$)**: Dimensioning the accumulator matrix based on three hardware parameters:
+   - Architectural register file capacity (16 registers on x86-64 AVX2; 32 registers on AVX-512, AArch64, and RVV) to prevent register spills to the stack.
+   - FMA execution pipeline latency (typically 4–5 cycles) requiring sufficient accumulator depth to avoid read-after-write (RAW) pipeline stalls.
+   - Memory load-to-compute ratio ($M_R + N_R$ memory loads for $M_R \times N_R$ FMA operations).
 
-For subsequent target microarchitectures, the methodology was empirical, the exploration workflow relied on pre-established invariants:
-- **Layout Exploration**: Both the $RRR$ format (Row-major $A, B, C$) and the $CRR$ format (Column-major $A$, Row-major $B, C$) are implemented. CRR uses the GotoBLAS / BLIS packing convention where $A$ is stored contiguously along $M_R$ with leading dimension $= M_R$, matching the inner kernel's access pattern. CRR microkernels achieve comparable or higher peak efficiency than RRR on most microarchitectures (up to **99.4%** on M1).
-- **Inner-Loop Access Patterns**: Preserving either the scalar broadcast pattern (`mipp::set1` + `mipp::fmadd`) or the indexed FMA pattern (`mipp::fmaddi`) on matrix $A$.
-
-Under these, the exploration focused on sweeping register block dimensions ($M_R \times N_R$) that made sense given the uarch characteristics. Register file size, number of FMA pipelines/execution units and FMA latency being the three things that answer the questions :
-- How many accumulators can I have at most? 
-- How many accumulators do I want? 
-- How many accumulators do I need at least?
-
-In practice, it often boiled down to telling Gemini to implement a bunch of tile sizes I thought might yield good results. Then I ran the benchmarks on the target hardware and iterated over the ones that performed well "Gemini please make `gemm_mippv2_firestorm_mr8_nr2_fmaddi` using `gemm_mippv2_firestorm_mr6_nr4_fmaddi` as reference" and so on. I feel like the most inefficient part of the automation was sometimes the agent sitting between the keyboard and the chair. Oh well.
+Generative models were used to synthesize structural C++ tile implementations across candidate geometries, followed by empirical validation, hardware performance profiling, and iterative optimization on the target silicon.

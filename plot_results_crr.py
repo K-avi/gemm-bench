@@ -423,7 +423,7 @@ def plot_crr_cross_uarch_efficiency(champions: List[UArchChampionCRR], output_pa
     """Generates an executive horizontal ranking bar chart grouped by SIMD family for CRR micro-kernels."""
     fig, ax = plt.subplots(figsize=(14.0, 7.5))
 
-    sorted_champs = group_crr_champions_by_family(champions, sort_metric="pipeline_efficiency")
+    sorted_champs = group_crr_champions_by_family(champions, sort_metric="efficiency")
     y_positions = np.arange(len(sorted_champs))
     bar_height = 0.58
 
@@ -431,7 +431,7 @@ def plot_crr_cross_uarch_efficiency(champions: List[UArchChampionCRR], output_pa
 
     bars = ax.barh(
         y_positions,
-        [c.pipeline_efficiency_pct for c in sorted_champs],
+        [c.efficiency_pct for c in sorted_champs],
         height=bar_height,
         color=bar_colors,
         edgecolor=BORDER_COLOR,
@@ -439,12 +439,12 @@ def plot_crr_cross_uarch_efficiency(champions: List[UArchChampionCRR], output_pa
         zorder=3,
     )
 
-    # 100% Architectural FMA Peak reference line
+    # 100% Theoretical Peak GFLOP/s reference line
     ax.axvline(100.0, color="#1e293b", linestyle="--", linewidth=1.5, zorder=4)
     ax.text(
         100.2,
         len(sorted_champs) - 0.45,
-        "100% Architectural Peak",
+        "100% Theoretical Peak",
         color="#1e293b",
         fontsize=9,
         fontweight="bold",
@@ -453,18 +453,18 @@ def plot_crr_cross_uarch_efficiency(champions: List[UArchChampionCRR], output_pa
     )
 
     for idx, (champ, bar) in enumerate(zip(sorted_champs, bars)):
-        eff = champ.pipeline_efficiency_pct
-        text_label = f"{eff:.1f}%"
-        if eff > 15.0:
+        eff = champ.efficiency_pct
+        text_label = f"{eff:.1f}% ({champ.peak_gflops:.1f} / {champ.spec.peak_gflops:.1f} GFLOP/s)"
+        if eff > 25.0:
             ax.text(
-                eff - 1.8,
+                eff - 1.5,
                 idx,
                 text_label,
                 va="center",
                 ha="right",
                 color="#ffffff",
                 fontweight="bold",
-                fontsize=10.5,
+                fontsize=9.5,
                 zorder=5,
             )
         else:
@@ -476,7 +476,7 @@ def plot_crr_cross_uarch_efficiency(champions: List[UArchChampionCRR], output_pa
                 ha="left",
                 color=TEXT_PRIMARY,
                 fontweight="bold",
-                fontsize=10.5,
+                fontsize=9.5,
                 zorder=5,
             )
 
@@ -487,11 +487,11 @@ def plot_crr_cross_uarch_efficiency(champions: List[UArchChampionCRR], output_pa
     ax.set_xlim(0, 108)
     ax.set_xticks([0, 20, 40, 60, 80, 100])
     ax.set_xticklabels(["0%", "20%", "40%", "60%", "80%", "100%"], fontsize=10)
-    ax.set_xlabel("Microarchitectural Efficiency (% of Theoretical Peak FP64 FLOP / cycle)", fontsize=11, fontweight="bold", labelpad=10)
+    ax.set_xlabel("Sustained DGEMM Efficiency (% of Theoretical Peak: Achieved GFLOP/s / R_peak)", fontsize=11, fontweight="bold", labelpad=10)
 
     fig.text(
         0.04, 0.965,
-        "Cross-Microarchitecture GEMM Peak Efficiency — CRR BLIS Micro-Kernels",
+        "Cross-Microarchitecture DGEMM Peak Efficiency — CRR BLIS Micro-Kernels",
         fontsize=13.5,
         fontweight="bold",
         color=TEXT_PRIMARY,
@@ -499,7 +499,7 @@ def plot_crr_cross_uarch_efficiency(champions: List[UArchChampionCRR], output_pa
     )
     fig.text(
         0.04, 0.930,
-        "FP64 BLIS-like Micro-Kernel (A PackedColMajor, B PackedRowMajor) | Single tile MRxNR streaming over K ∈ [32..1024] | Measured via hardware PMU cycles",
+        "FP64 BLIS-like Micro-Kernel | Single native register tile MRxNR streaming over K ∈ [32..1024] | Normalized to theoretical peak GFLOP/s (f_boost × Peak_FLOP/cycle)",
         fontsize=9.5,
         color=TEXT_SECONDARY,
         ha="left",
@@ -561,30 +561,31 @@ def plot_crr_cross_uarch_flop_per_cycle(champions: List[UArchChampionCRR], outpu
 
     for idx, (champ, bar) in enumerate(zip(sorted_champs, bars)):
         val = champ.peak_flop_per_cycle
-        tile_str = f"{champ.mr}x{champ.nr}"
-        if val >= 10.0:
-            text_label = f" {val:.2f} FLOP/cyc (Tile: {tile_str} | Peak: {champ.peak_gflops:.1f} GFLOP/s)"
-            fsize = 9.5
-        elif val >= 7.0:
-            text_label = f" {val:.2f} FLOP/cyc ({tile_str} | {champ.peak_gflops:.1f} GFLOP/s)"
-            fsize = 8.5
-        elif val >= 6.0:
-            text_label = f" {val:.2f} FLOP/cyc ({tile_str} | {champ.peak_gflops:.1f} GFLOP/s)"
-            fsize = 8.5
+        text_label = f"{val:.2f} FLOP/cyc"
+        if val >= 5.0:
+            ax.text(
+                val - 0.35,
+                idx,
+                text_label,
+                va="center",
+                ha="right",
+                color="#ffffff",
+                fontweight="bold",
+                fontsize=10.0,
+                zorder=5,
+            )
         else:
-            text_label = f" {val:.2f} FLOP/cyc ({tile_str} | {champ.peak_gflops:.1f} GFLOP/s)"
-            fsize = 7.5
-        ax.text(
-            0.15,
-            idx,
-            text_label,
-            va="center",
-            ha="left",
-            color="#ffffff",
-            fontweight="bold",
-            fontsize=fsize,
-            zorder=5,
-        )
+            ax.text(
+                val + 0.25,
+                idx,
+                text_label,
+                va="center",
+                ha="left",
+                color=TEXT_PRIMARY,
+                fontweight="bold",
+                fontsize=10.0,
+                zorder=5,
+            )
 
     # Theoretical ceiling lines: 8 FLOP/cyc and 16 FLOP/cyc groups
     idx_8 = [i for i, c in enumerate(sorted_champs) if np.isclose(c.spec.peak_flop_per_cycle, 8.0)]
@@ -597,7 +598,7 @@ def plot_crr_cross_uarch_flop_per_cycle(champions: List[UArchChampionCRR], outpu
     if idx_8:
         ymin_8 = min(idx_8) - 0.45
         ymax_8 = max(idx_8) + 0.45
-        ax.vlines(8.0, ymin_8, ymax_8, color="#334155", linestyle="--", linewidth=1.8, zorder=4)
+        ax.vlines(8.0, ymin_8, ymax_8, color="#475569", linestyle="--", linewidth=1.6, zorder=4)
         ax.text(
             8.15,
             (ymin_8 + ymax_8) / 2.0,
@@ -606,14 +607,15 @@ def plot_crr_cross_uarch_flop_per_cycle(champions: List[UArchChampionCRR], outpu
             va="center",
             fontsize=9.5,
             fontweight="bold",
-            color="#334155",
+            color="#475569",
+            bbox=dict(boxstyle="round,pad=0.25", facecolor="#ffffff", edgecolor="none", alpha=0.9),
             zorder=4,
         )
 
     if idx_16:
         ymin_16 = min(idx_16) - 0.45
         ymax_16 = max(idx_16) + 0.45
-        ax.vlines(16.0, ymin_16, ymax_16, color="#334155", linestyle="--", linewidth=1.8, zorder=4)
+        ax.vlines(16.0, ymin_16, ymax_16, color="#475569", linestyle="--", linewidth=1.6, zorder=4)
         ax.text(
             16.0,
             ymax_16 + 0.15,
@@ -622,7 +624,8 @@ def plot_crr_cross_uarch_flop_per_cycle(champions: List[UArchChampionCRR], outpu
             va="bottom",
             fontsize=9.5,
             fontweight="bold",
-            color="#334155",
+            color="#475569",
+            bbox=dict(boxstyle="round,pad=0.25", facecolor="#ffffff", edgecolor="none", alpha=0.9),
             zorder=4,
         )
 
@@ -658,7 +661,7 @@ def plot_crr_cross_uarch_flop_per_cycle(champions: List[UArchChampionCRR], outpu
         Patch(facecolor=SIMD_FAMILY_COLORS["avx2"], edgecolor=BORDER_COLOR, label="AVX2"),
         Patch(facecolor=SIMD_FAMILY_COLORS["neon"], edgecolor=BORDER_COLOR, label="NEON"),
         Patch(facecolor=SIMD_FAMILY_COLORS["rvv"], edgecolor=BORDER_COLOR, label="RVV 1.0"),
-        Line2D([0], [0], color="#334155", linestyle="--", linewidth=1.8, label="Theoretical Peak"),
+        Line2D([0], [0], color="#475569", linestyle="--", linewidth=1.6, label="Theoretical Peak"),
     ]
     ax.legend(
         handles=legend_elements,
