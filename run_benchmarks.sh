@@ -517,40 +517,47 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
             CATCH2_PREFIX_FLAG="-DCMAKE_PREFIX_PATH=${LOCAL_CATCH2}"
         fi
 
-        # Configure if CMakeCache is missing or full rebuild requested
-        if [[ ! -f "${BUILD_DIR}/CMakeCache.txt" || "$FORCE_REBUILD" == "true" ]]; then
+        if [[ "${PLATFORM_TAG:-}" == "x60" && "$COMPILER_TAG" == "clang" && -f "$BIN" ]]; then
             echo
             echo "======================================="
-            echo "Configuring ${VERSION} for ${PLATFORM_NAME} (${COMPILER}) in ${BUILD_DIR}"
+            echo "Notice: Using precompiled clang binary for x60 from NFS ($BIN)"
             echo "======================================="
-            echo "Flags: ${FORMATTED_FLAGS}"
+        else
+            # Configure if CMakeCache is missing or full rebuild requested
+            if [[ ! -f "${BUILD_DIR}/CMakeCache.txt" || "$FORCE_REBUILD" == "true" ]]; then
+                echo
+                echo "======================================="
+                echo "Configuring ${VERSION} for ${PLATFORM_NAME} (${COMPILER}) in ${BUILD_DIR}"
+                echo "======================================="
+                echo "Flags: ${FORMATTED_FLAGS}"
 
-            cmake -B "${BUILD_DIR}" -S . \
-                -DCMAKE_BUILD_TYPE=Release \
-                -DCMAKE_CXX_COMPILER="${COMPILER}" \
-                -DCMAKE_CXX_FLAGS="${FORMATTED_FLAGS}" \
-                ${EXPLO_FLAG} \
-                ${TEST_BUILD_FLAG} \
-                ${CATCH2_PREFIX_FLAG}
+                cmake -B "${BUILD_DIR}" -S . \
+                    -DCMAKE_BUILD_TYPE=Release \
+                    -DCMAKE_CXX_COMPILER="${COMPILER}" \
+                    -DCMAKE_CXX_FLAGS="${FORMATTED_FLAGS}" \
+                    ${EXPLO_FLAG} \
+                    ${TEST_BUILD_FLAG} \
+                    ${CATCH2_PREFIX_FLAG}
+            fi
+
+            BUILD_TARGET_FLAG="--target GemmBench"
+            if [[ "$TESTS_ONLY" == "true" ]]; then
+                BUILD_TARGET_FLAG="--target GemmBenchTests"
+            elif [[ "$RUN_TESTS" == "true" ]]; then
+                BUILD_TARGET_FLAG=""
+            fi
+
+            BUILD_OPTS=()
+            if [[ "$FORCE_REBUILD" == "true" ]]; then
+                BUILD_OPTS+=(--clean-first)
+            fi
+
+            echo
+            echo "======================================="
+            echo "Building ${VERSION} (${COMPILER}) in ${BUILD_DIR}..."
+            echo "======================================="
+            cmake --build "${BUILD_DIR}" ${BUILD_TARGET_FLAG} "${BUILD_OPTS[@]}" --parallel
         fi
-
-        BUILD_TARGET_FLAG="--target GemmBench"
-        if [[ "$TESTS_ONLY" == "true" ]]; then
-            BUILD_TARGET_FLAG="--target GemmBenchTests"
-        elif [[ "$RUN_TESTS" == "true" ]]; then
-            BUILD_TARGET_FLAG=""
-        fi
-
-        BUILD_OPTS=()
-        if [[ "$FORCE_REBUILD" == "true" ]]; then
-            BUILD_OPTS+=(--clean-first)
-        fi
-
-        echo
-        echo "======================================="
-        echo "Building ${VERSION} (${COMPILER}) in ${BUILD_DIR}..."
-        echo "======================================="
-        cmake --build "${BUILD_DIR}" ${BUILD_TARGET_FLAG} "${BUILD_OPTS[@]}" --parallel
 
         if [[ "$RUN_TESTS" == "true" ]]; then
             echo

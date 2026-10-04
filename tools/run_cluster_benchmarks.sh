@@ -299,7 +299,7 @@ run_target() {
             ;;
         zen4)
             partition="az4-n4090"
-            node="${ZEN4_NODE:-az4-n4090-1}"
+            node="${ZEN4_NODE:-az4-n4090-0}"
             platform="avx512"
             out_prefix="zen4_avx512"
             pre_cmd="module load catch2 2>/dev/null || true;"
