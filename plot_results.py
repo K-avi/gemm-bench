@@ -191,7 +191,7 @@ def load_dataset_for_uarch(input_dir: Path, spec: UArchSpec) -> pd.DataFrame:
                 flop_per_cycle = pd.to_numeric(df["FLOP_per_cycle"], errors="coerce").fillna(df["GFLOPS"] / spec.frequency_ghz)
             else:
                 flop_per_cycle = df["GFLOPS"] / spec.frequency_ghz
-            efficiency_pct = (flop_per_cycle / spec.peak_flop_per_cycle) * 100.0
+            efficiency_pct = (df["GFLOPS"] / spec.peak_gflops) * 100.0
 
             df = df.assign(
                 Compiler=compiler,
@@ -264,7 +264,7 @@ def analyze_uarch(df: pd.DataFrame, spec: UArchSpec) -> Optional[UArchChampion]:
     cv_pct = float(peak_row["GFLOPS_cv_pct"]) if "GFLOPS_cv_pct" in peak_row and pd.notna(peak_row["GFLOPS_cv_pct"]) else None
     stddev = float(peak_row["GFLOPS_stddev"]) if "GFLOPS_stddev" in peak_row and pd.notna(peak_row["GFLOPS_stddev"]) else None
 
-    efficiency_pct = (peak_flop_per_cycle / spec.peak_flop_per_cycle) * 100.0
+    efficiency_pct = (peak_gflops / spec.peak_gflops) * 100.0
     measured_eff = (peak_flop_per_cycle / spec.measured_peak_flop_per_cycle * 100.0) if spec.measured_peak_flop_per_cycle else None
     expected_kernel = (
         spec.expected_best_kernel_crr

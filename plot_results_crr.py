@@ -200,7 +200,10 @@ def load_crr_dataset_for_uarch(input_dir: Path, spec: UArchSpecCRR) -> pd.DataFr
                 flop_per_cycle = pd.to_numeric(df["FLOP_per_cycle"], errors="coerce").fillna(df["GFLOPS"] / spec.frequency_ghz)
             else:
                 flop_per_cycle = df["GFLOPS"] / spec.frequency_ghz
-            efficiency_pct = (flop_per_cycle / spec.peak_flop_per_cycle) * 100.0
+            
+            # Efficiency relative to rated theoretical peak GFLOP/s (frequency_ghz * peak_flop_per_cycle)
+            efficiency_pct = (df["GFLOPS"] / spec.peak_gflops) * 100.0
+            pipeline_efficiency_pct = (flop_per_cycle / spec.peak_flop_per_cycle) * 100.0
 
             df = df.assign(
                 Compiler=compiler,
@@ -214,6 +217,7 @@ def load_crr_dataset_for_uarch(input_dir: Path, spec: UArchSpecCRR) -> pd.DataFr
                 ExpectedKernel=spec.expected_best_kernel,
                 FLOP_per_cycle=flop_per_cycle,
                 Efficiency_pct=efficiency_pct,
+                PipelineEfficiency_pct=pipeline_efficiency_pct,
             )
 
             dfs.append(df)
@@ -262,7 +266,8 @@ def load_rrr_dataset_for_uarch(rrr_dir: Path, spec: UArchSpecCRR) -> pd.DataFram
                 flop_per_cycle = pd.to_numeric(df["FLOP_per_cycle"], errors="coerce").fillna(df["GFLOPS"] / spec.frequency_ghz)
             else:
                 flop_per_cycle = df["GFLOPS"] / spec.frequency_ghz
-            efficiency_pct = (flop_per_cycle / spec.peak_flop_per_cycle) * 100.0
+            efficiency_pct = (df["GFLOPS"] / spec.peak_gflops) * 100.0
+            pipeline_efficiency_pct = (flop_per_cycle / spec.peak_flop_per_cycle) * 100.0
 
             df = df.assign(
                 Compiler=compiler,
@@ -273,6 +278,7 @@ def load_rrr_dataset_for_uarch(rrr_dir: Path, spec: UArchSpecCRR) -> pd.DataFram
                 PeakGFLOPS=spec.peak_gflops,
                 FLOP_per_cycle=flop_per_cycle,
                 Efficiency_pct=efficiency_pct,
+                PipelineEfficiency_pct=pipeline_efficiency_pct,
             )
             dfs.append(df)
         except Exception:
@@ -302,6 +308,7 @@ class UArchChampionCRR:
     peak_gflops: float
     peak_flop_per_cycle: float
     efficiency_pct: float
+    pipeline_efficiency_pct: float
     measured_efficiency_pct: Optional[float]
     matches_expected: bool
     data: pd.DataFrame
@@ -338,7 +345,8 @@ def analyze_crr_uarch(df: pd.DataFrame, spec: UArchSpecCRR) -> Optional[UArchCha
     mr = int(peak_row["M"])
     nr = int(peak_row["N"])
 
-    efficiency_pct = (peak_flop_per_cycle / spec.peak_flop_per_cycle) * 100.0
+    efficiency_pct = (peak_gflops / spec.peak_gflops) * 100.0
+    pipeline_efficiency_pct = (peak_flop_per_cycle / spec.peak_flop_per_cycle) * 100.0
     measured_eff = (peak_flop_per_cycle / spec.measured_peak_flop_per_cycle * 100.0) if spec.measured_peak_flop_per_cycle else None
     matches_expected = (best_kernel == spec.expected_best_kernel)
 
@@ -352,6 +360,7 @@ def analyze_crr_uarch(df: pd.DataFrame, spec: UArchSpecCRR) -> Optional[UArchCha
         peak_gflops=peak_gflops,
         peak_flop_per_cycle=peak_flop_per_cycle,
         efficiency_pct=efficiency_pct,
+        pipeline_efficiency_pct=pipeline_efficiency_pct,
         measured_efficiency_pct=measured_eff,
         matches_expected=matches_expected,
         data=champion_data,
@@ -434,10 +443,12 @@ def plot_crr_cross_uarch_efficiency(champions: List[UArchChampionCRR], output_pa
         eff = champ.efficiency_pct
         gflops = champ.peak_gflops
         flop_cyc = champ.peak_flop_per_cycle
+        pipe_eff = champ.pipeline_efficiency_pct
         k_dim = champ.peak_k
         tile_str = f"{champ.mr}x{champ.nr}"
+        peak_theo = champ.spec.peak_gflops
 
-        text_label = f" {eff:.1f}%  ({gflops:.1f} GFLOP/s @ K={k_dim} | Tile MRxNR={tile_str} | {flop_cyc:.2f} FLOP/cyc)"
+        text_label = f" {eff:.1f}%  ({gflops:.1f} / {peak_theo:.1f} GFLOP/s | {flop_cyc:.2f} FLOP/cyc [{pipe_eff:.1f}% pipe] | Tile {tile_str})"
         ax.text(
             1.2,
             idx,
@@ -446,7 +457,7 @@ def plot_crr_cross_uarch_efficiency(champions: List[UArchChampionCRR], output_pa
             ha="left",
             color="#ffffff",
             fontweight="bold",
-            fontsize=9.5,
+            fontsize=9.0,
             zorder=5,
         )
 
@@ -457,7 +468,7 @@ def plot_crr_cross_uarch_efficiency(champions: List[UArchChampionCRR], output_pa
     ax.set_xlim(0, 108)
     ax.set_xticks([0, 20, 40, 60, 80, 100])
     ax.set_xticklabels(["0%", "20%", "40%", "60%", "80%", "100%"], fontsize=10)
-    ax.set_xlabel("Hardware Efficiency (% of Theoretical Peak FLOP/cycle)", fontsize=11, fontweight="bold", labelpad=10)
+    ax.set_xlabel("Peak Efficiency (% of Theoretical Peak GFLOP/s: R_peak = f_boost × Peak_FLOP/cycle)", fontsize=11, fontweight="bold", labelpad=10)
 
     fig.text(
         0.04, 0.965,
@@ -469,7 +480,7 @@ def plot_crr_cross_uarch_efficiency(champions: List[UArchChampionCRR], output_pa
     )
     fig.text(
         0.04, 0.935,
-        "FP64 BLIS-like Micro-Kernel (A PackedColMajor, B PackedRowMajor) | Single tile MRxNR streaming over K ∈ [32..1024]",
+        "FP64 BLIS-like Micro-Kernel (A PackedColMajor, B PackedRowMajor) | Single tile MRxNR streaming over K ∈ [32..1024] | Normalized to theoretical peak GFLOP/s",
         fontsize=9.5,
         color=TEXT_SECONDARY,
         ha="left",
@@ -922,15 +933,15 @@ def plot_crr_vs_rrr_comparison(pairs: List[ComparisonPair], output_path: Path) -
 
 def print_crr_summary_table(champions: List[UArchChampionCRR]) -> None:
     """Prints a formatted comparative table in the console."""
-    print("\n" + "=" * 145)
+    print("\n" + "=" * 155)
     print("  GEMMBench — Microarchitectural Performance & Peak Efficiency Summary (CRR BLIS Micro-Kernels)")
-    print("=" * 145)
+    print("=" * 155)
     header = (
         f"{'SIMD':<8} | {'Microarchitecture':<22} | {'Champion CRR Kernel':<36} | "
-        f"{'Tile':<7} | {'Comp':<5} | {'Peak GFLOP/s':<12} | {'K_opt':<6} | {'FLOP/cyc':<9} | {'% Theo':<8} | {'Expected Match?':<15}"
+        f"{'Tile':<7} | {'Comp':<5} | {'Peak GFLOP/s':<12} | {'K_opt':<6} | {'FLOP/cyc':<9} | {'% GFLOP/s':<10} | {'Pipe Eff':<9} | {'Expected Match?':<15}"
     )
     print(header)
-    print("-" * 145)
+    print("-" * 155)
 
     for champ in champions:
         match_str = "✓ MATCH" if champ.matches_expected else f"✗ MISMATCH ({champ.spec.expected_best_kernel})"
@@ -944,11 +955,12 @@ def print_crr_summary_table(champions: List[UArchChampionCRR]) -> None:
             f"{champ.peak_gflops:<12.1f} | "
             f"{champ.peak_k:<6} | "
             f"{champ.peak_flop_per_cycle:<9.2f} | "
-            f"{champ.efficiency_pct:<7.1f}% | "
+            f"{champ.efficiency_pct:<9.1f}% | "
+            f"{champ.pipeline_efficiency_pct:<8.1f}% | "
             f"{match_str}"
         )
         print(row)
-    print("=" * 145 + "\n")
+    print("=" * 155 + "\n")
 
 
 def print_comparison_table(pairs: List[ComparisonPair]) -> None:
