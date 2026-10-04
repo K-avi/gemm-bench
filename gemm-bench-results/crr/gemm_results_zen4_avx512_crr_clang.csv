@@ -1,7 +1,7 @@
-Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS,Time_min_s,GFLOPS_peak,GFLOPS_stddev,GFLOPS_cv_pct,Repetitions,InterRun_CV_pct
-native,mippv2_firestorm_mr4_nr4_fmaddi_crr,4,32,32,1,0,9.66394312e-08,84.7687,9.65733102e-08,84.8267,0.0193,0.02,15,0.43
-native,mippv2_firestorm_mr4_nr4_fmaddi_crr,4,32,64,1,0,1.933541184e-07,84.7357,1.933240304e-07,84.7489,0.2245,0.27,15,0.44
-native,mippv2_firestorm_mr4_nr4_fmaddi_crr,4,32,128,1,0,3.890404136e-07,84.2278,3.886586288e-07,84.3105,0.0230,0.03,15,0.43
-native,mippv2_firestorm_mr4_nr4_fmaddi_crr,4,32,256,1,0,7.75641763333e-07,84.4926,7.75267735e-07,84.5334,0.0215,0.03,15,0.27
-native,mippv2_firestorm_mr4_nr4_fmaddi_crr,4,32,512,1,0,1.55414145667e-06,84.3372,1.55402023e-06,84.3438,0.1633,0.19,15,0.16
-native,mippv2_firestorm_mr4_nr4_fmaddi_crr,4,32,1024,1,0,3.10291131333e-06,84.4832,3.10215804667e-06,84.5038,0.0139,0.02,15,0.29
+Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS,Time_min_s,GFLOPS_peak,GFLOPS_stddev,GFLOPS_cv_pct,Repetitions,Time_max_s,Cycles,Eff_GHz,FLOP_per_cycle,InterRun_CV_pct
+native,mippv2_firestorm_mr4_nr4_fmaddi_crr,4,32,32,1,0,9.82094704e-08,83.4135,9.8140152e-08,83.4725,0.0222,0.03,15,9.8235563e-08,512.1,5.2146,15.9961,0.03
+native,mippv2_firestorm_mr4_nr4_fmaddi_crr,4,32,64,1,0,1.965913152e-07,83.3404,1.964723444e-07,83.3909,0.0233,0.03,15,1.967058652e-07,1024.4,5.2106,15.9944,0.01
+native,mippv2_firestorm_mr4_nr4_fmaddi_crr,4,32,128,1,0,3.941201528e-07,83.1422,3.940054176e-07,83.1664,0.0134,0.02,15,3.942553112e-07,2062.2,5.2324,15.8899,0.08
+native,mippv2_firestorm_mr4_nr4_fmaddi_crr,4,32,256,1,0,7.86117533333e-07,83.3667,7.85696983333e-07,83.4113,0.0199,0.02,15,7.86371108333e-07,4109.9,5.2281,15.9459,0.22
+native,mippv2_firestorm_mr4_nr4_fmaddi_crr,4,32,512,1,0,1.56994559e-06,83.4882,1.56464094e-06,83.7713,7.1118,8.71,15,2.11079122667e-06,8217.1,5.2340,15.9512,0.05
+native,mippv2_firestorm_mr4_nr4_fmaddi_crr,4,32,1024,1,0,3.13665103333e-06,83.5745,3.12889011333e-06,83.7818,7.1074,8.70,15,4.21628208e-06,16432.7,5.2389,15.9526,0.08

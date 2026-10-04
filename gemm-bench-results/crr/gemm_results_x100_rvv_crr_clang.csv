@@ -1,7 +1,7 @@
-Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS,Time_min_s,GFLOPS_peak,GFLOPS_stddev,GFLOPS_cv_pct,Repetitions,InterRun_CV_pct
-rvv,mippv2_x100_register_blocked_apack4_crr,3,16,32,1,0,2.060959724e-07,14.9057,2.05589511e-07,14.9424,0.0206,0.14,15,0.11
-rvv,mippv2_x100_register_blocked_apack4_crr,3,16,64,1,0,3.656724772e-07,16.8019,3.65268118e-07,16.8205,0.0134,0.08,15,0.24
-rvv,mippv2_x100_register_blocked_apack4_crr,3,16,128,1,0,6.861737376e-07,17.9080,6.859098208e-07,17.9149,0.0087,0.05,15,0.13
-rvv,mippv2_x100_register_blocked_apack4_crr,3,16,256,1,0,1.328029525e-06,18.5056,1.32731311e-06,18.5156,0.0145,0.08,15,0.02
-rvv,mippv2_x100_register_blocked_apack4_crr,3,16,512,1,0,3.12557665333e-06,15.7257,3.12269363e-06,15.7403,0.0097,0.06,15,1.14
-rvv,mippv2_x100_register_blocked_apack4_crr,3,16,1024,1,0,6.23293454667e-06,15.7717,6.23206627333e-06,15.7739,0.0680,0.43,15,0.09
+Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS,Time_min_s,GFLOPS_peak,GFLOPS_stddev,GFLOPS_cv_pct,Repetitions,Time_max_s,Cycles,Eff_GHz,FLOP_per_cycle,InterRun_CV_pct
+rvv,mippv2_x100_register_blocked_apack4_crr,3,16,32,1,0,2.06536489e-07,14.8739,2.0619026e-07,14.8989,0.0189,0.13,15,2.07226081e-07,494.9,2.3963,6.2070,0.15
+rvv,mippv2_x100_register_blocked_apack4_crr,3,16,64,1,0,3.665896712e-07,16.7599,3.662800564e-07,16.7741,0.0158,0.09,15,3.676949884e-07,878.4,2.3962,6.9945,0.10
+rvv,mippv2_x100_register_blocked_apack4_crr,3,16,128,1,0,6.866902872e-07,17.8945,6.865293976e-07,17.8987,0.0036,0.02,15,6.869504056e-07,1645.5,2.3962,7.4678,0.14
+rvv,mippv2_x100_register_blocked_apack4_crr,3,16,256,1,0,1.32778281167e-06,18.5091,1.32749713667e-06,18.5130,0.0028,0.02,15,1.32821723e-06,3181.0,2.3957,7.7259,0.08
+rvv,mippv2_x100_register_blocked_apack4_crr,3,16,512,1,0,3.14260830667e-06,15.6405,3.14107614333e-06,15.6481,0.0662,0.42,15,3.19396152667e-06,7528.1,2.3955,6.5291,1.40
+rvv,mippv2_x100_register_blocked_apack4_crr,3,16,1024,1,0,6.29724694e-06,15.6106,6.29620672e-06,15.6132,0.0076,0.05,15,6.30831711333e-06,15085.5,2.3956,6.5165,0.37

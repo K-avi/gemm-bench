@@ -1,7 +1,7 @@
-Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS,Time_min_s,GFLOPS_peak,GFLOPS_stddev,GFLOPS_cv_pct,Repetitions,InterRun_CV_pct
-rvv,mippv2_x100_register_blocked_apack4_crr,3,16,32,1,0,2.21983334e-07,13.8389,2.218532584e-07,13.8470,0.0085,0.06,15,0.09
-rvv,mippv2_x100_register_blocked_apack4_crr,3,16,64,1,0,4.056945108e-07,15.1444,4.054256604e-07,15.1544,0.0622,0.41,15,0.14
-rvv,mippv2_x100_register_blocked_apack4_crr,3,16,128,1,0,7.774540632e-07,15.8054,7.771761472e-07,15.8111,0.0023,0.01,15,0.04
-rvv,mippv2_x100_register_blocked_apack4_crr,3,16,256,1,0,1.51719845e-06,16.1983,1.51692110667e-06,16.2012,0.0020,0.01,15,0.03
-rvv,mippv2_x100_register_blocked_apack4_crr,3,16,512,1,0,3.58483706e-06,13.7111,3.57539470667e-06,13.7473,0.0550,0.40,15,0.50
-rvv,mippv2_x100_register_blocked_apack4_crr,3,16,1024,1,0,6.99379326667e-06,14.0559,6.99144536e-06,14.0606,0.0027,0.02,15,0.08
+Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS,Time_min_s,GFLOPS_peak,GFLOPS_stddev,GFLOPS_cv_pct,Repetitions,Time_max_s,Cycles,Eff_GHz,FLOP_per_cycle,InterRun_CV_pct
+rvv,mippv2_x100_register_blocked_apack4_crr,3,16,32,1,0,2.199969844e-07,13.9638,2.197138264e-07,13.9818,0.0082,0.06,15,2.202347868e-07,527.1,2.3961,5.8278,0.28
+rvv,mippv2_x100_register_blocked_apack4_crr,3,16,64,1,0,4.051696204e-07,15.1640,4.04905736e-07,15.1739,0.0032,0.02,15,4.052283504e-07,970.9,2.3962,6.3284,0.18
+rvv,mippv2_x100_register_blocked_apack4_crr,3,16,128,1,0,7.759862328e-07,15.8353,7.758331088e-07,15.8385,0.0665,0.42,15,7.886388568e-07,1859.5,2.3963,6.6082,0.05
+rvv,mippv2_x100_register_blocked_apack4_crr,3,16,256,1,0,1.51600125667e-06,16.2111,1.51532740667e-06,16.2183,0.0052,0.03,15,1.51723458667e-06,3632.5,2.3961,6.7656,0.05
+rvv,mippv2_x100_register_blocked_apack4_crr,3,16,512,1,0,3.61529888333e-06,13.5956,3.61118537667e-06,13.6110,0.0060,0.04,15,3.61586954667e-06,8660.1,2.3954,5.6757,0.94
+rvv,mippv2_x100_register_blocked_apack4_crr,3,16,1024,1,0,6.9611701e-06,14.1218,6.95793251333e-06,14.1283,0.0115,0.08,15,6.97939958667e-06,16672.1,2.3950,5.8963,0.23
