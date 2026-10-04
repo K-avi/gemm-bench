@@ -2,7 +2,7 @@
 PLATFORM_NAME="x86_64 (AVX2)"
 BUILD_DIR_PREFIX="build_avx2"
 CSV_PREFIX="gemm_results_avx2"
-DEFAULT_PIN_CORE="0"
+DEFAULT_PIN_CORE="1"
 
 DEFAULT_KERNELS=(
     mippv2_meteorlake_mr4_nr3

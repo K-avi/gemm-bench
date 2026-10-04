@@ -2,6 +2,7 @@
 PLATFORM_NAME="x86_64 (AVX-512)"
 BUILD_DIR_PREFIX="build_avx512"
 CSV_PREFIX="gemm_results_avx512"
+DEFAULT_PIN_CORE="1"
  
 DEFAULT_KERNELS=(
     mippv2_firestorm_mr4_nr4_fmaddi

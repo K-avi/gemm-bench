@@ -25,7 +25,7 @@ struct BenchConfig
 
     size_t packet_size = mipp::N<double, 1>();
     size_t lmul = 1;
-    size_t alignment = 32;
+    size_t alignment = 64;
 
     uint32_t seed = 12;
 
@@ -38,6 +38,7 @@ struct BenchConfig
     bool csv_mode = false;
     std::string kernel_name = "ijk";
     bool legacy_mode = false;
+    bool validate = false;
 };
 
 inline BenchConfig& config()
@@ -128,6 +129,8 @@ inline void parseArgs(int argc,
         }
         else if(arg == "--csv")
             cfg.csv_mode = true;
+        else if(arg == "--validate")
+            cfg.validate = true;
         else if(!ignore_unknown)
         {
             std::cerr << "Unknown argument: " << arg << '\n';

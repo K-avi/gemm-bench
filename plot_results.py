@@ -187,7 +187,10 @@ def load_dataset_for_uarch(input_dir: Path, spec: UArchSpec) -> pd.DataFrame:
             if df.empty or "Kernel" not in df.columns or "GFLOPS" not in df.columns:
                 continue
 
-            flop_per_cycle = df["GFLOPS"] / spec.frequency_ghz
+            if "FLOP_per_cycle" in df.columns and (pd.to_numeric(df["FLOP_per_cycle"], errors="coerce") > 0).any():
+                flop_per_cycle = pd.to_numeric(df["FLOP_per_cycle"], errors="coerce").fillna(df["GFLOPS"] / spec.frequency_ghz)
+            else:
+                flop_per_cycle = df["GFLOPS"] / spec.frequency_ghz
             efficiency_pct = (flop_per_cycle / spec.peak_flop_per_cycle) * 100.0
 
             df = df.assign(

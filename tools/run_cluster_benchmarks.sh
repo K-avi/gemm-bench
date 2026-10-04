@@ -65,7 +65,7 @@ ${BOLD}Cibles disponibles :${NC}
   x60          SpacemiT X60 (mono-bpi-f3, RVV 256-bit) -> mippv2_a100_mr7_nr4_pipe (+ _crr)
   rpi5         Raspberry Pi 5 (mono-rpi-5b, Cortex-A76 NEON) -> mippv2_a76_mr6_nr3 (+ _crr)
   m1           Apple M1 (m1u, Firestorm NEON, core 3) -> mippv2_x60_mr6_nr4_fmaddi (+ _crr)
-  zen4         AMD Zen 4 (az4-a7900-3, AVX-512) -> mippv2_firestorm_mr4_nr4_fmaddi (+ _crr)
+  zen4         AMD Zen 4 (az4-n4090-1, AVX-512) -> mippv2_firestorm_mr4_nr4_fmaddi (+ _crr)
   zen5         AMD Zen 5 (az5-a890m-0, AVX-512) -> mippv2_firestorm_mr4_nr4_fmaddi (+ _crr)
   meteorlake   Intel Meteor Lake (iml-ia770-3, AVX2, core 0) -> mippv2_meteorlake_mr4_nr3 (+ _crr)
   all          Toutes les cibles ci-dessus (défaut)
@@ -264,7 +264,7 @@ run_target() {
             node="mono-sip-k3"
             platform="rvv_x100"
             out_prefix="x100_rvv"
-            srun_extra="-c 8"
+            srun_extra="--exclusive"
             ;;
         a100)
             partition="mono"
@@ -272,7 +272,7 @@ run_target() {
             platform="rvv_a100"
             out_prefix="a100_rvv"
             wrapper="ai "
-            srun_extra="-c 8"
+            srun_extra="--exclusive"
             ;;
         x60)
             partition="mono"
@@ -299,7 +299,7 @@ run_target() {
             ;;
         zen4)
             partition="az4-n4090"
-            node="az4-n4090-0"
+            node="${ZEN4_NODE:-az4-n4090-1}"
             platform="avx512"
             out_prefix="zen4_avx512"
             pre_cmd="module load catch2 2>/dev/null || true;"

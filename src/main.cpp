@@ -4,15 +4,70 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <iomanip>
 #include <iostream>
+#include <numeric>
+#include <stdexcept>
 #include <string>
 #include <vector>
+
+#if defined(__linux__)
+#include <linux/perf_event.h>
+#include <sys/ioctl.h>
+#include <sys/syscall.h>
+#include <unistd.h>
+#endif
 
 #include "BenchConfig.h"
 
 using namespace GEMMBench;
+
+// User-mode CPU cycle counter (Linux perf_event_open, no root needed when
+// perf_event_paranoid <= 2). If unavailable (non-Linux, VM without PMU,
+// restricted kernel), ok() is false and all cycle-derived metrics are 0.
+class CycleCounter {
+public:
+  CycleCounter() {
+#if defined(__linux__)
+    perf_event_attr pe;
+    std::memset(&pe, 0, sizeof(pe));
+    pe.type = PERF_TYPE_HARDWARE;
+    pe.size = sizeof(pe);
+    pe.config = PERF_COUNT_HW_CPU_CYCLES;
+    pe.disabled = 1;
+    pe.exclude_kernel = 1;
+    pe.exclude_hv = 1;
+    fd_ = static_cast<int>(syscall(SYS_perf_event_open, &pe, 0, -1, -1, 0));
+    if (fd_ >= 0) {
+      ioctl(fd_, PERF_EVENT_IOC_RESET, 0);
+      ioctl(fd_, PERF_EVENT_IOC_ENABLE, 0);
+    }
+#endif
+  }
+  ~CycleCounter() {
+#if defined(__linux__)
+    if (fd_ >= 0) close(fd_);
+#endif
+  }
+  CycleCounter(const CycleCounter &) = delete;
+  CycleCounter &operator=(const CycleCounter &) = delete;
+
+  bool ok() const { return fd_ >= 0; }
+
+  uint64_t read_cycles() const {
+#if defined(__linux__)
+    uint64_t v = 0;
+    if (fd_ >= 0 && ::read(fd_, &v, sizeof(v)) == static_cast<ssize_t>(sizeof(v)))
+      return v;
+#endif
+    return 0;
+  }
+
+private:
+  int fd_ = -1;
+};
 
 struct BenchmarkStats {
   double time_median_s = 0.0;
@@ -23,12 +78,25 @@ struct BenchmarkStats {
   double gflops_stddev = 0.0;
   double cv_percent    = 0.0;
   size_t repetitions   = 0;
+  // Measured with the user-mode cycle counter, taken from the same sample
+  // as the median time. 0 when the counter is unavailable.
+  double cycles_per_call = 0.0;
+  double eff_ghz         = 0.0;
+  double flop_per_cycle  = 0.0;
 };
 
-inline BenchmarkStats compute_stats(std::vector<double> &samples, double ops) {
-  const size_t R = samples.size();
-  std::sort(samples.begin(), samples.end());
+inline BenchmarkStats compute_stats(const std::vector<double> &times,
+                                    const std::vector<double> &cycles,
+                                    double ops) {
+  const size_t R = times.size();
+  std::vector<size_t> order(R);
+  std::iota(order.begin(), order.end(), size_t{0});
+  std::sort(order.begin(), order.end(),
+            [&](size_t a, size_t b) { return times[a] < times[b]; });
+  std::vector<double> samples(R);
+  for (size_t i = 0; i < R; ++i) samples[i] = times[order[i]];
 
+  const size_t median_idx  = order[R / 2];
   const double median_time = samples[R / 2];
   const double min_time    = samples.front();
   const double max_time    = samples.back();
@@ -50,34 +118,49 @@ inline BenchmarkStats compute_stats(std::vector<double> &samples, double ops) {
   s.gflops_stddev = (mean_time > 0.0) ? ((ops / mean_time / 1e9) * (stddev_time / mean_time)) : 0.0;
   s.cv_percent    = (mean_time > 0.0) ? ((stddev_time / mean_time) * 100.0) : 0.0;
   s.repetitions   = R;
+  const double cyc = cycles[median_idx];
+  if (cyc > 0.0 && median_time > 0.0) {
+    s.cycles_per_call = cyc;
+    s.eff_ghz         = cyc / median_time / 1e9;
+    s.flop_per_cycle  = ops / cyc;
+  }
   return s;
 }
 
+// Timing note: the "memory" clobber forces the compiler to assume A/B/C may
+// have changed/been read, so the kernel call cannot be hoisted or elided.
+// steady_clock is monotonic (high_resolution_clock may alias system_clock).
 #define BENCH_KERNEL(CALL)                                                     \
   do {                                                                         \
     for (size_t w = 0; w < cfg.warmup; ++w) {                                  \
       CALL;                                                                    \
     }                                                                          \
                                                                                \
+    CycleCounter cyc_counter;                                                  \
     const size_t reps = (cfg.repetitions > 0) ? cfg.repetitions : 1;           \
     std::vector<double> samples_s(reps);                                       \
+    std::vector<double> samples_cyc(reps, 0.0);                                \
     for (size_t r = 0; r < reps; ++r) {                                        \
       asm volatile("" ::: "memory");                                           \
-      const auto start = std::chrono::high_resolution_clock::now();            \
+      const uint64_t cyc0 = cyc_counter.read_cycles();                         \
+      const auto start = std::chrono::steady_clock::now();                     \
       asm volatile("" ::: "memory");                                           \
       for (size_t i = 0; i < cfg.iterations; ++i) {                            \
         CALL;                                                                  \
         asm volatile("" :: "r"(C.data) : "memory");                            \
       }                                                                        \
       asm volatile("" ::: "memory");                                           \
-      const auto end = std::chrono::high_resolution_clock::now();              \
+      const auto end = std::chrono::steady_clock::now();                       \
+      const uint64_t cyc1 = cyc_counter.read_cycles();                         \
       asm volatile("" ::: "memory");                                           \
       const auto duration =                                                    \
           std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);   \
       samples_s[r] = (duration.count() * 1e-9) / cfg.iterations;               \
+      if (cyc_counter.ok() && cyc1 > cyc0)                                     \
+        samples_cyc[r] = static_cast<double>(cyc1 - cyc0) / cfg.iterations;    \
     }                                                                          \
     const double ops = 2.0 * cfg.M * cfg.N * cfg.K;                           \
-    return compute_stats(samples_s, ops);                                      \
+    return compute_stats(samples_s, samples_cyc, ops);                         \
   } while (false)
 
 #define BENCH_KERNEL_FASTPATH(CALL_FAST, CALL_FULL)                            \
@@ -396,11 +479,17 @@ void printResults(const BenchConfig &cfg,
               << "Beta: " << cfg.beta << "\n"
               << "Time(s) [median]: " << std::setprecision(12) << stats.time_median_s << "\n"
               << "Time(s) [min]:    " << std::setprecision(12) << stats.time_min_s << "\n"
+              << "Time(s) [max]:    " << std::setprecision(12) << stats.time_max_s << "\n"
               << "GFLOP/s [median]: " << std::fixed << std::setprecision(4) << stats.gflops_median << "\n"
               << "GFLOP/s [peak]:   " << std::fixed << std::setprecision(4) << stats.gflops_peak << "\n"
               << "GFLOP/s [stddev]: " << std::fixed << std::setprecision(4) << stats.gflops_stddev << "\n"
               << "CV (%):           " << std::fixed << std::setprecision(2) << stats.cv_percent << " %\n"
               << "Repetitions:      " << stats.repetitions << "\n";
+    if (stats.cycles_per_call > 0.0) {
+      std::cout << "Cycles / call:    " << std::fixed << std::setprecision(1) << stats.cycles_per_call << "\n"
+                << "Eff Freq (GHz):   " << std::fixed << std::setprecision(3) << stats.eff_ghz << "\n"
+                << "FLOP / cycle:     " << std::fixed << std::setprecision(4) << stats.flop_per_cycle << "\n";
+    }
   } else {
     std::cout << cfg.kernel_name << "," << cfg.M << "," << cfg.N << "," << cfg.K
               << "," << cfg.alpha << "," << cfg.beta << ","
@@ -410,7 +499,60 @@ void printResults(const BenchConfig &cfg,
               << std::fixed << std::setprecision(4) << stats.gflops_peak << ","
               << std::fixed << std::setprecision(4) << stats.gflops_stddev << ","
               << std::fixed << std::setprecision(2) << stats.cv_percent << ","
-              << stats.repetitions << "\n";
+              << stats.repetitions << ","
+              << std::defaultfloat << std::setprecision(12) << stats.time_max_s << ","
+              << std::fixed << std::setprecision(1) << stats.cycles_per_call << ","
+              << std::fixed << std::setprecision(4) << stats.eff_ghz << ","
+              << std::fixed << std::setprecision(4) << stats.flop_per_cycle << "\n";
+  }
+}
+
+template <typename T, typename APacked, typename BPacked, typename CPacked>
+void validateKernel(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
+                    const APacked &A, const BPacked &B, CPacked &C,
+                    SimdAlloc<T> &alloc) {
+  auto C_val = cfg.legacy_mode
+                   ? alloc.template allocatePacked<CPacked>(cfg.M, cfg.N, InitMode::Zero)
+                   : alloc.template allocatePackedTile<CPacked>(cfg.M, cfg.N, InitMode::Zero);
+  auto C_ref = cfg.legacy_mode
+                   ? alloc.template allocatePacked<CPacked>(cfg.M, cfg.N, InitMode::Zero)
+                   : alloc.template allocatePackedTile<CPacked>(cfg.M, cfg.N, InitMode::Zero);
+
+  for (size_t i = 0; i < cfg.M; ++i) {
+    for (size_t j = 0; j < cfg.N; ++j) {
+      C_val(i, j) = C(i, j);
+      T acc = T{0};
+      for (size_t k = 0; k < cfg.K; ++k) {
+        acc += A(i, k) * B(k, j);
+      }
+      C_ref(i, j) = (cfg.beta == T{0}) ? (cfg.alpha * acc)
+                                       : (cfg.alpha * acc + cfg.beta * C(i, j));
+    }
+  }
+
+  BenchConfig val_cfg = cfg;
+  val_cfg.iterations = 1;
+  val_cfg.repetitions = 1;
+  val_cfg.warmup = 0;
+  run<T>(val_cfg, gemm, A, B, C_val);
+
+  double max_diff = 0.0;
+  for (size_t i = 0; i < cfg.M; ++i) {
+    for (size_t j = 0; j < cfg.N; ++j) {
+      double diff = std::abs(static_cast<double>(C_val(i, j) - C_ref(i, j)));
+      if (diff > max_diff) max_diff = diff;
+    }
+  }
+  alloc.freePacked(C_val);
+  alloc.freePacked(C_ref);
+
+  const double tol = std::numeric_limits<T>::epsilon() * static_cast<double>(cfg.K) * 100.0;
+  if (max_diff > tol) {
+    std::cerr << "VALIDATION FAILED for " << cfg.kernel_name
+              << ": max diff = " << max_diff << " (tolerance = " << tol << ")\n";
+    throw std::runtime_error("Numerical validation failed");
+  } else if (!cfg.csv_mode) {
+    std::cout << "Validation: OK (max diff = " << max_diff << ")\n";
   }
 }
 
@@ -448,6 +590,10 @@ void runBenchmark(BenchConfig &cfg) {
                : ((cfg.beta != 0.0)
                       ? alloc.template allocatePackedTile<CPacked>(cfg.M, cfg.N, InitMode::Random)
                       : alloc.template allocatePackedTile<CPacked>(cfg.M, cfg.N, InitMode::Zero));
+
+  if (cfg.validate) {
+    validateKernel<T, APacked, BPacked, CPacked>(cfg, gemm, A, B, C, alloc);
+  }
 
   if (!cfg.csv_mode) {
     std::cout << "Mode: " << (cfg.legacy_mode ? "Legacy (strided/padded)" : "BLIS Tile (compacted)") << "\n";

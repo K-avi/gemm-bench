@@ -48,6 +48,7 @@ results/
 GemmBench_*
 dump_gemmbench_*/
 k3-6.pdf
+*.tar.gz
 results_zen5/
 results_rpi5/
 logs/

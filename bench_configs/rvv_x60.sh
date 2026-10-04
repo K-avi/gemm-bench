@@ -3,6 +3,7 @@ PLATFORM_NAME="SpacemiT X60 (RVV 256-bit)"
 BUILD_DIR_PREFIX="build_rvv_x60"
 CSV_PREFIX="gemm_results_rvv_x60"
 DEFAULT_VERSION="rvv"
+DEFAULT_PIN_CORE="1"
 
 # NOTE: The A100 mr7_nr4_pipe kernel is the empirical champion on X60 despite
 # being designed for the A100 core. Both share VLEN=256 and the wider 7×4 tile

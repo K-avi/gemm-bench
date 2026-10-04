@@ -23,7 +23,7 @@ Across all target ISA families (x86_64 AVX2 & AVX-512, ARM NEON, RISC-V Vector),
 
 CRR microkernels use a column-major packed $A$ panel (leading dimension $= M_R$), matching the access pattern of the GotoBLAS / BLIS macro-kernel inner loop. The benchmark evaluates a single register tile ($M_R \times N_R$) across panel depth $K \in \{32, 64, 128, 256, 512, 1024\}$.
 
-| SIMD | Microarchitecture | CPU / SoC Model | Freq (GHz) | Peak FLOP/cyc | Comp | Peak GFLOP/s | DGEMM FLOP/cyc | % of Peak |
+| SIMD | Microarchitecture | CPU / SoC Model | Freq (GHz) | Peak FLOP/cyc | Comp | Achieved GFLOP/s | DGEMM FLOP/cyc | % of Peak |
 | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
 | **NEON** | **Apple M1 Firestorm** | M1 Ultra (P-core) | 3.036 | 16.0 | GCC | 48.3 | 15.90 | **99.4 %** |
 | **NEON** | **Cortex-A76** | Raspberry Pi 5 | 2.400 | 8.0 | Clang | 18.9 | 7.88 | **98.5 %** |
@@ -69,20 +69,26 @@ To prevent common benchmarking pitfalls in microkernel evaluation (frequency thr
 
 1. **Multi-Repetition Sampling & Median Filtering**:
    - Each measurement point collects $R = 15$ timed samples (configurable via `-r / --repetitions`).
-   - Timings report the **median** duration (less sensitive to OS interrupts than mean) alongside min, max, stddev, and intra-run coefficient of variation ($\text{CV} = \frac{\sigma}{\mu} \times 100\,\%$, reported as `GFLOPS_cv_pct`).
+   - Each sample measures steady-state execution over hundreds of thousands to millions of kernel invocations.
+   - Timings report the **median** duration (less sensitive to occasional background OS scheduling interrupts than the mean) alongside min, max, stddev, and intra-run coefficient of variation ($\text{CV} = \frac{\sigma}{\mu} \times 100\,\%$, reported as `GFLOPS_cv_pct`).
 2. **Multi-Run Replication & Inter-Run CV Monitoring**:
-   - Benchmarks execute $N_{\text{runs}} = 3$ independent passes per configuration (`--runs 3`).
-   - The driver selects the best median execution time across passes and computes the inter-run variation (`InterRun_CV_pct`). An automatic warning (`⚠ inter-run CV > 5%`) is raised if runs exhibit significant variance.
-3. **Compiler Optimization & Timing Barriers**:
-   - High-resolution timestamps (`std::chrono::high_resolution_clock::now()`) are strictly isolated by `asm volatile("" ::: "memory")` compiler barriers to prevent reordering across timing boundaries.
-   - Dead-code elimination (DCE) of computation is prevented via an intra-loop read barrier on the destination matrix pointer (`asm volatile("" :: "r"(C.data) : "memory")`), verified by assembly inspection to introduce zero register spills or loop overhead.
-4. **Passive CPU Frequency Monitoring & Throttle Detection**:
+   - Benchmarks execute $N_{\text{runs}} = 3$ independent processes per configuration (`--runs 3`).
+   - The driver selects the best median execution time across passes and computes the inter-run variation (`InterRun_CV_pct`, sample coefficient of variation across run medians). An automatic warning (`⚠ inter-run CV > 5%`) is raised if runs exhibit significant variance.
+3. **Compiler Optimization & Monotonic Timing Barriers**:
+   - High-resolution monotonic timestamps (`std::chrono::steady_clock::now()`) are strictly isolated by `asm volatile("" ::: "memory")` compiler barriers to prevent reordering across timing boundaries.
+   - Dead-code elimination (DCE) and loop-invariant hoisting are prevented via a clobbered read barrier on the destination matrix pointer (`asm volatile("" :: "r"(C.data) : "memory")`), forcing the compiler to re-evaluate the kernel on every iteration.
+4. **Hardware Cycle Counting & In-Process FLOP/Cycle**:
+   - On Linux systems, the harness uses unprivileged hardware performance counters (`perf_event_open` with `PERF_COUNT_HW_CPU_CYCLES`, accessible when `perf_event_paranoid <= 2`).
+   - This records the exact CPU cycles elapsed during the timed loop, computing true $\text{FLOP/cycle} = \frac{2 \times M \times N \times K}{\text{Cycles}}$ and measured effective operating frequency ($\text{Eff\_GHz} = \frac{\text{Cycles}}{\text{Time} \times 10^9}$) directly, removing reliance on nominal boost clock assumptions.
+5. **Passive CPU Frequency Monitoring & Throttle Detection**:
    - Does not require `sudo` / root privileges, enabling reliable execution on shared HPC clusters (e.g. the Dalek cluster) where governors cannot be forced to `performance`.
-   - The driver queries `/sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq` before and after each kernel evaluation, logging initial frequencies and warning if thermal or power throttling causes a $> 5\%$ drop during benchmarking.
-5. **Adaptive Thermal Cooldown**:
+   - The driver logs governor state and reads `/sys/devices/system/cpu/cpu*/cpufreq/scaling_cur_freq`, warning if core frequency drops by $> 5\%$ during benchmarks.
+6. **Thermal Cooldown Pauses**:
    - A configurable pause (default: $2.0\,\text{s}$ via `--cooldown 2.0`) is inserted between matrix sizes for $K \ge 256$, preventing heat buildup and thermal frequency degradation during intensive sweeps.
-6. **Hardware Core Pinning**:
-   - Benchmark processes are pinned to an isolated physical core via `taskset` (configurable via `-c / --core`, default core 0) to prevent OS thread migration and cache-thrashing penalties.
+7. **Hardware Core Pinning**:
+   - Benchmark processes are pinned to a dedicated physical core via `taskset` (configurable via `-c / --core`, with per-platform defaults such as Core 1 on x86, Core 2 on RPi5, Core 3 on M1, and Core 8 on A100) to prevent OS thread migration and cache-thrashing penalties.
+8. **Numerical Accuracy Verification (`--validate`)**:
+   - Includes on-the-fly verification against a pure scalar IEEE-754 FP64 reference computation before benchmarking to ensure mathematical correctness within machine precision tolerance bounds.
 
 ---
 
@@ -97,7 +103,7 @@ To ensure empirical reproducibility, benchmarks are compiled with modern toolcha
 | **SpacemiT X60** | `x60` | Banana Pi BPI-F3 | RVV 1.0 (256-bit, VLEN=256) | 15.2.0 (RISCstar 15.2-r1) | 21.1.8 (cross-built on X100)* |
 | **Raspberry Pi 5** | `rpi5` | Broadcom BCM2712 (Cortex-A76) | ARMv8-A NEON (128-bit) | 15.2.0 (Ubuntu 15.2.0-16ubuntu1) | 21.1.8 (Ubuntu 21.1.8-6ubuntu1) |
 | **Apple M1** | `m1` | Apple M1 Ultra (Firestorm) | ARMv8-A NEON (128-bit) | 16.1.1 (Red Hat 16.1.1-1) | 22.1.5 (Fedora 22.1.5-1.fc44) |
-| **AMD Zen 4** | `zen4` | Ryzen 9 7900X | x86_64 AVX-512 | 13.3.0 (Ubuntu 13.3.0-6ubuntu2) | 18.1.3 (Ubuntu 18.1.3-1ubuntu1) |
+| **AMD Zen 4** | `zen4` | Ryzen 9 7945HX | x86_64 AVX-512 | 13.3.0 (Ubuntu 13.3.0-6ubuntu2) | 18.1.3 (Ubuntu 18.1.3-1ubuntu1) |
 | **AMD Zen 5** | `zen5` | Ryzen AI 9 HX 370 | x86_64 AVX-512 (256-bit DP) | 13.3.0 (Ubuntu 13.3.0-6ubuntu2) | 18.1.3 (Ubuntu 18.1.3-1ubuntu1) |
 | **Intel Meteor Lake** | `meteorlake` | Core Ultra (Redwood Cove P-core) | x86_64 AVX2 / FMA | 13.3.0 (Ubuntu 13.3.0-6ubuntu2) | 18.1.3 (Ubuntu 18.1.3-1ubuntu1) |
 | **Intel Skylake** | `skylake` | Core i5-6200U (local laptop) | x86_64 AVX2 / FMA | 14.2.1 (GCC 14.2.1 20250405) | 21.1.8 (Clang 21.1.8) |
@@ -183,10 +189,13 @@ Always specify `-o <uarch>_<simd>` to ensure non-colliding, standardized result 
 | `-r, --repetitions` | `<N>` | Number of timed repetitions per size/kernel sample | `15` |
 | `--runs, --repeats` | `<N>` | Number of full benchmark passes to compute inter-run CV | `3` |
 | `--cooldown` | `<sec>` | Cooldown sleep between sizes for $K \ge 256$ (thermal throttle mitigation) | `2.0` |
-| `-c, --core` | `<id>` | Pin benchmark execution to a specific CPU core via `taskset` | Auto / Core 0 |
+| `--validate` | — | Validate numerical correctness against scalar reference before benchmarking | `false` |
+| `-c, --core` | `<id>` | Pin benchmark execution to a specific CPU core via `taskset` | Config default (e.g. core 1) |
 | `--no-pin` | — | Disable core affinity pinning | `false` |
 | `-s, --size` | `<K>` | Evaluate specific panel depth $K$ (can be repeated) | Config defaults |
 | `-k, --kernel` | `<name>` | Benchmark only a specific microkernel | All in config |
+| `--explo` | — | Enable exploratory kernels (`-DGEMMBENCH_ENABLE_EXPLO=ON`) | `false` |
+| `--run-all` | — | Run all versions (including scalar baseline) and exploratory kernels | `false` |
 | `--rebuild` | — | Force clean rebuild of target executables before benchmarking | `false` |
 | `--tests` | — | Build and run Catch2 unit tests before benchmarking | `false` |
 | `--tests-only` | — | Build and run Catch2 unit tests only, then exit | `false` |
@@ -516,7 +525,7 @@ Generative AI assistants (**Google Gemini** and **OpenAI ChatGPT**) were utilize
 The foundational DGEMM microkernel designs tuned for **Intel Skylake** (AVX2 + FMA) and the **SpacemiT K3 X100** core are the result of multiple weeks of work and reflection on the underlying microarchitectures and platforms. And the best **X100** microkernels are, I think, some of the best results of my internship.
 
 For subsequent target microarchitectures, the methodology was empirical, the exploration workflow relied on pre-established invariants:
-- **Layout Exploration**: Both the $RRR$ format (Row-major $A, B, C$) and the $CRR$ format (Column-major $A$, Row-major $B, C$) are implemented. CRR uses the GotoBLAS / BLIS packing convention where $A$ is stored contiguously along $M_R$ with leading dimension $= M_R$, matching the inner kernel's access pattern. CRR microkernels achieve comparable or higher peak efficiency than RRR on most microarchitectures (up to **99.3%** on M1).
+- **Layout Exploration**: Both the $RRR$ format (Row-major $A, B, C$) and the $CRR$ format (Column-major $A$, Row-major $B, C$) are implemented. CRR uses the GotoBLAS / BLIS packing convention where $A$ is stored contiguously along $M_R$ with leading dimension $= M_R$, matching the inner kernel's access pattern. CRR microkernels achieve comparable or higher peak efficiency than RRR on most microarchitectures (up to **99.4%** on M1).
 - **Inner-Loop Access Patterns**: Preserving either the scalar broadcast pattern (`mipp::set1` + `mipp::fmadd`) or the indexed FMA pattern (`mipp::fmaddi`) on matrix $A$.
 
 Under these, the exploration focused on sweeping register block dimensions ($M_R \times N_R$) that made sense given the uarch characteristics. Register file size, number of FMA pipelines/execution units and FMA latency being the three things that answer the questions :

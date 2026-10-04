@@ -196,7 +196,10 @@ def load_crr_dataset_for_uarch(input_dir: Path, spec: UArchSpecCRR) -> pd.DataFr
             if df.empty:
                 continue
 
-            flop_per_cycle = df["GFLOPS"] / spec.frequency_ghz
+            if "FLOP_per_cycle" in df.columns and (pd.to_numeric(df["FLOP_per_cycle"], errors="coerce") > 0).any():
+                flop_per_cycle = pd.to_numeric(df["FLOP_per_cycle"], errors="coerce").fillna(df["GFLOPS"] / spec.frequency_ghz)
+            else:
+                flop_per_cycle = df["GFLOPS"] / spec.frequency_ghz
             efficiency_pct = (flop_per_cycle / spec.peak_flop_per_cycle) * 100.0
 
             df = df.assign(
@@ -255,7 +258,10 @@ def load_rrr_dataset_for_uarch(rrr_dir: Path, spec: UArchSpecCRR) -> pd.DataFram
             if df.empty:
                 continue
 
-            flop_per_cycle = df["GFLOPS"] / spec.frequency_ghz
+            if "FLOP_per_cycle" in df.columns and (pd.to_numeric(df["FLOP_per_cycle"], errors="coerce") > 0).any():
+                flop_per_cycle = pd.to_numeric(df["FLOP_per_cycle"], errors="coerce").fillna(df["GFLOPS"] / spec.frequency_ghz)
+            else:
+                flop_per_cycle = df["GFLOPS"] / spec.frequency_ghz
             efficiency_pct = (flop_per_cycle / spec.peak_flop_per_cycle) * 100.0
 
             df = df.assign(

@@ -12,6 +12,7 @@ elif [[ "$(hostname)" == *"rpi"* || "${PLATFORM_TAG:-}" == "rpi5" ]]; then
     PLATFORM_NAME="Raspberry Pi 5 (NEON)"
     BUILD_DIR_PREFIX="build_neon_rpi5"
     CSV_PREFIX="gemm_results_neon_rpi5"
+    DEFAULT_PIN_CORE="2"
     DEFAULT_KERNELS=(
         mippv2_a76_mr6_nr3
         mippv2_a76_mr6_nr4_fmaddi_crr
@@ -20,6 +21,7 @@ else
     PLATFORM_NAME="ARMv8-A (NEON)"
     BUILD_DIR_PREFIX="build_neon"
     CSV_PREFIX="gemm_results_neon"
+    DEFAULT_PIN_CORE="1"
     DEFAULT_KERNELS=(
         mippv2_a76_mr6_nr3
         mippv2_a76_mr6_nr4_fmaddi_crr

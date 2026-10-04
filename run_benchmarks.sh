@@ -29,7 +29,8 @@ Options:
   -s, --size <N>          Run only specified size(s) (can be repeated)
   --sizes "N1 N2 ..."     Run specified list of sizes
   -r, --repetitions <N>   Number of independent repetitions per measurement (default: 15)
-  --cooldown <sec>        Cooldown pause in seconds after large sizes (default: 0.5)
+  --cooldown <sec>        Cooldown pause in seconds after large sizes (default: 2.0)
+  --validate              Run numerical correctness validation against scalar reference before benchmark
   -o, --output <prefix>   Prefix for result CSV filename (e.g. --output zen4 -> zen4_gemm_results_gcc.csv)
   -a, --alpha <val>       Alpha parameter (default: 1.0)
   -b, --beta <val>        Beta parameter (default: 0.0)
@@ -99,13 +100,10 @@ ENABLE_EXPLO_FLAG=false
 RUN_TESTS=false
 TESTS_ONLY=false
 FORCE_REBUILD=false
+VALIDATE_FLAG=false
 ALPHA=1.0
 BETA=0.0
-PIN_CORE="${DEFAULT_PIN_CORE}"
-AUTO_PIN=true
-if [[ -n "${DEFAULT_PIN_CORE}" ]]; then
-    AUTO_PIN=false
-fi
+PIN_CORE="${DEFAULT_PIN_CORE:-}"
 REQUESTED_COMPILERS=()
 CUSTOM_KERNELS=()
 CUSTOM_SIZES=()
@@ -126,6 +124,10 @@ while [[ $# -gt 0 ]]; do
         --rrr|--rrr-only)
             RRR_ONLY=true
             CRR_ONLY=false
+            shift
+            ;;
+        --validate)
+            VALIDATE_FLAG=true
             shift
             ;;
         --tests)
@@ -151,11 +153,9 @@ while [[ $# -gt 0 ]]; do
             ;;
         -c|--core|--pin-core)
             PIN_CORE="$2"
-            AUTO_PIN=false
             shift 2
             ;;
         --no-pin)
-            AUTO_PIN=false
             PIN_CORE=""
             shift
             ;;
@@ -244,15 +244,14 @@ else
 fi
 
 # Passive inspection of CPU frequency and governor (no sudo required)
-if command -v cpupower &>/dev/null && sudo -n true 2>/dev/null; then
-    sudo -n cpupower frequency-set -g performance &>/dev/null || true
-fi
-
 CPU_GOV="unknown"
 if [[ -f /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor ]]; then
     CPU_GOV=$(cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor 2>/dev/null || echo "unknown")
 elif [[ -f /sys/devices/system/cpu/cpufreq/scaling_governor ]]; then
     CPU_GOV=$(cat /sys/devices/system/cpu/cpufreq/scaling_governor 2>/dev/null || echo "unknown")
+fi
+if [[ "$CPU_GOV" != "performance" && "$CPU_GOV" != "unknown" ]]; then
+    echo "Notice: CPU governor is '${CPU_GOV}'. For minimal timing jitter, 'performance' is recommended."
 fi
 
 CPU_FREQ_STR=""
@@ -460,7 +459,12 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
         CSV="results/${CSV_PREFIX}${file_suffix}_${COMPILER_TAG}.csv"
     fi
     mkdir -p "$(dirname "$CSV")"
-    echo "Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS,Time_min_s,GFLOPS_peak,GFLOPS_stddev,GFLOPS_cv_pct,Repetitions,InterRun_CV_pct" > "$CSV"
+    echo "Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS,Time_min_s,GFLOPS_peak,GFLOPS_stddev,GFLOPS_cv_pct,Repetitions,Time_max_s,Cycles,Eff_GHz,FLOP_per_cycle,InterRun_CV_pct" > "$CSV"
+
+    # Log provenance metadata
+    GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
+    COMPILER_VER=$("$COMPILER" --version 2>/dev/null | head -1 || echo "unknown")
+    echo "Metadata: commit=${GIT_COMMIT} | compiler=${COMPILER_VER} | core=${PIN_CORE:-none}"
 
     # Determine whether exploratory kernels are required
     NEED_EXPLO=false
@@ -499,43 +503,27 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
         BIN="${BUILD_DIR}/GemmBench"
         TEST_BIN="${BUILD_DIR}/tests/GemmBenchTests"
 
-        NEED_BUILD=false
-        if [[ "$FORCE_REBUILD" == "true" ]]; then
-            NEED_BUILD=true
-        elif [[ "$TESTS_ONLY" == "true" ]]; then
-            if [[ ! -f "$TEST_BIN" ]]; then
-                NEED_BUILD=true
-            fi
-        else
-            if [[ ! -f "$BIN" ]]; then
-                NEED_BUILD=true
-            fi
-            if [[ "$RUN_TESTS" == "true" && ! -f "$TEST_BIN" ]]; then
-                NEED_BUILD=true
-            fi
+        FULL_FLAGS="${COMMON_FLAGS} ${ARCH_FLAGS[${VERSION}]} ${EXTRA_COMPILER_FLAGS}"
+        FORMATTED_FLAGS=$(echo "$FULL_FLAGS" | tr '\n' ' ' | tr -s ' ')
+
+        TEST_BUILD_FLAG="-DGEMMBENCH_BUILD_TESTS=OFF"
+        if [[ "$RUN_TESTS" == "true" || "$TESTS_ONLY" == "true" ]]; then
+            TEST_BUILD_FLAG="-DGEMMBENCH_BUILD_TESTS=ON"
         fi
 
-        if [[ "$NEED_BUILD" == "true" ]]; then
+        LOCAL_CATCH2="$HOME/.local/catch2/$(uname -m)"
+        CATCH2_PREFIX_FLAG=""
+        if [[ -d "${LOCAL_CATCH2}" ]]; then
+            CATCH2_PREFIX_FLAG="-DCMAKE_PREFIX_PATH=${LOCAL_CATCH2}"
+        fi
+
+        # Configure if CMakeCache is missing or full rebuild requested
+        if [[ ! -f "${BUILD_DIR}/CMakeCache.txt" || "$FORCE_REBUILD" == "true" ]]; then
             echo
             echo "======================================="
-            echo "Building ${VERSION} for ${PLATFORM_NAME} (${COMPILER}) in ${BUILD_DIR}"
+            echo "Configuring ${VERSION} for ${PLATFORM_NAME} (${COMPILER}) in ${BUILD_DIR}"
             echo "======================================="
-
-            FULL_FLAGS="${COMMON_FLAGS} ${ARCH_FLAGS[${VERSION}]} ${EXTRA_COMPILER_FLAGS}"
-            FORMATTED_FLAGS=$(echo "$FULL_FLAGS" | tr '\n' ' ' | tr -s ' ')
-
             echo "Flags: ${FORMATTED_FLAGS}"
-
-            TEST_BUILD_FLAG="-DGEMMBENCH_BUILD_TESTS=OFF"
-            if [[ "$RUN_TESTS" == "true" ]]; then
-                TEST_BUILD_FLAG="-DGEMMBENCH_BUILD_TESTS=ON"
-            fi
-
-            LOCAL_CATCH2="$HOME/.local/catch2/$(uname -m)"
-            CATCH2_PREFIX_FLAG=""
-            if [[ -d "${LOCAL_CATCH2}" ]]; then
-                CATCH2_PREFIX_FLAG="-DCMAKE_PREFIX_PATH=${LOCAL_CATCH2}"
-            fi
 
             cmake -B "${BUILD_DIR}" -S . \
                 -DCMAKE_BUILD_TYPE=Release \
@@ -544,21 +532,25 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
                 ${EXPLO_FLAG} \
                 ${TEST_BUILD_FLAG} \
                 ${CATCH2_PREFIX_FLAG}
-
-            BUILD_TARGET_FLAG="--target GemmBench"
-            if [[ "$TESTS_ONLY" == "true" ]]; then
-                BUILD_TARGET_FLAG="--target GemmBenchTests"
-            elif [[ "$RUN_TESTS" == "true" ]]; then
-                BUILD_TARGET_FLAG=""
-            fi
-
-            cmake --build "${BUILD_DIR}" ${BUILD_TARGET_FLAG} --parallel
-        else
-            echo
-            echo "======================================="
-            echo "Target binaries already exist, skipping build (use --rebuild to force)."
-            echo "======================================="
         fi
+
+        BUILD_TARGET_FLAG="--target GemmBench"
+        if [[ "$TESTS_ONLY" == "true" ]]; then
+            BUILD_TARGET_FLAG="--target GemmBenchTests"
+        elif [[ "$RUN_TESTS" == "true" ]]; then
+            BUILD_TARGET_FLAG=""
+        fi
+
+        BUILD_OPTS=()
+        if [[ "$FORCE_REBUILD" == "true" ]]; then
+            BUILD_OPTS+=(--clean-first)
+        fi
+
+        echo
+        echo "======================================="
+        echo "Building ${VERSION} (${COMPILER}) in ${BUILD_DIR}..."
+        echo "======================================="
+        cmake --build "${BUILD_DIR}" ${BUILD_TARGET_FLAG} "${BUILD_OPTS[@]}" --parallel
 
         if [[ "$RUN_TESTS" == "true" ]]; then
             echo
@@ -638,6 +630,11 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
                 read -r SIZE ITERS WARMUP <<< "${SIZE_ENTRY}"
 
                 BENCH_CMD=()
+                EXTRA_BENCH_ARGS=()
+                if [[ "$VALIDATE_FLAG" == "true" ]]; then
+                    EXTRA_BENCH_ARGS+=(--validate)
+                fi
+
                 if [[ "$KERNEL" == *_crr* ]]; then
                     # In CRR BLIS mode: size is K, while M and N are auto-detected native MR x NR
                     BENCH_CMD=("${TASKSET_PREFIX[@]}" "${BIN}" \
@@ -648,6 +645,7 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
                         --iterations "${ITERS}" \
                         --repetitions "${REPETITIONS}" \
                         --warmup "${WARMUP}" \
+                        "${EXTRA_BENCH_ARGS[@]}" \
                         --csv)
                     DESC_STR="K=${SIZE}"
                 else
@@ -662,6 +660,7 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
                         --iterations "${ITERS}" \
                         --repetitions "${REPETITIONS}" \
                         --warmup "${WARMUP}" \
+                        "${EXTRA_BENCH_ARGS[@]}" \
                         --legacy \
                         --csv)
                     DESC_STR="${SIZE}x${SIZE}"
@@ -681,14 +680,14 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
                     fi
                 done
 
-                # Compute inter-run CV (coefficient of variation across NUM_RUNS medians)
+                # Compute inter-run CV (sample coefficient of variation across NUM_RUNS medians)
                 INTER_CV=""
                 if [[ ${#ALL_TIMES[@]} -ge 2 ]]; then
                     INTER_CV=$(printf '%s\n' "${ALL_TIMES[@]}" | awk '{
                         x[NR]=$1; s+=$1; s2+=$1*$1
                     } END {
                         if (NR>=2) {
-                            m=s/NR; v=(s2/NR)-(m*m);
+                            m=s/NR; v=(s2 - (s*s/NR))/(NR-1);
                             if (v<0) v=0;
                             printf "%.2f", (sqrt(v)/m)*100
                         } else { print "0.00" }
@@ -719,7 +718,7 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
                     fi
                 fi
 
-                if (( SIZE >= 256 )) && (( $(echo "${COOLDOWN_SEC} > 0" | bc -l 2>/dev/null || echo 0) )); then
+                if (( SIZE >= 256 )) && awk "BEGIN {exit !(${COOLDOWN_SEC} > 0)}" 2>/dev/null; then
                     sleep "${COOLDOWN_SEC}"
                 fi
             done
