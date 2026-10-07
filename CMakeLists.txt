@@ -61,8 +61,22 @@ endif()
 option(GEMMBENCH_ENABLE_LIKWID "Build with LIKWID Marker API support" OFF)
 set(LIKWID_FOUND FALSE)
 if(GEMMBENCH_ENABLE_LIKWID)
-    find_path(LIKWID_INCLUDE_DIR NAMES likwid-marker.h PATHS /usr/local/include /usr/include)
-    find_library(LIKWID_LIBRARY NAMES likwid PATHS /usr/local/lib /usr/lib /usr/lib64 /usr/local/lib64)
+    find_path(LIKWID_INCLUDE_DIR NAMES likwid-marker.h
+        PATHS
+            ENV LIKWID_PREFIX
+            ENV LIKWID_DIR
+            /usr/local
+            /usr
+        PATH_SUFFIXES include
+    )
+    find_library(LIKWID_LIBRARY NAMES likwid
+        PATHS
+            ENV LIKWID_PREFIX
+            ENV LIKWID_DIR
+            /usr/local
+            /usr
+        PATH_SUFFIXES lib lib64
+    )
     if(LIKWID_INCLUDE_DIR AND LIKWID_LIBRARY)
         message(STATUS "Found LIKWID: ${LIKWID_LIBRARY} (headers: ${LIKWID_INCLUDE_DIR})")
         set(LIKWID_FOUND TRUE)
