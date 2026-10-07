@@ -21,16 +21,30 @@
 #endif
 
 #include "BenchConfig.h"
+#include "HardwareFence.h"
+
+#ifdef GEMMBENCH_USE_LIKWID
+#include <likwid-marker.h>
+#else
+#define LIKWID_MARKER_INIT do {} while (0)
+#define LIKWID_MARKER_THREADINIT do {} while (0)
+#define LIKWID_MARKER_START(regionTag) do {} while (0)
+#define LIKWID_MARKER_STOP(regionTag) do {} while (0)
+#define LIKWID_MARKER_CLOSE do {} while (0)
+#endif
 
 using namespace GEMMBench;
 
-// User-mode CPU cycle counter (Linux perf_event_open, no root needed when
-// perf_event_paranoid <= 2). If unavailable (non-Linux, VM without PMU,
-// restricted kernel), ok() is false and all cycle-derived metrics are 0.
+// User-mode CPU cycle counter.
+// - On RISC-V (RV64): direct unprivileged CSR rdcycle (1 instruction, 0 syscall)
+// - On Linux (x86/ARM): perf_event_open (PERF_COUNT_HW_CPU_CYCLES, core unhalted cycles)
+// If unavailable (non-Linux without PMU), ok() is false and cycle metrics are 0 / NaN.
 class CycleCounter {
 public:
   CycleCounter() {
-#if defined(__linux__)
+#if defined(__riscv)
+    ok_ = true;
+#elif defined(__linux__)
     perf_event_attr pe;
     std::memset(&pe, 0, sizeof(pe));
     pe.type = PERF_TYPE_HARDWARE;
@@ -43,6 +57,7 @@ public:
     if (fd_ >= 0) {
       ioctl(fd_, PERF_EVENT_IOC_RESET, 0);
       ioctl(fd_, PERF_EVENT_IOC_ENABLE, 0);
+      ok_ = true;
     } else {
       static bool warned = false;
       if (!warned) {
@@ -62,82 +77,128 @@ public:
   CycleCounter(const CycleCounter &) = delete;
   CycleCounter &operator=(const CycleCounter &) = delete;
 
-  bool ok() const { return fd_ >= 0; }
+  bool ok() const { return ok_; }
 
   uint64_t read_cycles() const {
-#if defined(__linux__)
-    uint64_t v = 0;
-    if (fd_ >= 0 && ::read(fd_, &v, sizeof(v)) == static_cast<ssize_t>(sizeof(v)))
-      return v;
+#if defined(__riscv)
+    uint64_t c;
+    asm volatile("rdcycle %0" : "=r"(c));
+    return c;
+#elif defined(__linux__)
+    if (fd_ >= 0) {
+      uint64_t v = 0;
+      if (::read(fd_, &v, sizeof(v)) == static_cast<ssize_t>(sizeof(v)))
+        return v;
+    }
 #endif
     return 0;
   }
 
 private:
   int fd_ = -1;
+  bool ok_ = false;
 };
 
 struct BenchmarkStats {
   double time_median_s = 0.0;
   double time_min_s    = 0.0;
   double time_max_s    = 0.0;
+  double time_stddev_s = 0.0;
+  double time_cv_pct   = 0.0;
+
   double gflops_median = 0.0;
   double gflops_peak   = 0.0;
-  double gflops_stddev = 0.0;
-  double cv_percent    = 0.0;
+
+  double cycles_median = 0.0;
+  double cycles_min    = 0.0;
+  double cycles_max    = 0.0;
+  double cycles_stddev = 0.0;
+  double cycles_cv_pct = 0.0;
+
+  double eff_ghz               = 0.0;
+  double flop_per_cycle_median = 0.0;
+  double flop_per_cycle_peak   = 0.0;
+
   size_t repetitions   = 0;
-  // Measured with the user-mode cycle counter, taken from the same sample
-  // as the median time. 0 when the counter is unavailable.
-  double cycles_per_call = 0.0;
-  double eff_ghz         = 0.0;
-  double flop_per_cycle  = 0.0;
 };
 
 inline BenchmarkStats compute_stats(const std::vector<double> &times,
                                     const std::vector<double> &cycles,
                                     double ops) {
   const size_t R = times.size();
-  std::vector<size_t> order(R);
-  std::iota(order.begin(), order.end(), size_t{0});
-  std::sort(order.begin(), order.end(),
-            [&](size_t a, size_t b) { return times[a] < times[b]; });
-  std::vector<double> samples(R);
-  for (size_t i = 0; i < R; ++i) samples[i] = times[order[i]];
+  std::vector<double> sorted_times = times;
+  std::sort(sorted_times.begin(), sorted_times.end());
 
-  const size_t median_idx  = order[R / 2];
-  const double median_time = samples[R / 2];
-  const double min_time    = samples.front();
-  const double max_time    = samples.back();
+  const double median_time = sorted_times[R / 2];
+  const double min_time    = sorted_times.front();
+  const double max_time    = sorted_times.back();
 
-  double sum = 0.0;
-  for (double t : samples) sum += t;
-  const double mean_time = sum / R;
+  double sum_t = 0.0;
+  for (double t : sorted_times) sum_t += t;
+  const double mean_time = sum_t / R;
 
-  double var_sum = 0.0;
-  for (double t : samples) var_sum += (t - mean_time) * (t - mean_time);
-  const double stddev_time = (R > 1) ? std::sqrt(var_sum / (R - 1)) : 0.0;
+  double var_sum_t = 0.0;
+  for (double t : sorted_times) var_sum_t += (t - mean_time) * (t - mean_time);
+  const double stddev_time = (R > 1) ? std::sqrt(var_sum_t / (R - 1)) : 0.0;
+  const double cv_time_pct = (mean_time > 0.0) ? ((stddev_time / mean_time) * 100.0) : 0.0;
 
   BenchmarkStats s;
+  s.repetitions   = R;
   s.time_median_s = median_time;
   s.time_min_s    = min_time;
   s.time_max_s    = max_time;
+  s.time_stddev_s = stddev_time;
+  s.time_cv_pct   = cv_time_pct;
   s.gflops_median = (median_time > 0.0) ? ((ops / median_time) / 1e9) : 0.0;
   s.gflops_peak   = (min_time > 0.0) ? ((ops / min_time) / 1e9) : 0.0;
-  s.gflops_stddev = (mean_time > 0.0) ? ((ops / mean_time / 1e9) * (stddev_time / mean_time)) : 0.0;
-  s.cv_percent    = (mean_time > 0.0) ? ((stddev_time / mean_time) * 100.0) : 0.0;
-  s.repetitions   = R;
-  const double cyc = cycles[median_idx];
-  if (cyc > 0.0 && median_time > 0.0) {
-    s.cycles_per_call = cyc;
-    s.eff_ghz         = cyc / median_time / 1e9;
-    s.flop_per_cycle  = ops / cyc;
+
+  // Process cycles independently if available
+  std::vector<double> valid_cycles;
+  valid_cycles.reserve(R);
+  for (double c : cycles) {
+    if (c > 0.0) valid_cycles.push_back(c);
   }
+
+  if (!valid_cycles.empty()) {
+    std::sort(valid_cycles.begin(), valid_cycles.end());
+    const size_t num_c = valid_cycles.size();
+    const double median_cyc = valid_cycles[num_c / 2];
+    const double min_cyc    = valid_cycles.front();
+    const double max_cyc    = valid_cycles.back();
+
+    double sum_c = 0.0;
+    for (double c : valid_cycles) sum_c += c;
+    const double mean_cyc = sum_c / num_c;
+
+    double var_sum_c = 0.0;
+    for (double c : valid_cycles) var_sum_c += (c - mean_cyc) * (c - mean_cyc);
+    const double stddev_cyc = (num_c > 1) ? std::sqrt(var_sum_c / (num_c - 1)) : 0.0;
+    const double cv_cyc_pct = (mean_cyc > 0.0) ? ((stddev_cyc / mean_cyc) * 100.0) : 0.0;
+
+    s.cycles_median = median_cyc;
+    s.cycles_min    = min_cyc;
+    s.cycles_max    = max_cyc;
+    s.cycles_stddev = stddev_cyc;
+    s.cycles_cv_pct = cv_cyc_pct;
+
+    if (median_time > 0.0) {
+      s.eff_ghz = median_cyc / median_time / 1e9;
+    }
+    if (median_cyc > 0.0) {
+      s.flop_per_cycle_median = ops / median_cyc;
+    }
+    if (min_cyc > 0.0) {
+      s.flop_per_cycle_peak = ops / min_cyc;
+    }
+  }
+
   return s;
 }
 
-// Timing note: the "memory" clobber forces the compiler to assume A/B/C may
-// have changed/been read, so the kernel call cannot be hoisted or elided.
-// steady_clock is monotonic (high_resolution_clock may alias system_clock).
+// Timing & Cycle measurement note:
+// pipeline_fence() serializes out-of-order execution (lfence on x86, isb on ARM, fence on RISC-V).
+// compiler_fence() prevents compiler instruction reordering.
+// Cycle counting brackets are isolated from clock_gettime VDSO calls.
 #define BENCH_KERNEL(CALL)                                                     \
   do {                                                                         \
     for (size_t w = 0; w < cfg.warmup; ++w) {                                  \
@@ -149,18 +210,23 @@ inline BenchmarkStats compute_stats(const std::vector<double> &times,
     std::vector<double> samples_s(reps);                                       \
     std::vector<double> samples_cyc(reps, 0.0);                                \
     for (size_t r = 0; r < reps; ++r) {                                        \
-      asm volatile("" ::: "memory");                                           \
-      const uint64_t cyc0 = cyc_counter.read_cycles();                         \
+      compiler_fence();                                                        \
       const auto start = std::chrono::steady_clock::now();                     \
-      asm volatile("" ::: "memory");                                           \
+      compiler_fence();                                                        \
+      pipeline_fence();                                                        \
+      const uint64_t cyc0 = cyc_counter.read_cycles();                         \
+      pipeline_fence();                                                        \
+      LIKWID_MARKER_START(cfg.kernel_name.c_str());                            \
       for (size_t i = 0; i < cfg.iterations; ++i) {                            \
         CALL;                                                                  \
         asm volatile("" :: "r"(C.data) : "memory");                            \
       }                                                                        \
-      asm volatile("" ::: "memory");                                           \
-      const auto end = std::chrono::steady_clock::now();                       \
+      LIKWID_MARKER_STOP(cfg.kernel_name.c_str());                             \
+      pipeline_fence();                                                        \
       const uint64_t cyc1 = cyc_counter.read_cycles();                         \
-      asm volatile("" ::: "memory");                                           \
+      pipeline_fence();                                                        \
+      const auto end = std::chrono::steady_clock::now();                       \
+      compiler_fence();                                                        \
       const auto duration =                                                    \
           std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);   \
       samples_s[r] = (duration.count() * 1e-9) / cfg.iterations;               \
@@ -488,30 +554,39 @@ void printResults(const BenchConfig &cfg,
               << "Time(s) [median]: " << std::setprecision(12) << stats.time_median_s << "\n"
               << "Time(s) [min]:    " << std::setprecision(12) << stats.time_min_s << "\n"
               << "Time(s) [max]:    " << std::setprecision(12) << stats.time_max_s << "\n"
+              << "Time stddev(s):   " << std::setprecision(12) << stats.time_stddev_s << "\n"
+              << "Time CV (%):      " << std::fixed << std::setprecision(2) << stats.time_cv_pct << " %\n"
               << "GFLOP/s [median]: " << std::fixed << std::setprecision(4) << stats.gflops_median << "\n"
               << "GFLOP/s [peak]:   " << std::fixed << std::setprecision(4) << stats.gflops_peak << "\n"
-              << "GFLOP/s [stddev]: " << std::fixed << std::setprecision(4) << stats.gflops_stddev << "\n"
-              << "CV (%):           " << std::fixed << std::setprecision(2) << stats.cv_percent << " %\n"
               << "Repetitions:      " << stats.repetitions << "\n";
-    if (stats.cycles_per_call > 0.0) {
-      std::cout << "Cycles / call:    " << std::fixed << std::setprecision(1) << stats.cycles_per_call << "\n"
+    if (stats.cycles_median > 0.0) {
+      std::cout << "Cycles [median]:  " << std::fixed << std::setprecision(1) << stats.cycles_median << "\n"
+                << "Cycles [min]:     " << std::fixed << std::setprecision(1) << stats.cycles_min << "\n"
+                << "Cycles CV (%):    " << std::fixed << std::setprecision(2) << stats.cycles_cv_pct << " %\n"
                 << "Eff Freq (GHz):   " << std::fixed << std::setprecision(3) << stats.eff_ghz << "\n"
-                << "FLOP / cycle:     " << std::fixed << std::setprecision(4) << stats.flop_per_cycle << "\n";
+                << "FLOP/cyc [median]:" << std::fixed << std::setprecision(4) << stats.flop_per_cycle_median << "\n"
+                << "FLOP/cyc [peak]:  " << std::fixed << std::setprecision(4) << stats.flop_per_cycle_peak << "\n";
     }
   } else {
-    std::cout << cfg.kernel_name << "," << cfg.M << "," << cfg.N << "," << cfg.K
-              << "," << cfg.alpha << "," << cfg.beta << ","
+    std::cout << cfg.kernel_name << ","
+              << cfg.M << "," << cfg.N << "," << cfg.K << ","
+              << cfg.alpha << "," << cfg.beta << ","
               << std::defaultfloat << std::setprecision(12) << stats.time_median_s << ","
-              << std::fixed << std::setprecision(4) << stats.gflops_median << ","
               << std::defaultfloat << std::setprecision(12) << stats.time_min_s << ","
-              << std::fixed << std::setprecision(4) << stats.gflops_peak << ","
-              << std::fixed << std::setprecision(4) << stats.gflops_stddev << ","
-              << std::fixed << std::setprecision(2) << stats.cv_percent << ","
-              << stats.repetitions << ","
               << std::defaultfloat << std::setprecision(12) << stats.time_max_s << ","
-              << std::fixed << std::setprecision(1) << stats.cycles_per_call << ","
+              << std::defaultfloat << std::setprecision(12) << stats.time_stddev_s << ","
+              << std::fixed << std::setprecision(2) << stats.time_cv_pct << ","
+              << std::fixed << std::setprecision(4) << stats.gflops_median << ","
+              << std::fixed << std::setprecision(4) << stats.gflops_peak << ","
+              << std::fixed << std::setprecision(1) << stats.cycles_median << ","
+              << std::fixed << std::setprecision(1) << stats.cycles_min << ","
+              << std::fixed << std::setprecision(1) << stats.cycles_max << ","
+              << std::fixed << std::setprecision(1) << stats.cycles_stddev << ","
+              << std::fixed << std::setprecision(2) << stats.cycles_cv_pct << ","
               << std::fixed << std::setprecision(4) << stats.eff_ghz << ","
-              << std::fixed << std::setprecision(4) << stats.flop_per_cycle << "\n";
+              << std::fixed << std::setprecision(4) << stats.flop_per_cycle_median << ","
+              << std::fixed << std::setprecision(4) << stats.flop_per_cycle_peak << ","
+              << stats.repetitions << "\n";
   }
 }
 
@@ -643,14 +718,18 @@ void dispatchBenchmark(BenchConfig &cfg) {
   }
 }
 int main(int argc, char **argv) {
+  LIKWID_MARKER_INIT;
+  LIKWID_MARKER_THREADINIT;
   try {
     auto cfg = parseArgs(argc, argv);
 
     dispatchBenchmark(cfg);
   } catch (const std::exception &e) {
+    LIKWID_MARKER_CLOSE;
     std::cerr << "Error: " << e.what() << '\n';
     return EXIT_FAILURE;
   }
 
+  LIKWID_MARKER_CLOSE;
   return 0;
 }

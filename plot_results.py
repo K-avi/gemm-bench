@@ -184,13 +184,23 @@ def load_dataset_for_uarch(input_dir: Path, spec: UArchSpec) -> pd.DataFrame:
     for path, compiler in files:
         try:
             df = pd.read_csv(path)
-            if df.empty or "Kernel" not in df.columns or "GFLOPS" not in df.columns:
+            if df.empty or "Kernel" not in df.columns:
+                continue
+
+            if "GFLOPS_median" in df.columns:
+                df["GFLOPS"] = df["GFLOPS_median"]
+            if "FLOP_per_cycle_median" in df.columns:
+                df["FLOP_per_cycle"] = df["FLOP_per_cycle_median"]
+            if "Time_median_s" in df.columns:
+                df["Time_s"] = df["Time_median_s"]
+
+            if "GFLOPS" not in df.columns:
                 continue
 
             if "FLOP_per_cycle" in df.columns and (pd.to_numeric(df["FLOP_per_cycle"], errors="coerce") > 0).any():
-                flop_per_cycle = pd.to_numeric(df["FLOP_per_cycle"], errors="coerce").fillna(df["GFLOPS"] / spec.frequency_ghz)
+                flop_per_cycle = pd.to_numeric(df["FLOP_per_cycle"], errors="coerce")
             else:
-                flop_per_cycle = df["GFLOPS"] / spec.frequency_ghz
+                flop_per_cycle = pd.Series(np.nan, index=df.index)
             efficiency_pct = (df["GFLOPS"] / spec.peak_gflops) * 100.0
 
             df = df.assign(

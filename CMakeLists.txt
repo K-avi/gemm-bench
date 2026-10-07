@@ -56,6 +56,22 @@ if(GEMMBENCH_ENABLE_EXPLO)
 endif()
 
 # -----------------------------------------------------------------------------
+# LIKWID Marker API (Optional, x86_64 validation)
+# -----------------------------------------------------------------------------
+option(GEMMBENCH_ENABLE_LIKWID "Build with LIKWID Marker API support" OFF)
+set(LIKWID_FOUND FALSE)
+if(GEMMBENCH_ENABLE_LIKWID)
+    find_path(LIKWID_INCLUDE_DIR NAMES likwid-marker.h PATHS /usr/local/include /usr/include)
+    find_library(LIKWID_LIBRARY NAMES likwid PATHS /usr/local/lib /usr/lib /usr/lib64 /usr/local/lib64)
+    if(LIKWID_INCLUDE_DIR AND LIKWID_LIBRARY)
+        message(STATUS "Found LIKWID: ${LIKWID_LIBRARY} (headers: ${LIKWID_INCLUDE_DIR})")
+        set(LIKWID_FOUND TRUE)
+    else()
+        message(WARNING "LIKWID not found! Building GemmBench without LIKWID support.")
+    endif()
+endif()
+
+# -----------------------------------------------------------------------------
 # Benchmarks
 # -----------------------------------------------------------------------------
 add_executable(GemmBench
@@ -74,6 +90,12 @@ target_compile_options(GemmBench
         -finline-functions
         -funroll-loops
 )
+
+if(LIKWID_FOUND)
+    target_compile_definitions(GemmBench PRIVATE GEMMBENCH_USE_LIKWID LIKWID_PERFMON)
+    target_include_directories(GemmBench PRIVATE ${LIKWID_INCLUDE_DIR})
+    target_link_libraries(GemmBench PRIVATE ${LIKWID_LIBRARY})
+endif()
 
 # Optional microarchitectural experiment benchmark
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/x100_uarch_exp/broadcast_bench.cpp")

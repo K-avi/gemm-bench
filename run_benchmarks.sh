@@ -31,6 +31,7 @@ Options:
   -r, --repetitions <N>   Number of independent repetitions per measurement (default: 15)
   --cooldown <sec>        Cooldown pause in seconds after large sizes (default: 2.0)
   --validate              Run numerical correctness validation against scalar reference before benchmark
+  --likwid                Enable LIKWID Marker API instrumentation (-DGEMMBENCH_ENABLE_LIKWID=ON)
   -o, --output <prefix>   Prefix for result CSV filename (e.g. --output zen4 -> zen4_gemm_results_gcc.csv)
   -a, --alpha <val>       Alpha parameter (default: 1.0)
   -b, --beta <val>        Beta parameter (default: 0.0)
@@ -113,6 +114,7 @@ RRR_ONLY=false
 NUM_RUNS=3
 REPETITIONS=15
 COOLDOWN_SEC=2.0
+ENABLE_LIKWID_FLAG=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -128,6 +130,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --validate)
             VALIDATE_FLAG=true
+            shift
+            ;;
+        --likwid)
+            ENABLE_LIKWID_FLAG=true
             shift
             ;;
         --tests)
@@ -459,7 +465,7 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
         CSV="results/${CSV_PREFIX}${file_suffix}_${COMPILER_TAG}.csv"
     fi
     mkdir -p "$(dirname "$CSV")"
-    echo "Build,Kernel,M,N,K,Alpha,Beta,Time_s,GFLOPS,Time_min_s,GFLOPS_peak,GFLOPS_stddev,GFLOPS_cv_pct,Repetitions,Time_max_s,Cycles,Eff_GHz,FLOP_per_cycle,InterRun_CV_pct" > "$CSV"
+    echo "Build,Kernel,M,N,K,Alpha,Beta,Time_median_s,Time_min_s,Time_max_s,Time_stddev_s,Time_cv_pct,GFLOPS_median,GFLOPS_peak,Cycles_median,Cycles_min,Cycles_max,Cycles_stddev,Cycles_cv_pct,Eff_GHz,FLOP_per_cycle_median,FLOP_per_cycle_peak,Repetitions,InterRun_CV_pct" > "$CSV"
 
     # Log provenance metadata
     GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -531,12 +537,18 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
                 echo "======================================="
                 echo "Flags: ${FORMATTED_FLAGS}"
 
+                LIKWID_FLAG="-DGEMMBENCH_ENABLE_LIKWID=OFF"
+                if [[ "$ENABLE_LIKWID_FLAG" == "true" ]]; then
+                    LIKWID_FLAG="-DGEMMBENCH_ENABLE_LIKWID=ON"
+                fi
+
                 cmake -B "${BUILD_DIR}" -S . \
                     -DCMAKE_BUILD_TYPE=Release \
                     -DCMAKE_CXX_COMPILER="${COMPILER}" \
                     -DCMAKE_CXX_FLAGS="${FORMATTED_FLAGS}" \
                     ${EXPLO_FLAG} \
                     ${TEST_BUILD_FLAG} \
+                    ${LIKWID_FLAG} \
                     ${CATCH2_PREFIX_FLAG}
             fi
 

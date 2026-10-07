@@ -188,7 +188,17 @@ def load_crr_dataset_for_uarch(input_dir: Path, spec: UArchSpecCRR) -> pd.DataFr
     for path, compiler in files:
         try:
             df = pd.read_csv(path)
-            if df.empty or "Kernel" not in df.columns or "GFLOPS" not in df.columns:
+            if df.empty or "Kernel" not in df.columns:
+                continue
+
+            if "GFLOPS_median" in df.columns:
+                df["GFLOPS"] = df["GFLOPS_median"]
+            if "FLOP_per_cycle_median" in df.columns:
+                df["FLOP_per_cycle"] = df["FLOP_per_cycle_median"]
+            if "Time_median_s" in df.columns:
+                df["Time_s"] = df["Time_median_s"]
+
+            if "GFLOPS" not in df.columns:
                 continue
 
             # Ensure we only retain CRR kernels
@@ -254,7 +264,17 @@ def load_rrr_dataset_for_uarch(rrr_dir: Path, spec: UArchSpecCRR) -> pd.DataFram
     for path, compiler in matched:
         try:
             df = pd.read_csv(path)
-            if df.empty or "Kernel" not in df.columns or "GFLOPS" not in df.columns:
+            if df.empty or "Kernel" not in df.columns:
+                continue
+
+            if "GFLOPS_median" in df.columns:
+                df["GFLOPS"] = df["GFLOPS_median"]
+            if "FLOP_per_cycle_median" in df.columns:
+                df["FLOP_per_cycle"] = df["FLOP_per_cycle_median"]
+            if "Time_median_s" in df.columns:
+                df["Time_s"] = df["Time_median_s"]
+
+            if "GFLOPS" not in df.columns:
                 continue
 
             # In RRR comparison, strictly exclude CRR / panel kernels

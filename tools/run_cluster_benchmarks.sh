@@ -78,6 +78,7 @@ ${BOLD}Options :${NC}
   --rebuild         Forcer la recompilation complète sur les nœuds
   --crr-only        Exécuter uniquement les variantes CRR des champions
   --rrr-only        Exécuter uniquement les variantes RRR des champions
+  --likwid          Activer l'instrumentation LIKWID Marker API (-DGEMMBENCH_ENABLE_LIKWID=ON)
   -r, --repetitions <N> Nombre de répétitions par mesure (défaut: 15)
   --cooldown <sec>  Temps de pause thermique après grandes tailles (défaut: 0.5)
   -k, --kernel <n>  Exécuter un kernel spécifique (répétable, remplace le champion par défaut)
@@ -101,6 +102,7 @@ SEQUENTIAL=false
 RUN_ALL_FLAG=false
 CRR_ONLY=false
 RRR_ONLY=false
+LIKWID_FLAG=""
 REBUILD_FLAG=""
 CUSTOM_SIZES=""
 CUSTOM_REPETITIONS=""
@@ -144,6 +146,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --rrr-only)
             RRR_ONLY=true
+            shift
+            ;;
+        --likwid)
+            LIKWID_FLAG="--likwid"
             shift
             ;;
         -r|--repetitions)
@@ -302,7 +308,7 @@ run_target() {
             node="${ZEN4_NODE:-az4-n4090-0}"
             platform="avx512"
             out_prefix="zen4_avx512"
-            pre_cmd="module load catch2 2>/dev/null || true;"
+            pre_cmd="module load catch2 likwid 2>/dev/null || true;"
             srun_extra="--exclusive"
             ;;
         zen5)
@@ -310,7 +316,7 @@ run_target() {
             node="az5-a890m-0"
             platform="avx512"
             out_prefix="zen5_avx512"
-            pre_cmd="module load catch2 2>/dev/null || true;"
+            pre_cmd="module load catch2 likwid 2>/dev/null || true;"
             srun_extra="--exclusive"
             ;;
         meteorlake)
@@ -318,7 +324,7 @@ run_target() {
             node="iml-ia770-0"
             platform="avx2"
             out_prefix="meteorlake_avx2"
-            pre_cmd="module load catch2 2>/dev/null || true;"
+            pre_cmd="module load catch2 likwid 2>/dev/null || true;"
             srun_extra="--exclusive"
             ;;
     esac
@@ -334,6 +340,7 @@ run_target() {
     [[ -n "$CUSTOM_COOLDOWN" ]] && bench_flags+="--cooldown ${CUSTOM_COOLDOWN} "
     [[ "$CRR_ONLY" == "true" ]] && bench_flags+="--crr-only "
     [[ "$RRR_ONLY" == "true" ]] && bench_flags+="--rrr-only "
+    [[ -n "$LIKWID_FLAG" ]] && bench_flags+="${LIKWID_FLAG} "
 
     if [[ "$BENCH_ONLY" == "true" ]]; then
         :
