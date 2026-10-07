@@ -35,16 +35,13 @@
 
 using namespace GEMMBench;
 
-// User-mode CPU cycle counter.
-// - On RISC-V (RV64): direct unprivileged CSR rdcycle (1 instruction, 0 syscall)
-// - On Linux (x86/ARM): perf_event_open (PERF_COUNT_HW_CPU_CYCLES, core unhalted cycles)
-// If unavailable (non-Linux without PMU), ok() is false and cycle metrics are 0 / NaN.
+// User-mode CPU cycle counter via Linux perf_event_open (PERF_COUNT_HW_CPU_CYCLES).
+// Supported across all Linux architectures (x86_64, AArch64, RISC-V).
+// If unavailable (non-Linux or restricted PMU), ok() is false and cycle metrics are 0 / NaN.
 class CycleCounter {
 public:
   CycleCounter() {
-#if defined(__riscv)
-    ok_ = true;
-#elif defined(__linux__)
+#if defined(__linux__)
     perf_event_attr pe;
     std::memset(&pe, 0, sizeof(pe));
     pe.type = PERF_TYPE_HARDWARE;
@@ -80,11 +77,7 @@ public:
   bool ok() const { return ok_; }
 
   uint64_t read_cycles() const {
-#if defined(__riscv)
-    uint64_t c;
-    asm volatile("rdcycle %0" : "=r"(c));
-    return c;
-#elif defined(__linux__)
+#if defined(__linux__)
     if (fd_ >= 0) {
       uint64_t v = 0;
       if (::read(fd_, &v, sizeof(v)) == static_cast<ssize_t>(sizeof(v)))
