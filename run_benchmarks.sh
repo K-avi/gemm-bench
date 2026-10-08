@@ -487,7 +487,7 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
                 mippv2_x60_mr6_nr4_fmaddi|mippv2_x60_mr6_nr4_fmaddi_crr|\
                 mippv2_x100_register_blocked_apack4|mippv2_x100_register_blocked_apack4_crr|\
                 mippv2_a100_mr7_nr4_pipe|mippv2_a100_mr7_nr4_pipe_crr|\
-                mippv2_a100_mr7_nr2_lmul2_pipe|mippv2_a100_mr7_nr2_lmul2_pipe_crr|ijk)
+                mippv2_a100_mr7_nr2_lmul2_pipe|mippv2_a100_mr7_nr2_lmul2_pipe_crr|ijk|blis_native)
                     ;;
                 *)
                     NEED_EXPLO=true
@@ -629,7 +629,7 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
         if [[ "$CRR_ONLY" == "true" ]]; then
             FILTERED_KERNELS=()
             for k in "${RUN_KERNELS[@]}"; do
-                if [[ "$k" == *_crr* || "$k" == *panel* ]]; then
+                if [[ "$k" == *_crr* || "$k" == *panel* || "$k" == "blis_native" ]]; then
                     FILTERED_KERNELS+=("$k")
                 fi
             done
@@ -637,7 +637,7 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
         elif [[ "$RRR_ONLY" == "true" ]]; then
             FILTERED_KERNELS=()
             for k in "${RUN_KERNELS[@]}"; do
-                if [[ "$k" != *_crr* && "$k" != *panel* ]]; then
+                if [[ "$k" != *_crr* && "$k" != *panel* && "$k" != "blis_native" ]]; then
                     FILTERED_KERNELS+=("$k")
                 fi
             done
@@ -654,8 +654,8 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
                     EXTRA_BENCH_ARGS+=(--validate)
                 fi
 
-                if [[ "$KERNEL" == *_crr* ]]; then
-                    # In CRR BLIS mode: size is K, while M and N are auto-detected native MR x NR
+                if [[ "$KERNEL" == *_crr* || "$KERNEL" == "blis_native" ]]; then
+                    # In micro-tile (CRR / BLIS) mode: size is K, while M and N are auto-detected native MR x NR
                     BENCH_CMD=("${TASKSET_PREFIX[@]}" "${BIN}" \
                         --kernel "${KERNEL}" \
                         --k "${SIZE}" \

@@ -41,6 +41,10 @@ enum class UKernelType {
   mippv2_a100_mr7_nr4_pipe_crr,
   mippv2_a100_mr7_nr2_lmul2_pipe_crr,
 
+#ifdef GEMMBENCH_HAS_BLIS
+  blis_native,
+#endif
+
 #ifdef GEMMBENCH_ENABLE_EXPLO
   // Exploratory kernels (guarded by GEMMBENCH_ENABLE_EXPLO)
   blocked_register_blocked,
@@ -119,14 +123,17 @@ struct KernelDescriptor {
   size_t defaultTileSize = 64;
   size_t MR = 4;
   size_t NR_vec = 3;
+  size_t NR = 0;
 
-  constexpr bool isCRR() const { return defaultPacking.A == PLayout::Col; }
-  constexpr bool isRRR() const { return defaultPacking.A == PLayout::Row; }
+  constexpr bool isCRR() const { return defaultPacking.A == PLayout::Col && defaultPacking.C == PLayout::Row; }
+  constexpr bool isCRC() const { return defaultPacking.A == PLayout::Col && defaultPacking.C == PLayout::Col; }
+  constexpr bool isRRR() const { return defaultPacking.A == PLayout::Row && defaultPacking.C == PLayout::Row; }
 };
 
 constexpr KernelPacking RRR = {PLayout::Row, PLayout::Row, PLayout::Row};
 constexpr KernelPacking RCR = {PLayout::Row, PLayout::Col, PLayout::Row};
 constexpr KernelPacking CRR = {PLayout::Col, PLayout::Row, PLayout::Row};
+constexpr KernelPacking CRC = {PLayout::Col, PLayout::Row, PLayout::Col};
 
 inline constexpr KernelDescriptor kernelTable[] = {
     // Production / Champion kernels
@@ -157,6 +164,20 @@ inline constexpr KernelDescriptor kernelTable[] = {
     {UKernelType::mippv2_x100_register_blocked_apack4_crr, "mippv2_x100_register_blocked_apack4_crr", CRR, 66, 3, 4},
     {UKernelType::mippv2_a100_mr7_nr4_pipe_crr, "mippv2_a100_mr7_nr4_pipe_crr", CRR, 64, 7, 4},
     {UKernelType::mippv2_a100_mr7_nr2_lmul2_pipe_crr, "mippv2_a100_mr7_nr2_lmul2_pipe_crr", CRR, 64, 7, 4},
+
+#ifdef GEMMBENCH_HAS_BLIS
+#if defined(GEMMBENCH_BLIS_HASWELL)
+    {UKernelType::blis_native, "blis_native", CRR, 64, 6, 2, 8},
+#elif defined(GEMMBENCH_BLIS_SKX)
+    {UKernelType::blis_native, "blis_native", CRC, 64, 16, 0, 14},
+#elif defined(GEMMBENCH_BLIS_ARMV8A)
+    {UKernelType::blis_native, "blis_native", CRR, 64, 6, 2, 8},
+#elif defined(GEMMBENCH_BLIS_X60)
+    {UKernelType::blis_native, "blis_native", CRC, 64, 8, 0, 14},
+#else
+    {UKernelType::blis_native, "blis_native", CRR, 64, 6, 2, 8},
+#endif
+#endif
 
 #ifdef GEMMBENCH_ENABLE_EXPLO
     // Exploratory kernels
@@ -249,12 +270,20 @@ inline const KernelDescriptor &getKernelDescriptor(const std::string &name) {
   throw std::runtime_error("Unknown GEMM kernel: " + name);
 }
 
+#ifdef GEMMBENCH_HAS_BLIS
+#include "BlisNativeAdapter.hpp"
+#endif
+
 template <typename T> class GemmUKernel {
 public:
 #include "GemmUKernel_opti.hpp"
 
 #ifdef GEMMBENCH_ENABLE_EXPLO
 #include "GemmUKernel_explo.hpp"
+#endif
+
+#ifdef GEMMBENCH_HAS_BLIS
+#include "BlisNativeMethods.hpp"
 #endif
 };
 

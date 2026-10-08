@@ -975,3 +975,86 @@ TEST_CASE("GEMM Alpha Beta scaling float", "[gemm][float]") {
   testAlphaBetaSuite<float>();
   testAlphaBetaSuiteCRR<float>(32, 4 * VL, 32, 42);
 }
+
+#ifdef GEMMBENCH_HAS_BLIS
+TEST_CASE("BLIS Native Microkernel Validation", "[gemm][blis]") {
+  auto &cfg = GEMMBench::config();
+  SimdAlloc<double> alloc(cfg.packet_size, cfg.lmul, cfg.alignment, 42);
+  GemmUKernel<double> gemm;
+  const auto &desc = getKernelDescriptor(UKernelType::blis_native);
+
+  const size_t M = desc.MR;
+  const size_t N = (desc.NR > 0) ? desc.NR : (desc.NR_vec * mipp::N<double>());
+  const size_t K = 128;
+
+  auto A = alloc.template allocatePackedTile<PackedColMajor<double>>(M, K, InitMode::Random);
+  auto B = alloc.template allocatePackedTile<PackedRowMajor<double>>(K, N, InitMode::Random);
+  auto A_ref = alloc.template allocatePackedTile<PackedRowMajor<double>>(M, K, InitMode::Uninitialized);
+  auto C_ref = alloc.template allocatePackedTile<PackedRowMajor<double>>(M, N, InitMode::Uninitialized);
+
+  for (size_t i = 0; i < M; ++i) {
+    for (size_t k = 0; k < K; ++k) {
+      A_ref[i][k] = A(i, k);
+    }
+  }
+
+  struct Param {
+    double alpha;
+    double beta;
+    const char *name;
+  };
+  Param params[] = {
+      {1.0, 0.0, "alpha=1.0, beta=0.0 (clean overwrite)"},
+      {1.0, 1.0, "alpha=1.0, beta=1.0 (accumulation)"},
+      {1.5, 0.5, "alpha=1.5, beta=0.5 (scaling)"},
+  };
+
+  if (desc.isCRC()) {
+    auto C_test = alloc.template allocatePackedTile<PackedColMajor<double>>(M, N, InitMode::Uninitialized);
+
+    for (const auto &p : params) {
+      DYNAMIC_SECTION("BLIS Native CRC - " << p.name) {
+        for (size_t i = 0; i < M; ++i) {
+          for (size_t j = 0; j < N; ++j) {
+            double v = static_cast<double>(i * 10 + j + 1);
+            C_ref[i][j] = v;
+            C_test(i, j) = v;
+          }
+        }
+        gemm.gemm_ijk(A_ref, B, C_ref, p.alpha, p.beta);
+        gemm.gemm_blis_native(A, B, C_test, p.alpha, p.beta);
+
+        for (size_t i = 0; i < M; ++i) {
+          for (size_t j = 0; j < N; ++j) {
+            REQUIRE(std::abs(C_ref[i][j] - C_test(i, j)) < 1e-10);
+          }
+        }
+      }
+    }
+    alloc.freePacked(C_test);
+  } else {
+    auto C_test = alloc.template allocatePackedTile<PackedRowMajor<double>>(M, N, InitMode::Uninitialized);
+
+    for (const auto &p : params) {
+      DYNAMIC_SECTION("BLIS Native CRR - " << p.name) {
+        for (size_t i = 0; i < M; ++i) {
+          for (size_t j = 0; j < N; ++j) {
+            double v = static_cast<double>(i * 10 + j + 1);
+            C_ref[i][j] = v;
+            C_test[i][j] = v;
+          }
+        }
+        gemm.gemm_ijk(A_ref, B, C_ref, p.alpha, p.beta);
+        gemm.gemm_blis_native(A, B, C_test, p.alpha, p.beta);
+        checkMatrixEqual(C_ref, C_test);
+      }
+    }
+    alloc.freePacked(C_test);
+  }
+
+  alloc.freePacked(A);
+  alloc.freePacked(A_ref);
+  alloc.freePacked(B);
+  alloc.freePacked(C_ref);
+}
+#endif

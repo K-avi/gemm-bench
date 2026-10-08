@@ -1,9 +1,15 @@
 cmake_minimum_required(VERSION 3.20)
 
-project(GemmBench LANGUAGES CXX)
+project(GemmBench LANGUAGES C CXX)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# Synchronize C compilation flags with CXX flags for SIMD and architecture intrinsics
+if(CMAKE_CXX_FLAGS)
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${CMAKE_CXX_FLAGS}")
+endif()
+set(CMAKE_C_STANDARD 99)
+set(CMAKE_C_STANDARD_REQUIRED ON)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -53,6 +59,40 @@ target_include_directories(gemmbench
 option(GEMMBENCH_ENABLE_EXPLO "Build and enable exploratory GEMM kernels" OFF)
 if(GEMMBENCH_ENABLE_EXPLO)
     target_compile_definitions(gemmbench INTERFACE GEMMBENCH_ENABLE_EXPLO)
+endif()
+
+# -----------------------------------------------------------------------------
+# Native BLIS Reference Micro-Kernels
+# -----------------------------------------------------------------------------
+option(GEMMBENCH_ENABLE_BLIS "Build and enable reference native BLIS micro-kernels" ON)
+
+if(GEMMBENCH_ENABLE_BLIS)
+    set(BLIS_KERNEL_SRC "")
+    set(BLIS_ARCH_TAG "")
+
+    if("${CMAKE_CXX_FLAGS} ${CMAKE_C_FLAGS}" MATCHES "-mavx512|-march=znver4|-march=znver5")
+        set(BLIS_KERNEL_SRC "${CMAKE_CURRENT_SOURCE_DIR}/libs/blis_reference/src/skx_d16x14.c")
+        set(BLIS_ARCH_TAG "GEMMBENCH_BLIS_SKX")
+    elseif("${CMAKE_CXX_FLAGS} ${CMAKE_C_FLAGS}" MATCHES "-mavx2")
+        set(BLIS_KERNEL_SRC "${CMAKE_CURRENT_SOURCE_DIR}/libs/blis_reference/src/haswell_d6x8.c")
+        set(BLIS_ARCH_TAG "GEMMBENCH_BLIS_HASWELL")
+    elseif("${CMAKE_CXX_FLAGS} ${CMAKE_C_FLAGS}" MATCHES "-march=armv8|-march=armv9" OR CMAKE_SYSTEM_PROCESSOR MATCHES "aarch64|arm64")
+        set(BLIS_KERNEL_SRC "${CMAKE_CURRENT_SOURCE_DIR}/libs/blis_reference/src/armv8a_d6x8.c")
+        set(BLIS_ARCH_TAG "GEMMBENCH_BLIS_ARMV8A")
+    elseif("${CMAKE_CXX_FLAGS} ${CMAKE_C_FLAGS}" MATCHES "rv64gcv" OR CMAKE_SYSTEM_PROCESSOR MATCHES "riscv64")
+        set(BLIS_KERNEL_SRC "${CMAKE_CURRENT_SOURCE_DIR}/libs/blis_reference/src/dgemm_x60_2vx14.c")
+        set(BLIS_ARCH_TAG "GEMMBENCH_BLIS_X60")
+    elseif(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64|AMD64")
+        set(BLIS_KERNEL_SRC "${CMAKE_CURRENT_SOURCE_DIR}/libs/blis_reference/src/haswell_d6x8.c")
+        set(BLIS_ARCH_TAG "GEMMBENCH_BLIS_HASWELL")
+    endif()
+
+    if(BLIS_KERNEL_SRC AND EXISTS "${BLIS_KERNEL_SRC}")
+        message(STATUS "BLIS Reference Kernel enabled: ${BLIS_KERNEL_SRC} (${BLIS_ARCH_TAG})")
+        target_sources(gemmbench INTERFACE ${BLIS_KERNEL_SRC})
+        target_include_directories(gemmbench INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/libs/blis_reference/include)
+        target_compile_definitions(gemmbench INTERFACE GEMMBENCH_HAS_BLIS ${BLIS_ARCH_TAG})
+    endif()
 endif()
 
 # -----------------------------------------------------------------------------

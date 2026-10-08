@@ -39,7 +39,8 @@ c_cpp_properties.json
 *~
 .DS_Store
 # Local external dependencies
-libs/
+libs/*
+!libs/blis_reference/
 third_party/
 
 # Cluster runner scripts (LIP6 Dalek specific)

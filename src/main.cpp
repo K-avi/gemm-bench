@@ -492,6 +492,13 @@ inline BenchmarkStats run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
         gemm.gemm_mippv2_a100_mr7_nr2_lmul2_pipe_crr(A, B, C),
         gemm.gemm_mippv2_a100_mr7_nr2_lmul2_pipe_crr(A, B, C, cfg.alpha, cfg.beta));
 
+#ifdef GEMMBENCH_HAS_BLIS
+  case UKernelType::blis_native:
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_blis_native(A, B, C),
+        gemm.gemm_blis_native(A, B, C, cfg.alpha, cfg.beta));
+#endif
+
 #ifdef GEMMBENCH_ENABLE_EXPLO
   case UKernelType::mippv2_skylake_panel:
     BENCH_KERNEL(gemm.gemm_mippv2_skylake_panel(A, B, C, cfg.alpha, cfg.beta));
@@ -531,6 +538,23 @@ inline BenchmarkStats run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
 
   default:
     throw std::runtime_error("Kernel incompatible with CRR packing");
+  }
+}
+
+template <typename T>
+inline BenchmarkStats run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
+                          const PackedColMajor<T> &A, const PackedRowMajor<T> &B,
+                          PackedColMajor<T> &C) {
+  switch (cfg.kernel) {
+#ifdef GEMMBENCH_HAS_BLIS
+  case UKernelType::blis_native:
+    BENCH_KERNEL_FASTPATH(
+        gemm.gemm_blis_native(A, B, C),
+        gemm.gemm_blis_native(A, B, C, cfg.alpha, cfg.beta));
+#endif
+
+  default:
+    throw std::runtime_error("Kernel incompatible with CRC packing: " + cfg.kernel_name);
   }
 }
 
@@ -641,7 +665,7 @@ void runBenchmark(BenchConfig &cfg) {
 
   if (!cfg.legacy_mode) {
     if (cfg.M == 0) cfg.M = desc.MR;
-    if (cfg.N == 0) cfg.N = desc.NR_vec * simd_width;
+    if (cfg.N == 0) cfg.N = (desc.NR > 0) ? desc.NR : (desc.NR_vec * simd_width);
     if (cfg.K == 0) cfg.K = 128;
   } else {
     if (cfg.M == 0) cfg.M = 32;
@@ -691,19 +715,27 @@ void dispatchBenchmark(BenchConfig &cfg) {
   const auto &desc = getKernelDescriptor(cfg.kernel);
 
   if (desc.defaultPacking.A == PLayout::Row &&
-      desc.defaultPacking.B == PLayout::Row) {
+      desc.defaultPacking.B == PLayout::Row &&
+      desc.defaultPacking.C == PLayout::Row) {
     runBenchmark<double, PackedRowMajor<double>, PackedRowMajor<double>,
                  PackedRowMajor<double>>(cfg);
   }
 
   else if (desc.defaultPacking.A == PLayout::Row &&
-           desc.defaultPacking.B == PLayout::Col) {
+           desc.defaultPacking.B == PLayout::Col &&
+           desc.defaultPacking.C == PLayout::Row) {
     runBenchmark<double, PackedRowMajor<double>, PackedColMajor<double>,
                  PackedRowMajor<double>>(cfg);
   } else if (desc.defaultPacking.A == PLayout::Col &&
-             desc.defaultPacking.B == PLayout::Row) {
+             desc.defaultPacking.B == PLayout::Row &&
+             desc.defaultPacking.C == PLayout::Row) {
     runBenchmark<double, PackedColMajor<double>, PackedRowMajor<double>,
                  PackedRowMajor<double>>(cfg);
+  } else if (desc.defaultPacking.A == PLayout::Col &&
+             desc.defaultPacking.B == PLayout::Row &&
+             desc.defaultPacking.C == PLayout::Col) {
+    runBenchmark<double, PackedColMajor<double>, PackedRowMajor<double>,
+                 PackedColMajor<double>>(cfg);
   }
 
   else {
