@@ -454,7 +454,7 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
         file_suffix="_rrr"
     fi
 
-    local target_dir="${RESULTS_DIR:-results}"
+    target_dir="${RESULTS_DIR:-results}"
     if [[ -n "${OUTPUT_PREFIX}" ]]; then
         local_prefix="${OUTPUT_PREFIX%_}"
         if [[ "${local_prefix}" == gemm_results_* ]]; then
