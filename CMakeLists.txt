@@ -89,13 +89,13 @@ if(GEMMBENCH_ENABLE_BLIS)
 
     if(BLIS_KERNEL_SRC AND EXISTS "${BLIS_KERNEL_SRC}")
         message(STATUS "BLIS Reference Kernel enabled: ${BLIS_KERNEL_SRC} (${BLIS_ARCH_TAG})")
-        target_sources(gemmbench INTERFACE ${BLIS_KERNEL_SRC})
-        target_include_directories(gemmbench INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/libs/blis_reference/include)
-        target_compile_definitions(gemmbench INTERFACE GEMMBENCH_HAS_BLIS ${BLIS_ARCH_TAG})
+        add_library(blis_reference STATIC ${BLIS_KERNEL_SRC})
+        target_include_directories(blis_reference PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/libs/blis_reference/include)
+        target_compile_definitions(blis_reference PUBLIC GEMMBENCH_HAS_BLIS ${BLIS_ARCH_TAG})
         if("${BLIS_ARCH_TAG}" STREQUAL "GEMMBENCH_BLIS_X60")
-            set_source_files_properties(${BLIS_KERNEL_SRC} PROPERTIES
-                COMPILE_OPTIONS "-march=rv64gcv_zvl256b_zicbop")
+            target_compile_options(blis_reference PRIVATE "-march=rv64gcv_zvl256b_zicbop")
         endif()
+        target_link_libraries(gemmbench INTERFACE blis_reference)
     endif()
 endif()
 

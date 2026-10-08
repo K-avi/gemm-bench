@@ -543,9 +543,15 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
                     LIKWID_FLAG="-DGEMMBENCH_ENABLE_LIKWID=ON"
                 fi
 
+                C_COMPILER="gcc"
+                if [[ "$COMPILER_TAG" == "clang" ]]; then
+                    C_COMPILER="clang"
+                fi
+
                 cmake -B "${BUILD_DIR}" -S . \
                     -DCMAKE_BUILD_TYPE=Release \
                     -DCMAKE_CXX_COMPILER="${COMPILER}" \
+                    -DCMAKE_C_COMPILER="${C_COMPILER}" \
                     -DCMAKE_CXX_FLAGS="${FORMATTED_FLAGS}" \
                     ${EXPLO_FLAG} \
                     ${TEST_BUILD_FLAG} \
