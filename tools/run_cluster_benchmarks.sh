@@ -255,7 +255,7 @@ for t in "${SELECTED_TARGETS[@]}"; do
 done
 if [[ "$has_x60" == "true" ]]; then
     echo -e "${CYAN}→ Pré-compilation du binaire X60 (Clang) sur le nœud X100 (mono-sip-k3)...${NC}"
-    ssh "$FRONT_HOST" "srun -p mono -w mono-sip-k3 bash -l -c 'cd ${REMOTE_DIR} && cmake -B build_rvv_x60_clang_rvv -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_FLAGS=\"-O3 -ffast-math -finline-functions -funroll-loops -fno-semantic-interposition -falign-functions=64 -falign-loops=32 -march=rv64gcv_zvl256b -mrvv-vector-bits=zvl\" -DGEMMBENCH_ENABLE_EXPLO=OFF && cmake --build build_rvv_x60_clang_rvv --target GemmBench --parallel'"
+    ssh "$FRONT_HOST" "srun -p mono -w mono-sip-k3 bash -l -c 'cd ${REMOTE_DIR} && cmake -B build_rvv_x60_clang_rvv -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_FLAGS=\"-O3 -ffast-math -finline-functions -funroll-loops -fno-semantic-interposition -falign-functions=64 -falign-loops=32 -march=rv64gcv_zvl256b_zicbop -mrvv-vector-bits=zvl\" -DGEMMBENCH_ENABLE_EXPLO=OFF && cmake --build build_rvv_x60_clang_rvv --target GemmBench --parallel'"
 fi
 
 # -----------------------------------------------------------------------------

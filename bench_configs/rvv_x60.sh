@@ -34,13 +34,13 @@ COMMON_FLAGS="
 "
 
 ARCH_FLAGS[scalar]="
--march=rv64gcv_zvl256b
+-march=rv64gcv_zvl256b_zicbop
 -mrvv-vector-bits=zvl
 -fno-tree-vectorize
 -fno-tree-slp-vectorize
 "
 
 ARCH_FLAGS[rvv]="
--march=rv64gcv_zvl256b
+-march=rv64gcv_zvl256b_zicbop
 -mrvv-vector-bits=zvl
 "
