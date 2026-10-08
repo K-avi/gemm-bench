@@ -258,10 +258,10 @@ public:
         }
         else
         {
-            // In packed Row-Major panel, cols must be padded to SIMD packet width
+            // In packed Row-Major panel, ld is strictly cols (no column padding for BLIS tiles)
             m.padded_rows = rows;
-            m.padded_cols = roundUp(cols, simdWidth());
-            m.ld = m.padded_cols;
+            m.padded_cols = cols;
+            m.ld = cols;
         }
 
         const size_t count = m.padded_rows * m.padded_cols;
