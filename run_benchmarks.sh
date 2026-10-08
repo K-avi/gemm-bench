@@ -454,15 +454,16 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
         file_suffix="_rrr"
     fi
 
+    local target_dir="${RESULTS_DIR:-results}"
     if [[ -n "${OUTPUT_PREFIX}" ]]; then
         local_prefix="${OUTPUT_PREFIX%_}"
         if [[ "${local_prefix}" == gemm_results_* ]]; then
-            CSV="results/${local_prefix}${file_suffix}_${COMPILER_TAG}.csv"
+            CSV="${target_dir}/${local_prefix}${file_suffix}_${COMPILER_TAG}.csv"
         else
-            CSV="results/gemm_results_${local_prefix}${file_suffix}_${COMPILER_TAG}.csv"
+            CSV="${target_dir}/gemm_results_${local_prefix}${file_suffix}_${COMPILER_TAG}.csv"
         fi
     else
-        CSV="results/${CSV_PREFIX}${file_suffix}_${COMPILER_TAG}.csv"
+        CSV="${target_dir}/${CSV_PREFIX}${file_suffix}_${COMPILER_TAG}.csv"
     fi
     mkdir -p "$(dirname "$CSV")"
     echo "Build,Kernel,M,N,K,Alpha,Beta,Time_median_s,Time_min_s,Time_max_s,Time_stddev_s,Time_cv_pct,GFLOPS_median,GFLOPS_peak,Cycles_median,Cycles_min,Cycles_max,Cycles_stddev,Cycles_cv_pct,Eff_GHz,FLOP_per_cycle_median,FLOP_per_cycle_peak,Repetitions,InterRun_CV_pct" > "$CSV"
@@ -761,5 +762,5 @@ fi
 
 echo "================================================================================"
 echo "Benchmarking complete."
-echo "Results saved in results/"
+echo "Results saved in ${RESULTS_DIR:-results}/"
 echo "================================================================================"

@@ -243,8 +243,10 @@ fi
 # -----------------------------------------------------------------------------
 # 1bis. Archivage des résultats antérieurs sur la frontale
 # -----------------------------------------------------------------------------
-echo -e "${BLUE}[+] Archivage des résultats antérieurs sur ${FRONT_HOST}...${NC}"
-ssh "$FRONT_HOST" "bash -l -c 'cd ${REMOTE_DIR} && if [ -d results ] && [ \"\$(ls -A results 2>/dev/null)\" ]; then ARCHIVE_DIR=\"results_archive_\$(date +%Y%m%d_%H%M%S)\"; mkdir -p \"\$ARCHIVE_DIR\" && cp -r results/* \"\$ARCHIVE_DIR/\" 2>/dev/null || true; echo \"✓ Résultats archivés dans \$ARCHIVE_DIR\"; fi'"
+target_res_dir="results"
+[[ "$WITH_BLIS" == "true" ]] && target_res_dir="results_blis"
+echo -e "${BLUE}[+] Nettoyage / Archivage (${target_res_dir}) sur ${FRONT_HOST}...${NC}"
+ssh "$FRONT_HOST" "bash -l -c 'cd ${REMOTE_DIR} && if [ -d ${target_res_dir} ] && [ \"\$(ls -A ${target_res_dir} 2>/dev/null)\" ]; then ARCHIVE_DIR=\"${target_res_dir}_archive_\$(date +%Y%m%d_%H%M%S)\"; mkdir -p \"\$ARCHIVE_DIR\" && mv ${target_res_dir}/* \"\$ARCHIVE_DIR/\" 2>/dev/null || true; echo \"✓ Résultats antérieurs archivés dans \$ARCHIVE_DIR\"; fi && mkdir -p ${target_res_dir}'"
 
 # -----------------------------------------------------------------------------
 # 1ter. Pré-compilation croisée X60 (Clang) sur le nœud X100 (mono-sip-k3)
@@ -382,7 +384,10 @@ run_target() {
         target_bench_flags="${target_bench_flags//--tests /}"
     fi
 
-    local bench_cmd="${pre_cmd} PLATFORM_TAG=${target} ${wrapper}./run_benchmarks.sh ${platform} ${target_bench_flags} ${compilers}"
+    local results_env=""
+    [[ "$WITH_BLIS" == "true" ]] && results_env="RESULTS_DIR=results_blis "
+
+    local bench_cmd="${pre_cmd} PLATFORM_TAG=${target} ${results_env}${wrapper}./run_benchmarks.sh ${platform} ${target_bench_flags} ${compilers}"
 
     if ssh "$FRONT_HOST" "srun -p ${partition} -w ${node} ${srun_extra} bash -l -c 'cd ${REMOTE_DIR} && ${bench_cmd}'"; then
         return 0
@@ -507,20 +512,33 @@ for target in "${SELECTED_TARGETS[@]}"; do
     printf "%-15s | %-24b | %-24b\n" "$target" "$test_colored" "$bench_colored"
 done
 echo
-echo -e "Les fichiers de résultats CSV sont disponibles dans le dossier partagé : ${BOLD}${REMOTE_DIR}/results/${NC}"
+remote_res_dir="results"
+local_crr_dir="gemm-bench-results/crr"
+local_rrr_dir="gemm-bench-results/rrr"
+
+if [[ "$WITH_BLIS" == "true" ]]; then
+    remote_res_dir="results_blis"
+    local_crr_dir="gemm-bench-results/blis_comparison"
+    local_rrr_dir="gemm-bench-results/blis_comparison_rrr"
+fi
+
+echo -e "Les fichiers de résultats CSV sont disponibles dans le dossier partagé : ${BOLD}${REMOTE_DIR}/${remote_res_dir}/${NC}"
 
 # -----------------------------------------------------------------------------
 # 5. Rapatriement automatique des CSV vers la machine locale
 # -----------------------------------------------------------------------------
 echo
 echo -e "${BLUE}[3/3] Rapatriement (scp) des résultats CSV vers la machine locale...${NC}"
-mkdir -p gemm-bench-results/crr gemm-bench-results/rrr
-if scp -q "${FRONT_HOST}:${REMOTE_DIR}/results/*_crr_*.csv" gemm-bench-results/crr/ 2>/dev/null; then
-    echo -e "${GREEN}✓ Résultats CRR rapatriés avec succès dans gemm-bench-results/crr/${NC}"
-    ls -lh gemm-bench-results/crr/
+mkdir -p "$local_crr_dir"
+if scp -q "${FRONT_HOST}:${REMOTE_DIR}/${remote_res_dir}/*_crr_*.csv" "${local_crr_dir}/" 2>/dev/null; then
+    echo -e "${GREEN}✓ Résultats CRR rapatriés avec succès dans ${local_crr_dir}/${NC}"
+    ls -lh "${local_crr_dir}/"
 fi
-if scp -q "${FRONT_HOST}:${REMOTE_DIR}/results/*_rrr_*.csv" gemm-bench-results/rrr/ 2>/dev/null; then
-    echo -e "${GREEN}✓ Résultats RRR rapatriés avec succès dans gemm-bench-results/rrr/${NC}"
-    ls -lh gemm-bench-results/rrr/
+if [[ "$RRR_ONLY" == "true" || "$CRR_ONLY" != "true" ]]; then
+    mkdir -p "$local_rrr_dir"
+    if scp -q "${FRONT_HOST}:${REMOTE_DIR}/${remote_res_dir}/*_rrr_*.csv" "${local_rrr_dir}/" 2>/dev/null; then
+        echo -e "${GREEN}✓ Résultats RRR rapatriés avec succès dans ${local_rrr_dir}/${NC}"
+        ls -lh "${local_rrr_dir}/"
+    fi
 fi
 
