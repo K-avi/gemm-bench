@@ -87,6 +87,7 @@ ${BOLD}Options :${NC}
   --crr-only        Exécuter uniquement les variantes CRR des champions
   --rrr-only        Exécuter uniquement les variantes RRR des champions
   --blis, --with-blis Inclure également le micro-kernel de référence BLIS (blis_native)
+  --no-fast-math, --strict-ieee Désactiver -ffast-math (-fno-fast-math -ffp-contract=fast)
   --likwid          Activer l'instrumentation LIKWID Marker API (-DGEMMBENCH_ENABLE_LIKWID=ON)
   -r, --repetitions <N> Nombre de répétitions par mesure (défaut: 15)
   --cooldown <sec>  Temps de pause thermique après grandes tailles (défaut: 0.5)
@@ -111,6 +112,7 @@ SEQUENTIAL=false
 RUN_ALL_FLAG=false
 CRR_ONLY=false
 RRR_ONLY=false
+FASTMATH_FLAG=""
 LIKWID_FLAG=""
 REBUILD_FLAG=""
 CUSTOM_SIZES=""
@@ -159,6 +161,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --blis|--with-blis)
             WITH_BLIS=true
+            shift
+            ;;
+        --no-fast-math|--strict-ieee)
+            FASTMATH_FLAG="--no-fast-math"
             shift
             ;;
         --likwid)
@@ -257,7 +263,15 @@ for t in "${SELECTED_TARGETS[@]}"; do
 done
 if [[ "$has_x60" == "true" ]]; then
     echo -e "${CYAN}→ Pré-compilation du binaire X60 (Clang) sur le nœud X100 (mono-sip-k3)...${NC}"
-    ssh "$FRONT_HOST" "srun -p mono -w mono-sip-k3 bash -l -c 'cd ${REMOTE_DIR} && cmake -B build_rvv_x60_clang_rvv -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_FLAGS=\"-O3 -ffast-math -finline-functions -funroll-loops -fno-semantic-interposition -falign-functions=64 -falign-loops=32 -march=rv64gcv_zvl256b_zicbop -mrvv-vector-bits=zvl\" -DGEMMBENCH_ENABLE_EXPLO=OFF && cmake --build build_rvv_x60_clang_rvv --target GemmBench --parallel'"
+    x60_math_cxx="-ffast-math"
+    x60_cmake_math="-DGEMMBENCH_ENABLE_FASTMATH=ON"
+    x60_bdir="build_rvv_x60_clang_rvv"
+    if [[ "$FASTMATH_FLAG" == "--no-fast-math" ]]; then
+        x60_math_cxx="-fno-fast-math -ffp-contract=fast"
+        x60_cmake_math="-DGEMMBENCH_ENABLE_FASTMATH=OFF"
+        x60_bdir="build_rvv_x60_strict_clang_rvv"
+    fi
+    ssh "$FRONT_HOST" "srun -p mono -w mono-sip-k3 bash -l -c 'cd ${REMOTE_DIR} && cmake -B ${x60_bdir} -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_FLAGS=\"-O3 ${x60_math_cxx} -finline-functions -funroll-loops -fno-semantic-interposition -falign-functions=64 -falign-loops=32 -march=rv64gcv_zvl256b_zicbop -mrvv-vector-bits=zvl\" ${x60_cmake_math} -DGEMMBENCH_ENABLE_EXPLO=OFF && cmake --build ${x60_bdir} --target GemmBench --parallel'"
 fi
 
 # -----------------------------------------------------------------------------
@@ -356,6 +370,7 @@ run_target() {
     [[ "$CRR_ONLY" == "true" ]] && bench_flags+="--crr-only "
     [[ "$RRR_ONLY" == "true" ]] && bench_flags+="--rrr-only "
     [[ -n "$LIKWID_FLAG" ]] && bench_flags+="${LIKWID_FLAG} "
+    [[ -n "$FASTMATH_FLAG" ]] && bench_flags+="${FASTMATH_FLAG} "
 
     if [[ "$BENCH_ONLY" == "true" ]]; then
         :

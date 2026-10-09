@@ -62,6 +62,17 @@ if(GEMMBENCH_ENABLE_EXPLO)
 endif()
 
 # -----------------------------------------------------------------------------
+# Math Optimization Flags (Fast-Math vs Strict IEEE-754)
+# -----------------------------------------------------------------------------
+option(GEMMBENCH_ENABLE_FASTMATH "Enable -ffast-math optimizations (relax IEEE-754)" ON)
+if(GEMMBENCH_ENABLE_FASTMATH)
+    set(GEMMBENCH_MATH_FLAGS "-ffast-math")
+else()
+    set(GEMMBENCH_MATH_FLAGS "-fno-fast-math" "-ffp-contract=fast")
+    message(STATUS "Strict IEEE-754 mode enabled (-fno-fast-math -ffp-contract=fast)")
+endif()
+
+# -----------------------------------------------------------------------------
 # Native BLIS Reference Micro-Kernels
 # -----------------------------------------------------------------------------
 option(GEMMBENCH_ENABLE_BLIS "Build and enable reference native BLIS micro-kernels" ON)
@@ -144,7 +155,7 @@ target_link_libraries(GemmBench
 target_compile_options(GemmBench
     PRIVATE
         -O3
-        -ffast-math
+        ${GEMMBENCH_MATH_FLAGS}
         -finline-functions
         -funroll-loops
 )
@@ -167,7 +178,7 @@ if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/x100_uarch_exp/broadcast_bench.cpp")
     target_compile_options(broadcast_bench
         PRIVATE
             -O3
-            -ffast-math
+            ${GEMMBENCH_MATH_FLAGS}
             -finline-functions
             -funroll-loops
     )

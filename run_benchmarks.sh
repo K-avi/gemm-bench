@@ -115,9 +115,14 @@ NUM_RUNS=3
 REPETITIONS=15
 COOLDOWN_SEC=2.0
 ENABLE_LIKWID_FLAG=false
+FAST_MATH=true
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --no-fast-math|--strict-ieee)
+            FAST_MATH=false
+            shift
+            ;;
         --crr|--crr-only)
             CRR_ONLY=true
             RRR_ONLY=false
@@ -220,6 +225,18 @@ done
 # Default to running both g++ and clang++, or accept specific compiler(s) as args
 if [[ ${#REQUESTED_COMPILERS[@]} -eq 0 ]]; then
     REQUESTED_COMPILERS=("g++" "clang++")
+fi
+
+# Configure fast-math vs strict IEEE-754 flags
+if [[ "$FAST_MATH" == "false" ]]; then
+    COMMON_FLAGS=$(echo "$COMMON_FLAGS" | sed 's/-ffast-math/-fno-fast-math -ffp-contract=fast/g')
+    FASTMATH_CMAKE_FLAG="-DGEMMBENCH_ENABLE_FASTMATH=OFF"
+    BUILD_DIR_PREFIX="${BUILD_DIR_PREFIX}_strict"
+    echo "================================================================================"
+    echo "Math Mode: Strict IEEE-754 enabled (-fno-fast-math -ffp-contract=fast)"
+    echo "================================================================================"
+else
+    FASTMATH_CMAKE_FLAG="-DGEMMBENCH_ENABLE_FASTMATH=ON"
 fi
 
 # Run platform setup hook if defined (e.g. P-core auto-detection, AI-thread unlock)
@@ -453,6 +470,9 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
     elif [[ "$RRR_ONLY" == "true" ]]; then
         file_suffix="_rrr"
     fi
+    if [[ "$FAST_MATH" == "false" ]]; then
+        file_suffix="${file_suffix}_strict"
+    fi
 
     target_dir="${RESULTS_DIR:-results}"
     if [[ -n "${OUTPUT_PREFIX}" ]]; then
@@ -553,6 +573,7 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
                     -DCMAKE_CXX_COMPILER="${COMPILER}" \
                     -DCMAKE_C_COMPILER="${C_COMPILER}" \
                     -DCMAKE_CXX_FLAGS="${FORMATTED_FLAGS}" \
+                    ${FASTMATH_CMAKE_FLAG} \
                     ${EXPLO_FLAG} \
                     ${TEST_BUILD_FLAG} \
                     ${LIKWID_FLAG} \

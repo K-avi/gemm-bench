@@ -194,11 +194,11 @@ inline BenchmarkStats compute_stats(const std::vector<double> &times,
 // Cycle counting brackets are isolated from clock_gettime VDSO calls.
 #define BENCH_KERNEL(CALL)                                                     \
   do {                                                                         \
+    CycleCounter cyc_counter;                                                  \
     for (size_t w = 0; w < cfg.warmup; ++w) {                                  \
       CALL;                                                                    \
     }                                                                          \
                                                                                \
-    CycleCounter cyc_counter;                                                  \
     const size_t reps = (cfg.repetitions > 0) ? cfg.repetitions : 1;           \
     std::vector<double> samples_s(reps);                                       \
     std::vector<double> samples_cyc(reps, 0.0);                                \

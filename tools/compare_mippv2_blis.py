@@ -2,15 +2,20 @@
 """
 tools/compare_mippv2_blis.py
 
-Calculates and displays the percentage of BLIS reference micro-kernel peak performance
-achieved by MIPPv2 champion micro-kernels across target microarchitectures.
+Calculates, analyzes, and visualizes the percentage of BLIS reference micro-kernel
+peak performance achieved by MIPPv2 champion micro-kernels across target microarchitectures.
 
 Features:
 - Reads CSVs from gemm-bench-results/blis_comparison/ (or specified --input-dir)
 - Computes Peak & Median GFLOPS, Peak & Median FLOP/cycle, and MIPPv2/BLIS ratio
 - Generates per-architecture markdown comparison tables and per-K scaling breakdowns
-- Optionally outputs markdown reports, CSV summaries, and comparative SVG plots
+- Produces publication-grade SVG & PNG comparative plots (--plot):
+  * Executive Peak Performance Ratio Bar Chart (% of BLIS Peak)
+  * Peak Compute Density Comparison (DP FLOP/cycle vs theoretical limits)
+  * Multi-panel Panel-Depth K ∈ [32..1024] Scaling Grid across all 8 microarchitectures
 """
+
+from __future__ import annotations
 
 import argparse
 import glob
@@ -22,6 +27,72 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import pandas as pd
+import numpy as np
+
+# Matplotlib configuration (Headless Agg)
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
+
+
+# ==============================================================================
+# Styling and Palette Configuration (Publication-Grade Light Mode)
+# ==============================================================================
+
+LIGHT_BG = "#ffffff"       # Clean white canvas
+CARD_BG = "#ffffff"        # White plot axes
+BORDER_COLOR = "#d0d7de"   # Subtle GitHub-style border
+TEXT_PRIMARY = "#1f2328"   # Dark slate for primary text
+TEXT_SECONDARY = "#656d76" # Muted slate for subtitles and labels
+TEXT_MUTED = "#8c959f"     # Dim label
+GRID_COLOR = "#eaeef2"     # Subtle grid lines
+
+SIMD_FAMILY_COLORS = {
+    "avx512": "#dc2626",   # Crimson Red
+    "avx2": "#0284c7",     # Sky Blue
+    "neon": "#7c3aed",     # Purple / Violet
+    "rvv": "#059669",      # Emerald Green
+}
+
+PLATFORM_META = {
+    "zen4_avx512": {"name": "AMD Zen 4", "simd": "avx512", "isa": "AVX-512", "peak_fc": 16.0},
+    "zen5_avx512": {"name": "AMD Zen 5", "simd": "avx512", "isa": "AVX-512", "peak_fc": 16.0},
+    "meteorlake_avx2": {"name": "Intel Meteor Lake", "simd": "avx2", "isa": "AVX2", "peak_fc": 16.0},
+    "m1_neon": {"name": "Apple M1", "simd": "neon", "isa": "NEON", "peak_fc": 16.0},
+    "rpi5_neon": {"name": "Raspberry Pi 5", "simd": "neon", "isa": "NEON", "peak_fc": 8.0},
+    "x100_rvv": {"name": "SpacemiT X100", "simd": "rvv", "isa": "RVV 1.0 (256b)", "peak_fc": 8.0},
+    "x60_rvv": {"name": "SpacemiT X60", "simd": "rvv", "isa": "RVV 1.0 (256b)", "peak_fc": 8.0},
+    "a100_rvv": {"name": "SpacemiT A100", "simd": "rvv", "isa": "RVV 1.0 (1024b)", "peak_fc": 8.0},
+}
+
+plt.rcParams.update({
+    "figure.facecolor": LIGHT_BG,
+    "figure.edgecolor": LIGHT_BG,
+    "axes.facecolor": CARD_BG,
+    "axes.edgecolor": BORDER_COLOR,
+    "axes.labelcolor": TEXT_PRIMARY,
+    "axes.labelsize": 10.5,
+    "axes.titlesize": 12,
+    "axes.titleweight": "bold",
+    "axes.titlecolor": TEXT_PRIMARY,
+    "axes.grid": True,
+    "grid.color": GRID_COLOR,
+    "grid.alpha": 0.8,
+    "grid.linestyle": "--",
+    "grid.linewidth": 0.8,
+    "xtick.color": TEXT_SECONDARY,
+    "ytick.color": TEXT_SECONDARY,
+    "xtick.labelsize": 9.5,
+    "ytick.labelsize": 9.5,
+    "legend.facecolor": CARD_BG,
+    "legend.edgecolor": BORDER_COLOR,
+    "legend.fontsize": 9.0,
+    "text.color": TEXT_PRIMARY,
+    "font.family": "sans-serif",
+    "font.sans-serif": ["DejaVu Sans", "Liberation Sans", "Helvetica", "Arial", "sans-serif"],
+    "svg.fonttype": "none",
+})
 
 
 def parse_filename(filepath: Path) -> Tuple[str, str, str]:
@@ -51,6 +122,8 @@ def load_dataset(input_dir: Path) -> pd.DataFrame:
     for f in csv_files:
         try:
             df = pd.read_csv(f)
+            if df.empty:
+                continue
             platform, layout, compiler = parse_filename(f)
             df["Platform"] = platform
             df["Layout"] = layout
@@ -150,11 +223,256 @@ def analyze_dataset(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict]:
     return summary_df, detailed_comparisons
 
 
-def format_markdown_report(summary_df: pd.DataFrame, details: Dict) -> str:
+# ==============================================================================
+# Visualization Functions (Publication-Grade SVG & PNG)
+# ==============================================================================
+
+def _get_platform_rows(summary_df: pd.DataFrame, target_plats: List[str]) -> List[Tuple[str, str, pd.Series]]:
+    """Helper to extract ordered (platform, compiler, row) tuples."""
+    rows = []
+    for p in target_plats:
+        sub = summary_df[summary_df["Platform"] == p]
+        for comp in ["gcc", "clang"]:
+            c_sub = sub[sub["Compiler"] == comp]
+            if not c_sub.empty:
+                rows.append((p, comp, c_sub.iloc[0]))
+    return rows
+
+
+def plot_blis_ratio_comparison(summary_df: pd.DataFrame, out_dir: Path, enable_png: bool = True) -> None:
+    """
+    Generates an executive horizontal bar chart of the % of BLIS Peak Reached.
+    Uses a 2-panel layout to clearly display standard architectures without squishing them
+    due to SpacemiT A100's 365% outlier.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    fig = plt.figure(figsize=(13.5, 9.0))
+    gs = fig.add_gridspec(2, 1, height_ratios=[6.5, 2.2], hspace=0.35)
+
+    ax_main = fig.add_subplot(gs[0])
+    ax_a100 = fig.add_subplot(gs[1])
+
+    main_plats = ["zen4_avx512", "zen5_avx512", "meteorlake_avx2", "m1_neon", "rpi5_neon", "x100_rvv", "x60_rvv"]
+    main_rows = _get_platform_rows(summary_df, main_plats)
+    y_pos = np.arange(len(main_rows))
+
+    bar_colors = []
+    for p, comp, r in main_rows:
+        simd = PLATFORM_META.get(p, {}).get("simd", "avx2")
+        base_col = SIMD_FAMILY_COLORS.get(simd, "#0284c7")
+        bar_colors.append(base_col if comp == "gcc" else matplotlib.colors.to_rgba(base_col, 0.72))
+
+    ratios = [r["Ratio_Peak_GFLOPS_pct"] for _, _, r in main_rows]
+    bars = ax_main.barh(y_pos, ratios, height=0.62, color=bar_colors, edgecolor=BORDER_COLOR, linewidth=0.8, zorder=3)
+
+    # 100% parity line
+    ax_main.axvline(100.0, color="#475569", linestyle="--", linewidth=1.5, zorder=4)
+    ax_main.text(100.5, len(main_rows) - 0.5, "100% BLIS Parity", color="#475569", fontsize=9.5, fontweight="bold", va="bottom", ha="left")
+
+    for idx, ((p, comp, r), bar) in enumerate(zip(main_rows, bars)):
+        val = r["Ratio_Peak_GFLOPS_pct"]
+        m_gf = r["MIPPv2_Peak_GFLOPS"]
+        b_gf = r["BLIS_Peak_GFLOPS"]
+        lbl = f"{val:.1f}% ({m_gf:.1f} vs {b_gf:.1f} GFLOP/s)"
+        ax_main.text(val + 1.2, idx, lbl, va="center", ha="left", color=TEXT_PRIMARY, fontweight="bold", fontsize=9.0)
+
+    labels = [f"{PLATFORM_META.get(p, {}).get('name', p)} ({comp.upper()})" for p, comp, _ in main_rows]
+    ax_main.set_yticks(y_pos)
+    ax_main.set_yticklabels(labels, fontsize=9.5)
+    ax_main.invert_yaxis()
+    ax_main.set_xlim(0, 125)
+    ax_main.set_xlabel("Sustained DGEMM Performance (% of BLIS Peak Reached)", fontsize=10.5, fontweight="bold")
+    ax_main.set_title("Standard Architectural Targets (Direct BLIS Equivalent / Hand-Tuned Micro-Kernel)", fontsize=11.5, pad=8)
+
+    # Panel 2: A100 Outlier
+    a100_rows = _get_platform_rows(summary_df, ["a100_rvv"])
+    y_a100 = np.arange(len(a100_rows))
+    a100_colors = [SIMD_FAMILY_COLORS["rvv"] if comp == "gcc" else matplotlib.colors.to_rgba(SIMD_FAMILY_COLORS["rvv"], 0.72) for _, comp, _ in a100_rows]
+    a100_ratios = [r["Ratio_Peak_GFLOPS_pct"] for _, _, r in a100_rows]
+
+    bars_a100 = ax_a100.barh(y_a100, a100_ratios, height=0.55, color=a100_colors, edgecolor=BORDER_COLOR, linewidth=0.8, zorder=3)
+    ax_a100.axvline(100.0, color="#475569", linestyle="--", linewidth=1.5, zorder=4)
+    ax_a100.text(101.5, 0.5, "100% BLIS (Fallback X60)", color="#475569", fontsize=9.0, fontweight="bold", va="center")
+
+    for idx, ((p, comp, r), bar) in enumerate(zip(a100_rows, bars_a100)):
+        val = r["Ratio_Peak_GFLOPS_pct"]
+        m_gf = r["MIPPv2_Peak_GFLOPS"]
+        b_gf = r["BLIS_Peak_GFLOPS"]
+        lbl = f"{val:.1f}% ({m_gf:.2f} vs {b_gf:.2f} GFLOP/s) — 3.65× Speedup"
+        ax_a100.text(val + 3.0, idx, lbl, va="center", ha="left", color=TEXT_PRIMARY, fontweight="bold", fontsize=9.0)
+
+    labels_a100 = [f"{PLATFORM_META.get(p, {}).get('name', p)} ({comp.upper()})" for p, comp, _ in a100_rows]
+    ax_a100.set_yticks(y_a100)
+    ax_a100.set_yticklabels(labels_a100, fontsize=9.5)
+    ax_a100.invert_yaxis()
+    ax_a100.set_xlim(0, 420)
+    ax_a100.set_xlabel("Sustained DGEMM Performance (% of BLIS Peak Reached)", fontsize=10.5, fontweight="bold")
+    ax_a100.set_title("SpacemiT A100 Outlier (RVV 1024-bit core | BLIS lacks native 1024-bit ukernel)", fontsize=11.5, pad=8)
+
+    fig.suptitle("GEMMBench — MIPPv2 vs BLIS Reference Micro-Kernels Peak DGEMM Ratio", fontsize=14, fontweight="bold", y=0.985)
+    
+    svg_path = out_dir / "blis_vs_mippv2_ratio_comparison.svg"
+    fig.savefig(svg_path, bbox_inches="tight")
+    print(f"✓ Generated SVG: {svg_path}")
+
+    if enable_png:
+        png_path = out_dir / "blis_vs_mippv2_ratio_comparison.png"
+        fig.savefig(png_path, dpi=160, bbox_inches="tight")
+        print(f"✓ Generated PNG: {png_path}")
+
+    plt.close(fig)
+
+
+def plot_flop_per_cycle_comparison(summary_df: pd.DataFrame, out_dir: Path, enable_png: bool = True) -> None:
+    """
+    Generates a grouped horizontal bar chart comparing raw Peak DP FLOP/cycle
+    between MIPPv2 and BLIS Native across all targets.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    fig, ax = plt.subplots(figsize=(14.0, 8.5))
+
+    ordered_plats = ["zen4_avx512", "zen5_avx512", "meteorlake_avx2", "m1_neon", "rpi5_neon", "x100_rvv", "x60_rvv", "a100_rvv"]
+    all_rows = _get_platform_rows(summary_df, ordered_plats)
+    y_pos = np.arange(len(all_rows))
+    bar_h = 0.35
+
+    m_fc = [r["MIPPv2_Peak_FC"] for _, _, r in all_rows]
+    b_fc = [r["BLIS_Peak_FC"] for _, _, r in all_rows]
+
+    col_mipp = [SIMD_FAMILY_COLORS.get(PLATFORM_META.get(p, {}).get("simd", "avx2"), "#0284c7") for p, _, _ in all_rows]
+    col_blis = "#64748b"  # Slate
+
+    bars1 = ax.barh(y_pos - bar_h/2, m_fc, height=bar_h, color=col_mipp, edgecolor=BORDER_COLOR, label="MIPPv2 Champion", zorder=3)
+    bars2 = ax.barh(y_pos + bar_h/2, b_fc, height=bar_h, color=col_blis, edgecolor=BORDER_COLOR, label="BLIS Native Reference", zorder=3, alpha=0.85, hatch="//")
+
+    # Value annotations
+    for idx, (m_val, b_val) in enumerate(zip(m_fc, b_fc)):
+        ax.text(m_val + 0.2, idx - bar_h/2, f"{m_val:.2f}", va="center", ha="left", color=TEXT_PRIMARY, fontweight="bold", fontsize=8.5)
+        ax.text(b_val + 0.2, idx + bar_h/2, f"{b_val:.2f}", va="center", ha="left", color="#475569", fontsize=8.5)
+
+    # Ceiling lines at 8 and 16
+    ax.axvline(8.0, color="#94a3b8", linestyle=":", linewidth=1.2, zorder=2)
+    ax.axvline(16.0, color="#94a3b8", linestyle=":", linewidth=1.2, zorder=2)
+    ax.text(8.0, len(all_rows) - 0.4, "8.0 FLOP/cyc Ceiling", color="#64748b", fontsize=9.0, fontweight="bold", ha="center")
+    ax.text(16.0, len(all_rows) - 0.4, "16.0 FLOP/cyc Ceiling", color="#64748b", fontsize=9.0, fontweight="bold", ha="center")
+
+    labels_all = [f"{PLATFORM_META.get(p, {}).get('name', p)} ({comp.upper()})" for p, comp, _ in all_rows]
+    ax.set_yticks(y_pos)
+    ax.set_yticklabels(labels_all, fontsize=9.5)
+    ax.invert_yaxis()
+    ax.set_xlim(0, 18.5)
+    ax.set_xlabel("Peak Sustained Compute Density (DP FLOP / cycle)", fontsize=11, fontweight="bold")
+    ax.set_title("Cross-Microarchitecture Sustained Compute Density — MIPPv2 vs BLIS Reference Micro-Kernels", fontsize=13, fontweight="bold", pad=12)
+
+    legend_patches = [
+        Patch(facecolor="#10b981", edgecolor=BORDER_COLOR, label="MIPPv2 Champion"),
+        Patch(facecolor="#64748b", edgecolor=BORDER_COLOR, hatch="//", label="BLIS Native Reference"),
+    ]
+    ax.legend(handles=legend_patches, loc="lower right", framealpha=0.95)
+
+    svg_path = out_dir / "blis_vs_mippv2_flop_per_cycle_comparison.svg"
+    fig.savefig(svg_path, bbox_inches="tight")
+    print(f"✓ Generated SVG: {svg_path}")
+
+    if enable_png:
+        png_path = out_dir / "blis_vs_mippv2_flop_per_cycle_comparison.png"
+        fig.savefig(png_path, dpi=160, bbox_inches="tight")
+        print(f"✓ Generated PNG: {png_path}")
+
+    plt.close(fig)
+
+
+def plot_k_scaling_grid(details: Dict, out_dir: Path, enable_png: bool = True) -> None:
+    """
+    Generates a 2x4 multipanel grid showing FLOP/cycle scaling over K ∈ [32..1024]
+    for both MIPPv2 and BLIS across all 8 microarchitectures.
+    """
+    out_dir.mkdir(parents=True, exist_ok=True)
+    fig, axes = plt.subplots(2, 4, figsize=(16.5, 8.5), sharex=True)
+    axes = axes.flatten()
+
+    grid_plats = ["zen4_avx512", "zen5_avx512", "meteorlake_avx2", "m1_neon", "rpi5_neon", "x100_rvv", "a100_rvv", "x60_rvv"]
+
+    for idx, p in enumerate(grid_plats):
+        ax = axes[idx]
+        meta = PLATFORM_META.get(p, {"name": p, "simd": "avx2", "peak_fc": 16.0})
+
+        # Pick gcc or clang (prefer gcc, fallback to clang)
+        comp = "gcc"
+        if (p, "gcc", "crr") not in details:
+            comp = "clang"
+
+        k_data = details.get((p, comp, "crr"), {})
+        if not k_data:
+            comp = "clang" if comp == "gcc" else "gcc"
+            k_data = details.get((p, comp, "crr"), {})
+
+        ks = sorted(k_data.keys())
+        m_fc_vals = [k_data[k]["MIPPv2_FC"] for k in ks]
+        b_fc_vals = [k_data[k]["BLIS_FC"] for k in ks]
+
+        color = SIMD_FAMILY_COLORS.get(meta["simd"], "#0284c7")
+
+        ax.plot(ks, m_fc_vals, marker="o", markersize=5.5, linewidth=2.0, color=color, label="MIPPv2 Champion", zorder=4)
+        ax.plot(ks, b_fc_vals, marker="s", markersize=5.0, linewidth=1.8, linestyle="--", color="#64748b", label="BLIS Native", zorder=3)
+
+        # Theoretical peak line
+        ax.axhline(meta["peak_fc"], color="#cbd5e1", linestyle=":", linewidth=1.2, zorder=2)
+
+        ax.set_title(f"{meta['name']} ({comp.upper()})", fontsize=11, fontweight="bold", pad=4)
+
+        ylim_max = 17.5 if meta["peak_fc"] == 16.0 else 9.0
+        ax.set_ylim(0, ylim_max)
+        ax.set_xscale("log", base=2)
+        ax.set_xticks(ks)
+        ax.set_xticklabels([str(k) for k in ks], fontsize=8.5)
+
+        if idx % 4 == 0:
+            ax.set_ylabel("FLOP / cycle", fontsize=10, fontweight="bold")
+        if idx >= 4:
+            ax.set_xlabel("Panel Depth K", fontsize=10, fontweight="bold")
+
+        # Small K annotation
+        if ks:
+            k0 = ks[0]
+            r0 = k_data[k0]["Ratio_pct"]
+            if r0 > 102.0:
+                ax.annotate(
+                    f"+{r0-100:.1f}%",
+                    xy=(k0, m_fc_vals[0]),
+                    xytext=(k0 * 1.25, m_fc_vals[0] + (0.5 if meta['peak_fc'] == 8.0 else 1.0)),
+                    fontsize=8.0,
+                    fontweight="bold",
+                    color=color,
+                    arrowprops=dict(arrowstyle="->", color=color, lw=1.0)
+                )
+
+    axes[0].legend(loc="lower right", fontsize=8.5, framealpha=0.92)
+
+    fig.suptitle("Scaling Across Panel Depth K ∈ [32, 1024] — MIPPv2 vs BLIS Reference Micro-Kernels", fontsize=14, fontweight="bold", y=0.98)
+    plt.subplots_adjust(top=0.91, bottom=0.09, left=0.06, right=0.98, hspace=0.28, wspace=0.22)
+
+    svg_path = out_dir / "blis_vs_mippv2_k_scaling_grid.svg"
+    fig.savefig(svg_path, bbox_inches="tight")
+    print(f"✓ Generated SVG: {svg_path}")
+
+    if enable_png:
+        png_path = out_dir / "blis_vs_mippv2_k_scaling_grid.png"
+        fig.savefig(png_path, dpi=160, bbox_inches="tight")
+        print(f"✓ Generated PNG: {png_path}")
+
+    plt.close(fig)
+
+
+# ==============================================================================
+# Markdown Report Generation
+# ==============================================================================
+
+def format_markdown_report(summary_df: pd.DataFrame, details: Dict, plot_dir: Optional[Path] = None) -> str:
     """Generates a GitHub-flavored Markdown comparative analysis document."""
     lines = []
     lines.append("# GEMMBench — Comparative Analysis: MIPPv2 vs BLIS Reference Micro-Kernels\n")
-    lines.append("Empirical comparison of sustained compute density and throughput between MIPPv2 champions")
+    lines.append("Empirical comparison of sustained in-register compute density and throughput between MIPPv2 champions")
     lines.append("and hand-tuned BLIS assembly micro-kernels across target microarchitectures.\n")
 
     if summary_df.empty:
@@ -162,6 +480,10 @@ def format_markdown_report(summary_df: pd.DataFrame, details: Dict) -> str:
         return "\n".join(lines)
 
     lines.append("## 1. Executive Summary Table (% of BLIS Peak Reached)\n")
+    lines.append("> [!NOTE]")
+    lines.append("> **Methodological Scope & RISC-V Baseline Distinction:**")
+    lines.append("> - **In-Register Scope:** This benchmark strictly measures in-register compute saturation ($M_R \\times N_R \\times K$) on hot L1 cache panels, isolating FMA pipeline efficiency without end-to-end DGEMM cache blocking (GotoBLAS $J_C, P_C, I_C$), dynamic packing overheads, or fringe tiles.")
+    lines.append("> - **RISC-V Baselines (`a100_rvv` & `x100_rvv`):** Upstream BLIS only provides an RVV microkernel for SpacemiT X60 (`dgemm_x60_2vx14.c`, $8 \\times 14$). On A100 and X100, this X60 kernel is used as an untuned cross-RVV baseline. The large relative advantage of MIPPv2 on A100 reflects the absence of a native A100-tailored assembly kernel in BLIS.\n")
     lines.append("| Microarchitecture | Compiler | Layout | MIPPv2 Champion | MIPPv2 (GFLOP/s) | BLIS (GFLOP/s) | **% of BLIS Peak** | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | Status |")
     lines.append("| :--- | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |")
 
@@ -177,14 +499,27 @@ def format_markdown_report(summary_df: pd.DataFrame, details: Dict) -> str:
             status = "🔴 Delta (<90%)"
 
         m_name = row["MIPPv2_Champion"].replace("mippv2_", "")
+        blis_label = f"**{row['BLIS_Peak_GFLOPS']:.2f}**"
+        if row['Platform'] in ['a100_rvv', 'x100_rvv']:
+            blis_label += "*"
+
         lines.append(
             f"| `{row['Platform']}` | `{row['Compiler']}` | `{row['Layout'].upper()}` | `{m_name}` | "
-            f"**{row['MIPPv2_Peak_GFLOPS']:.2f}** | **{row['BLIS_Peak_GFLOPS']:.2f}** | "
+            f"**{row['MIPPv2_Peak_GFLOPS']:.2f}** | {blis_label} | "
             f"**{ratio:.1f}%** | {row['MIPPv2_Peak_FC']:.2f} | {row['BLIS_Peak_FC']:.2f} | {status} |"
         )
 
+    lines.append("\n*\\*Note: On A100 and X100, BLIS uses the X60 kernel fallback as an untuned cross-RVV baseline.*")
+
+    if plot_dir and plot_dir.exists():
+        lines.append("\n---\n")
+        lines.append("## 2. Visual Comparative Figures\n")
+        lines.append("- **Peak Performance Ratio:** [plots/blis_vs_mippv2_ratio_comparison.svg](plots/blis_vs_mippv2_ratio_comparison.svg)")
+        lines.append("- **FLOP / Cycle Compute Density:** [plots/blis_vs_mippv2_flop_per_cycle_comparison.svg](plots/blis_vs_mippv2_flop_per_cycle_comparison.svg)")
+        lines.append("- **Scaling Grid Across K ∈ [32..1024]:** [plots/blis_vs_mippv2_k_scaling_grid.svg](plots/blis_vs_mippv2_k_scaling_grid.svg)\n")
+
     lines.append("\n---\n")
-    lines.append("## 2. Per-Size Scaling & Efficiency Analysis ($K \\in [32, 1024]$)\n")
+    lines.append("## 3. Per-Size Scaling & Efficiency Analysis ($K \\in [32, 1024]$)\n")
 
     for (platform, compiler, layout), k_data in details.items():
         lines.append(f"### Platform: `{platform}` ({compiler}, {layout.upper()})\n")
@@ -202,6 +537,10 @@ def format_markdown_report(summary_df: pd.DataFrame, details: Dict) -> str:
 
     return "\n".join(lines)
 
+
+# ==============================================================================
+# CLI Entrypoint
+# ==============================================================================
 
 def main():
     parser = argparse.ArgumentParser(description="Compare MIPPv2 champion kernels vs BLIS reference micro-kernels")
@@ -228,6 +567,22 @@ def main():
         default=None,
         help="Path to save summary CSV metrics",
     )
+    parser.add_argument(
+        "--plot",
+        action="store_true",
+        help="Generate publication-grade comparative SVG & PNG plots",
+    )
+    parser.add_argument(
+        "--plot-dir",
+        type=str,
+        default=None,
+        help="Custom directory to save plots (default: <input-dir>/plots)",
+    )
+    parser.add_argument(
+        "--no-png",
+        action="store_true",
+        help="Disable PNG raster generation (only generate SVG)",
+    )
     args = parser.parse_args()
 
     input_path = Path(args.input_dir)
@@ -247,7 +602,17 @@ def main():
         sys.exit(1)
 
     summary_df, details = analyze_dataset(df)
-    md_report = format_markdown_report(summary_df, details)
+
+    plot_dir_path = None
+    if args.plot or args.plot_dir:
+        plot_dir_path = Path(args.plot_dir) if args.plot_dir else input_path / "plots"
+        print(f"\nGenerating publication-grade comparative figures in {plot_dir_path}...")
+        enable_png = not args.no_png
+        plot_blis_ratio_comparison(summary_df, plot_dir_path, enable_png=enable_png)
+        plot_flop_per_cycle_comparison(summary_df, plot_dir_path, enable_png=enable_png)
+        plot_k_scaling_grid(details, plot_dir_path, enable_png=enable_png)
+
+    md_report = format_markdown_report(summary_df, details, plot_dir=plot_dir_path)
 
     # Print to console
     print("\n" + md_report)
