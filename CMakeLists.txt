@@ -168,7 +168,7 @@ endif()
 
 # Optional microarchitectural experiment benchmark
 if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/x100_uarch_exp/broadcast_bench.cpp")
-    add_executable(broadcast_bench
+    add_executable(broadcast_bench EXCLUDE_FROM_ALL
         x100_uarch_exp/broadcast_bench.cpp
     )
     target_link_libraries(broadcast_bench

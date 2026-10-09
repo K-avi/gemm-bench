@@ -299,7 +299,7 @@ run_target() {
             node="mono-sip-k3"
             platform="rvv_x100"
             out_prefix="x100_rvv"
-            srun_extra="--exclusive"
+            srun_extra=""
             ;;
         a100)
             partition="mono"
@@ -307,7 +307,7 @@ run_target() {
             platform="rvv_a100"
             out_prefix="a100_rvv"
             wrapper="ai "
-            srun_extra="--exclusive"
+            srun_extra=""
             ;;
         x60)
             partition="mono"

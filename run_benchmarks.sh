@@ -552,6 +552,9 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
         else
             # Configure if CMakeCache is missing or full rebuild requested
             if [[ ! -f "${BUILD_DIR}/CMakeCache.txt" || "$FORCE_REBUILD" == "true" ]]; then
+                if [[ "$FORCE_REBUILD" == "true" ]]; then
+                    rm -rf "${BUILD_DIR}"
+                fi
                 echo
                 echo "======================================="
                 echo "Configuring ${VERSION} for ${PLATFORM_NAME} (${COMPILER}) in ${BUILD_DIR}"
@@ -584,7 +587,7 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
             if [[ "$TESTS_ONLY" == "true" ]]; then
                 BUILD_TARGET_FLAG="--target GemmBenchTests"
             elif [[ "$RUN_TESTS" == "true" ]]; then
-                BUILD_TARGET_FLAG=""
+                BUILD_TARGET_FLAG="--target GemmBench --target GemmBenchTests"
             fi
 
             BUILD_OPTS=()
