@@ -561,9 +561,7 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
             fi
 
             if [[ "$need_config" == "true" ]]; then
-                if [[ "$FORCE_REBUILD" == "true" ]]; then
-                    rm -rf "${BUILD_DIR}"
-                fi
+                rm -rf "${BUILD_DIR}"
                 echo
                 echo "======================================="
                 echo "Configuring ${VERSION} for ${PLATFORM_NAME} (${COMPILER}) in ${BUILD_DIR}"
