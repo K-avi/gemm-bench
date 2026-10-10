@@ -553,7 +553,7 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
             echo "======================================="
         else
             # Configure if CMakeCache is missing, full rebuild requested, or test targets not yet configured
-            local need_config=false
+            need_config=false
             if [[ ! -f "${BUILD_DIR}/CMakeCache.txt" || "$FORCE_REBUILD" == "true" ]]; then
                 need_config=true
             elif [[ "$RUN_TESTS" == "true" || "$TESTS_ONLY" == "true" ]] && ! grep -q "GEMMBENCH_BUILD_TESTS:BOOL=ON" "${BUILD_DIR}/CMakeCache.txt" 2>/dev/null; then
