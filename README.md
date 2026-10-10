@@ -38,22 +38,62 @@ The table below reconciles execution unit pipeline saturation with rated system 
 
 | SIMD | Microarchitecture | CPU Model | Champion Kernel | Tile ($M_R \times N_R$) | Comp | Pipe Saturation (%) | FLOP/cycle | $f_{\text{eff}}$ (GHz) | $f_{\text{boost}}$ (GHz) | Achieved (GFLOP/s) | Peak Theo (GFLOP/s) | % Peak Theo |
 |:---|:---|:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| AVX512 | AMD Zen 5 Strix Point | Ryzen AI 9 HX 370 | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | 4x32 | gcc | **100.0%** | 16.00 / 16 | 5.03 | 5.16 | 80.5 | 82.5 | 97.6% |
-| AVX512 | AMD Zen 4 | Ryzen 9 7945HX | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | 4x32 | gcc | **99.7%** | 15.95 / 16 | 5.25 | 5.46 | 83.8 | 87.4 | 95.9% |
-| AVX2 | Intel Meteor Lake | Core Ultra 9 185H | `mippv2_meteorlake_mr4_nr3_crr` | 4x12 | clang | **97.1%** | 15.53 / 16 | 4.69 | 4.78 | 72.9 | 76.5 | 95.3% |
+| AVX512 | AMD Zen 5 Strix Point | Ryzen AI 9 HX 370 | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | 4x32 | gcc | **100.0%** | 16.00 / 16 | 5.10 | 5.16 | 81.6 | 82.5 | 98.9% |
+| AVX512 | AMD Zen 4 | Ryzen 9 7945HX | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | 4x32 | gcc | **99.7%** | 15.95 / 16 | 5.35 | 5.46 | 85.3 | 87.4 | 97.6% |
+| AVX2 | Intel Meteor Lake | Core Ultra 9 185H | `mippv2_meteorlake_mr4_nr3_crr` | 4x12 | clang | **96.5%** | 15.43 / 16 | 4.77 | 4.78 | 73.6 | 76.5 | 96.2% |
 | AVX2 | Intel Skylake | i5-6200U | `mippv2_meteorlake_mr4_nr3_crr` | 4x12 | clang | **96.2%** | 15.39 / 16 | 2.28 | 2.30 | 35.1 | 36.8 | 95.5% |
 | NEON | Apple M1 | Firestorm | `mippv2_x60_mr6_nr4_fmaddi_crr` | 6x8 | gcc | **99.6%** | 15.93 / 16 | 3.03 | 3.04 | 48.3 | 48.6 | 99.4% |
-| NEON | Raspberry Pi 5 | Cortex-A76 | `mippv2_a76_mr6_nr4_fmaddi_crr` | 6x8 | clang | **99.1%** | 7.93 / 8 | 2.39 | 2.40 | 19.0 | 19.2 | 98.8% |
-| RVV | SpacemiT X100 | SpacemiT X100 | `mippv2_x100_register_blocked_apack4_crr` | 3x16 | clang | **96.6%** | 7.73 / 8 | 2.40 | 2.40 | 18.5 | 19.2 | 96.4% |
-| RVV | SpacemiT A100 | SpacemiT A100 | `mippv2_a100_mr7_nr2_lmul2_pipe_crr` | 7x64 | gcc | **83.8%** | 6.70 / 8 | 1.99 | 2.00 | 13.3 | 16.0 | 83.4% |
+| NEON | Raspberry Pi 5 | Cortex-A76 | `mippv2_a76_mr6_nr4_fmaddi_crr` | 6x8 | gcc | **99.1%** | 7.93 / 8 | 2.39 | 2.40 | 19.0 | 19.2 | 98.7% |
+| RVV | SpacemiT X100 | SpacemiT X100 | `mippv2_x100_register_blocked_apack4_crr` | 3x16 | clang | **96.5%** | 7.72 / 8 | 2.40 | 2.40 | 18.5 | 19.2 | 96.4% |
+| RVV | SpacemiT A100 | SpacemiT A100 | `mippv2_a100_mr7_nr2_lmul2_pipe_crr` | 7x64 | gcc | **83.7%** | 6.69 / 8 | 1.99 | 2.00 | 13.3 | 16.0 | 83.3% |
 | RVV | SpacemiT X60 | SpacemiT X60 | `mippv2_a100_mr7_nr4_pipe_crr` | 7x16 | clang | **58.1%** | 4.65 / 8 | 1.60 | 1.60 | 7.4 | 12.8 | 58.0% |
 
 > **Microarchitectural Findings:**
-> - **Execution Pipeline Saturation vs. Thermal Scaling:** On AMD Zen 4, the vector FMA datapath reaches 15.95 / 16.0 FLOP/cycle (99.7% pipeline saturation). The 4.1% gap to the rated 87.4 GFLOP/s ceiling is attributable to clock throttling under continuous 512-bit vector execution ($f_{\text{eff}} = 5.25\text{ GHz}$ vs. $f_{\text{boost}} = 5.46\text{ GHz}$).
+> - **Execution Pipeline Saturation vs. Thermal Scaling:** On AMD Zen 4, the vector FMA datapath reaches 15.95 / 16.0 FLOP/cycle (99.7% pipeline saturation). The gap to the rated 87.4 GFLOP/s ceiling is attributable to clock throttling under continuous 512-bit vector execution ($f_{\text{eff}} = 5.35\text{ GHz}$ vs. $f_{\text{boost}} = 5.46\text{ GHz}$).
 > - **Out-of-Order Execution Efficiency:** Apple M1 (Firestorm), AMD Zen 5 (Strix Point), and ARM Cortex-A76 achieve $\ge 99\%$ pipeline issue saturation, indicating balanced register tiling and effective memory latency hiding in L1 cache.
 > - **Mobile Datapath Ceilings:** AMD Zen 5 on mobile Strix Point implements dual 256-bit physical FMA datapaths (double-pumped 512-bit execution), yielding a physical ceiling of 16 DP FLOP/cycle (identical to Zen 4) rather than the 32 DP FLOP/cycle ceiling of desktop/server Zen 5.
-> - **Intel Meteor Lake Frequency Stabilization:** Under sustained dense 256-bit AVX2 FMA execution, power management stabilizes the Redwood Cove P-core operating frequency at 4.78 GHz (calibrated empirically via `cpufp`, 76.5 GFLOP/s ceiling) compared to its 5.10 GHz light-load burst ceiling.
-> - **RISC-V Vector Scaling & In-Order Pipeline Constraints:** On SpacemiT X100, the kernel achieves 7.73 / 8.0 FLOP/cycle (96.6% saturation). In contrast, both SpacemiT X60 and A100 are **in-order dual-issue** microarchitectures where the lack of dynamic instruction reordering exposes load-to-use stalls, limiting pipeline saturation to 58.1% on X60 (4.65 / 8 FLOP/cycle) and 83.8% on A100 (6.70 / 8 FLOP/cycle).
+> - **Intel Meteor Lake Frequency Stabilization:** Under sustained dense 256-bit AVX2 FMA execution, power management stabilizes the Redwood Cove P-core operating frequency at 4.77 GHz (calibrated empirically via `cpufp`, 76.5 GFLOP/s ceiling) compared to its 5.10 GHz light-load burst ceiling.
+> - **RISC-V Vector Scaling & In-Order Pipeline Constraints:** On SpacemiT X100, the kernel achieves 7.72 / 8.0 FLOP/cycle (96.5% saturation). In contrast, both SpacemiT X60 and A100 are **in-order dual-issue** microarchitectures where the lack of dynamic instruction reordering exposes load-to-use stalls, limiting pipeline saturation to 58.1% on X60 (4.65 / 8 FLOP/cycle) and 83.7% on A100 (6.69 / 8 FLOP/cycle).
+
+---
+
+### 3. Native BLIS Assembly vs. Portable MIPPv2 C++ Comparison
+
+To establish an absolute performance reference against industry-standard hand-tuned kernels, GEMMBench incorporates native assembly microkernels from the [BLIS framework](https://github.com/flame/blis) under strictly identical in-cache CRR packing conditions ($A$ column-major $M_R \times K$, $B$ row-major $K \times N_R$, $C$ row-major $M_R \times N_R$):
+
+| Architecture / SIMD | Native BLIS Reference Kernel | Geometry ($M_R \times N_R$) | Implementation |
+| :--- | :--- | :---: | :--- |
+| **x86-64 AVX-512** (Zen 4, Zen 5) | `skx_d16x14.c` | $16 \times 14$ | Inline GNU assembly, 32 ZMM registers |
+| **x86-64 AVX2** (Meteor Lake, Skylake) | `haswell_d6x8.c` | $6 \times 8$ | Inline GNU assembly, 16 YMM registers |
+| **AArch64 NEON** (M1, Cortex-A76) | `armv8a_d6x8.c` | $6 \times 8$ | Inline GNU assembly, 32 V-registers |
+| **RISC-V Vector 1.0** (SpacemiT X60) | `dgemm_x60_2vx14.c` | $2\text{v} \times 14$ ($8 \times 14$) | Inline assembly with genetic algorithm scheduling |
+
+#### Comparative Performance Across Microarchitectures
+
+The table below compares the peak sustained throughput and compute density between MIPPv2 C++ champion kernels and native BLIS assembly across all evaluated platforms (sweeping panel depth $K \in [32..1024]$ with 15 repetitions and 3 replicated runs):
+
+| Platform | Compiler | MIPPv2 Champion | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | **MIPPv2 / BLIS (%)** | Microarchitectural Regime |
+| :--- | :---: | :--- | :---: | :---: | :---: | :--- |
+| **AMD Zen 5** | gcc | `mippv2_firestorm_mr4_nr4_fmaddi_crr` ($4\times32$) | 16.00 | 15.98 | **100.2%** | Parity (Out-of-order FMA saturation) |
+| **AMD Zen 4** | gcc | `mippv2_firestorm_mr4_nr4_fmaddi_crr` ($4\times32$) | 15.95 | 15.94 | **100.1%** | Parity (Out-of-order FMA saturation) |
+| **Intel Meteor Lake** | clang | `mippv2_meteorlake_mr4_nr3_crr` ($4\times12$) | 15.43 | 15.45 | **99.9%** | Parity (AVX2 Redwood Cove saturation) |
+| **Apple M1** | gcc | `mippv2_x60_mr6_nr4_fmaddi_crr` ($6\times8$) | 15.93 | 15.81 | **100.8%** | Parity (+30% MIPPv2 advantage at $K=32$) |
+| **Raspberry Pi 5** | gcc | `mippv2_a76_mr6_nr4_fmaddi_crr` ($6\times8$) | 7.93 | 7.85 | **101.0%** | Parity (+40% MIPPv2 advantage at $K=32$) |
+| **SpacemiT X100** | clang | `mippv2_x100_register_blocked_apack4_crr` ($3\times16$) | 7.72 | 7.52 | **102.6%** | MIPPv2 advantage at $K \le 256$ |
+| **SpacemiT X60** | clang | `mippv2_a100_mr7_nr4_pipe_crr` ($7\times16$) | 4.65 | 6.43 | **72.2%** | BLIS advantage (+28%, static dual-issue scheduling) |
+| **SpacemiT A100** | gcc | `mippv2_a100_mr7_nr2_lmul2_pipe_crr` ($7\times64$) | 6.69 | 1.84 | *(365%)*\* | MIPPv2 custom tile ($LMUL=2$, VLEN=1024) |
+
+*\* Note on SpacemiT A100: The native BLIS RVV kernel was engineered specifically for SpacemiT X60 (VLEN=256, in-order dual-issue). On A100 (VLEN=1024), this kernel suffers severe pipeline hazards due to geometry mismatch ($8 \times 14$ vs native $7 \times 64$). MIPPv2 demonstrates the advantage of algorithmic portability by dynamically sizing the tile to the hardware vector length.*
+
+> **Microarchitectural Insights on C++ vs. Assembly:**
+> 1. **Out-of-Order Latency Hiding:** On out-of-order cores (Zen 4, Zen 5, Firestorm, Cortex-A76), modern compilers (GCC 13/14, Clang 18) unroll and pipeline MIPPv2 vector intrinsics to within **0.1% to 0.8%** of hand-crafted assembly. Furthermore, MIPPv2 outperforms BLIS on small panel depths ($K \in [32..64]$) by up to **+40%** due to direct in-register tile unrolling without function call or loop fringe overheads.
+> 2. **In-Order Dual-Issue Constraints:** On the SpacemiT X60 (in-order dual-issue RVV 1.0), BLIS outperforms MIPPv2 by **+28%** (6.43 vs 4.65 FLOP/cycle). Because the in-order pipeline cannot dynamically reorder instructions, BLIS relies on offline genetic algorithm scheduling with interleaved NOPs and load hoisting to avoid execution stalls that C++ compilers currently fail to eliminate.
+> 3. **L1d vs. L2 Working Set Spill ($K=128$):** For register tiles with $M_R \times N_R$, as depth $K$ increases beyond 128, working set size exceeds 48 KiB and spills from L1d into L2 cache. The scaling curves reveal that both MIPPv2 and BLIS transition from compute-bound saturation to L2 latency-bound execution, annotated in the comparison figures.
+
+Detailed comparison reports and vector scaling figures are generated via:
+```bash
+python3 tools/compare_mippv2_blis.py --input-dir gemm-bench-results/blis_comparison --plot
+```
 
 ---
 
@@ -97,10 +137,20 @@ To ensure reproducibility and isolate microarchitectural behavior, the benchmark
 ```bash
 cmake -B build -S . \
   -DCMAKE_BUILD_TYPE=Release \
-  -DMIPPV2_INCLUDE_DIR=/path/to/mipp/include
+  -DMIPPV2_INCLUDE_DIR=/path/to/mipp/include \
+  -DGEMMBENCH_ENABLE_BLIS=ON \
+  -DGEMMBENCH_BLIS_TARGET=AUTO
 
 cmake --build build -j$(nproc)
 ```
+
+| CMake Option | Default | Description |
+| :--- | :--- | :--- |
+| `-DGEMMBENCH_ENABLE_BLIS` | `ON` | Compile and link native BLIS reference assembly microkernels (`blis_native`) |
+| `-DGEMMBENCH_BLIS_TARGET` | `AUTO` | Explicit target override: `AUTO`, `SKX` (AVX-512 $16\times14$), `HASWELL` (AVX2 $6\times8$), `ARMV8A` (NEON $6\times8$), `X60` (RVV $2\text{v}\times14$) |
+| `-DGEMMBENCH_BUILD_TESTS` | `OFF` | Build Catch2 unit test suite (`GemmBenchTests`) |
+| `-DGEMMBENCH_ENABLE_FASTMATH` | `ON` | Fast math flags (`-ffast-math`). Use `OFF` for strict IEEE-754 mode (`-ffp-contract=fast`) |
+| `-DGEMMBENCH_ENABLE_EXPLO` | `OFF` | Enable exploratory experimental microkernel implementations |
 
 ### 3. Build and Run Unit Tests
 Unit tests use Catch2 v3 (automatically fetched if not present on system):
@@ -447,17 +497,17 @@ python3 plot_results_crr.py --output plots_crr --compare-rrr gemm-bench-results/
 ---
 
 **Current Focus & Roadmap (Prioritized TODO)**:
-1. **Direct Microkernel Comparison Against BLIS (`bli_dgemm_ukernel_*`)**: Integrate native BLIS microkernels directly into the `GemmBench` in-cache harness (under iso-packing Col-Row-Row layouts) across supported microarchitectures (x86_64, AArch64) to quantify the exact performance delta between MIPPv2 C++ microkernels and hand-tuned assembly microkernels.
-2. **Cluster-Wide Benchmark Refresh (Dalek)**: Re-run the full multi-architecture sweep under the hardened protocol ($R = 15$, $N_{\text{runs}} = 3$, passive throttling checks) to update all reference datasets.
-3. **Single-Precision Support (SGEMM / FP32)**: Extend the benchmark suite and microkernel generators to evaluate FP32 as well.
-4. **Comparison with Hand-Written Native Intrinsics**: Implement intrinsics baselines (native RVV `riscv_vector.h`, AVX-512 `immintrin.h`, NEON `arm_neon.h`) to measure the exact abstraction overhead introduced by MIPPv2.
-5. **Cross-SIMD Abstraction Comparisons**: Benchmark against alternative SIMD abstraction frameworks, like **Google Highway**, **EVE**, and **`std::simd`**.
-6. **Non-Canonical GEMM Evaluation**: Benchmark throughput and epilogue overhead for non-canonical forms ($\beta \neq 0.0$, $\alpha \neq 1.0$) to quantify the cost of $C$ tile reloads and scaling.
+1. **Single-Precision Support (SGEMM / FP32)**: Extend the benchmark suite and microkernel generators to evaluate FP32 as well.
+2. **Comparison with Hand-Written Native Intrinsics**: Implement intrinsics baselines (native RVV `riscv_vector.h`, AVX-512 `immintrin.h`, NEON `arm_neon.h`) to measure the exact abstraction overhead introduced by MIPPv2.
+3. **Cross-SIMD Abstraction Comparisons**: Benchmark against alternative SIMD abstraction frameworks, like **Google Highway**, **EVE**, and **`std::simd`**.
+4. **Non-Canonical GEMM Evaluation**: Benchmark throughput and epilogue overhead for non-canonical forms ($\beta \neq 0.0$, $\alpha \neq 1.0$) to quantify the cost of $C$ tile reloads and scaling.
 
 > [!NOTE]
 > **Completed Milestones**:
-> - Empirical hardware FPU ceiling and sustained clock calibration via `cpufp` integrated into `uarch_config.json`.
-> - Statistical robustness framework (median filtering across 15 repetitions, 3-run replication with inter-run CV tracking, compiler memory barriers, passive CPU throttling monitoring, thermal cooldown pauses).
+> - **Direct Microkernel Comparison Against Native BLIS Assembly**: Integrated reference assembly microkernels from BLIS across AVX-512 (`skx_d16x14.c`), AVX2 (`haswell_d6x8.c`), NEON (`armv8a_d6x8.c`), and RVV 1.0 (`dgemm_x60_2vx14.c`) with full automated comparative analysis via `tools/compare_mippv2_blis.py`.
+> - **Cluster-Wide Multi-Architecture Campaign Refresh (Dalek)**: Re-run full 8-architecture sweep under hardened protocol ($R = 15$, $N_{\text{runs}} = 3$, atomic CSV output, Linux `perf_event_open` hardware cycle and instructions/IPC tracking).
+> - **Empirical Hardware FPU Ceiling Calibration**: Sustained clock and FMA issue capacity calibrated via `cpufp` in `uarch_config.json`.
+> - **Statistical Robustness Framework**: Median filtering across 15 repetitions, 3-run replication with inter-run CV tracking, memory fences, passive CPU throttling monitoring, thermal cooldown pauses.
 
 > [!NOTE]
 > BLIS/OpenBLAS for RVV: Ongoing vendor and community work on RVV-optimized BLAS kernels reportedly outperforms current upstream public releases of BLIS and OpenBLAS, but these patches are not yet fully merged/streamlined in mainline distributions. Benchmarking methodology should evaluate both upstream releases and patched branches.

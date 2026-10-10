@@ -21,7 +21,8 @@ env/
 venv/
 
 # Generated plot artifacts (not tracked, except documentation visuals)
-plots/
+/plots/
+*.png
 plots_crr/*
 !plots_crr/cross_uarch_crr_efficiency_comparison.svg
 !plots_crr/cross_uarch_crr_flop_cycle_comparison.svg
