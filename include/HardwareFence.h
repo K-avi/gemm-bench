@@ -14,7 +14,7 @@ inline void pipeline_fence() {
 #elif defined(__aarch64__)
     asm volatile("isb" ::: "memory");
 #elif defined(__riscv)
-    asm volatile("fence i,r" ::: "memory");
+    asm volatile("fence rw, rw" ::: "memory");
 #else
     compiler_fence();
 #endif

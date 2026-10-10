@@ -283,9 +283,10 @@ public:
     template<class M>
     void freePacked(M& m) const
     {
-        std::free(m.data);
-
-        m.data = nullptr;
+        if (m.data) {
+            std::free(m.data);
+            m.data = nullptr;
+        }
 
         m.rows = 0;
         m.cols = 0;
@@ -318,7 +319,9 @@ private:
             static_cast<T*>(
                 std::aligned_alloc(alignment_, bytes));
 
-        assert(ptr != nullptr);
+        if (!ptr) {
+            throw std::bad_alloc();
+        }
 
         return ptr;
     }

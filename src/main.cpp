@@ -779,20 +779,27 @@ void runBenchmark(BenchConfig &cfg) {
                       ? alloc.template allocatePackedTile<CPacked>(cfg.M, cfg.N, InitMode::Random)
                       : alloc.template allocatePackedTile<CPacked>(cfg.M, cfg.N, InitMode::Zero));
 
-  if (cfg.validate) {
-    validateKernel<T, APacked, BPacked, CPacked>(cfg, gemm, A, B, C, alloc);
+  try {
+    if (cfg.validate) {
+      validateKernel<T, APacked, BPacked, CPacked>(cfg, gemm, A, B, C, alloc);
+    }
+
+    if (!cfg.csv_mode) {
+      std::cout << "Mode: " << (cfg.legacy_mode ? "Legacy (strided/padded)" : "BLIS Tile (compacted)") << "\n";
+      std::cout << "A.ld = " << A.ld << "\n";
+      std::cout << "B.ld = " << B.ld << "\n";
+      std::cout << "C.ld = " << C.ld << "\n";
+    }
+
+    const auto stats = run<T>(cfg, gemm, A, B, C);
+
+    printResults<T>(cfg, stats);
+  } catch (...) {
+    alloc.freePacked(A);
+    alloc.freePacked(B);
+    alloc.freePacked(C);
+    throw;
   }
-
-  if (!cfg.csv_mode) {
-    std::cout << "Mode: " << (cfg.legacy_mode ? "Legacy (strided/padded)" : "BLIS Tile (compacted)") << "\n";
-    std::cout << "A.ld = " << A.ld << "\n";
-    std::cout << "B.ld = " << B.ld << "\n";
-    std::cout << "C.ld = " << C.ld << "\n";
-  }
-
-  const auto stats = run<T>(cfg, gemm, A, B, C);
-
-  printResults<T>(cfg, stats);
 
   alloc.freePacked(A);
   alloc.freePacked(B);

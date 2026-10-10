@@ -26,66 +26,14 @@ import numpy as np
 import pandas as pd
 
 
-# ==============================================================================
-# Styling and Palette Configuration (Publication-Grade Light Mode)
-# ==============================================================================
-
-LIGHT_BG = "#ffffff"       # Clean white canvas
-CARD_BG = "#ffffff"        # White plot axes
-BORDER_COLOR = "#d0d7de"   # Subtle GitHub-style border
-TEXT_PRIMARY = "#1f2328"   # Dark slate for primary text
-TEXT_SECONDARY = "#656d76" # Muted slate for subtitles and labels
-TEXT_MUTED = "#8c959f"     # Dim label
-GRID_COLOR = "#eaeef2"     # Subtle grid lines
-
-SIMD_FAMILY_COLORS = {
-    "avx512": "#dc2626",   # Crimson Red
-    "avx2": "#0284c7",     # Sky Blue
-    "neon": "#7c3aed",     # Purple / Violet
-    "rvv": "#059669",      # Emerald Green
-}
-
-UARCH_COLORS = {
-    "zen4": "#dc2626",       # Crimson Red (AMD AVX-512)
-    "zen5": "#b91c1c",       # Darker Red (AMD Zen 5)
-    "m1": "#7c3aed",         # Purple (Apple M1 NEON)
-    "rpi5": "#db2777",       # Pink (RPi5 Cortex-A76 NEON)
-    "meteorlake": "#0284c7", # Sky Blue (Intel Meteor Lake AVX2)
-    "skylake": "#0369a1",    # Deep Sky (Intel Skylake AVX2)
-    "x100": "#059669",       # Emerald Green (SpacemiT X100 RVV)
-    "x60": "#10b981",        # Sea Green (SpacemiT X60 RVV)
-    "a100": "#047857",       # Dark Emerald (SpacemiT A100 RVV)
-}
-
-plt.rcParams.update(
-    {
-        "figure.facecolor": LIGHT_BG,
-        "figure.edgecolor": LIGHT_BG,
-        "axes.facecolor": CARD_BG,
-        "axes.edgecolor": BORDER_COLOR,
-        "axes.labelcolor": TEXT_PRIMARY,
-        "axes.labelsize": 11,
-        "axes.titlesize": 13,
-        "axes.titleweight": "bold",
-        "axes.titlecolor": TEXT_PRIMARY,
-        "axes.grid": True,
-        "grid.color": GRID_COLOR,
-        "grid.alpha": 0.9,
-        "grid.linestyle": "--",
-        "grid.linewidth": 0.8,
-        "xtick.color": TEXT_SECONDARY,
-        "ytick.color": TEXT_SECONDARY,
-        "xtick.labelsize": 10,
-        "ytick.labelsize": 10,
-        "legend.facecolor": CARD_BG,
-        "legend.edgecolor": BORDER_COLOR,
-        "legend.fontsize": 9.5,
-        "text.color": TEXT_PRIMARY,
-        "font.family": "sans-serif",
-        "font.sans-serif": ["DejaVu Sans", "Liberation Sans", "Helvetica", "Arial", "sans-serif"],
-        "svg.fonttype": "none",
-    }
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent / "tools"))
+from gemmbench_common import (
+    LIGHT_BG, CARD_BG, BORDER_COLOR, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, GRID_COLOR,
+    SIMD_FAMILY_COLORS, UARCH_COLORS, L1_CACHE_BOUNDARY_K, setup_matplotlib_theme
 )
+
+setup_matplotlib_theme()
 
 
 # ==============================================================================

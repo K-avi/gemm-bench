@@ -37,78 +37,17 @@ from matplotlib.patches import Patch
 
 
 # ==============================================================================
-# Styling and Palette Configuration (Publication-Grade Light Mode)
+# Styling and Palette Configuration (Imported from tools/gemmbench_common.py)
 # ==============================================================================
 
-LIGHT_BG = "#ffffff"       # Clean white canvas
-CARD_BG = "#ffffff"        # White plot axes
-BORDER_COLOR = "#d0d7de"   # Subtle GitHub-style border
-TEXT_PRIMARY = "#1f2328"   # Dark slate for primary text
-TEXT_SECONDARY = "#656d76" # Muted slate for subtitles and labels
-TEXT_MUTED = "#8c959f"     # Dim label
-GRID_COLOR = "#eaeef2"     # Subtle grid lines
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from gemmbench_common import (
+    LIGHT_BG, CARD_BG, BORDER_COLOR, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, GRID_COLOR,
+    SIMD_FAMILY_COLORS, PLATFORM_META, L1_CACHE_BOUNDARY_K,
+    setup_matplotlib_theme, parse_benchmark_filename as parse_filename
+)
 
-SIMD_FAMILY_COLORS = {
-    "avx512": "#dc2626",   # Crimson Red
-    "avx2": "#0284c7",     # Sky Blue
-    "neon": "#7c3aed",     # Purple / Violet
-    "rvv": "#059669",      # Emerald Green
-}
-
-PLATFORM_META = {
-    "zen4_avx512": {"name": "AMD Zen 4", "simd": "avx512", "isa": "AVX-512", "peak_fc": 16.0},
-    "zen5_avx512": {"name": "AMD Zen 5", "simd": "avx512", "isa": "AVX-512", "peak_fc": 16.0},
-    "meteorlake_avx2": {"name": "Intel Meteor Lake", "simd": "avx2", "isa": "AVX2", "peak_fc": 16.0},
-    "m1_neon": {"name": "Apple M1", "simd": "neon", "isa": "NEON", "peak_fc": 16.0},
-    "rpi5_neon": {"name": "Raspberry Pi 5", "simd": "neon", "isa": "NEON", "peak_fc": 8.0},
-    "x100_rvv": {"name": "SpacemiT X100", "simd": "rvv", "isa": "RVV 1.0 (256b)", "peak_fc": 8.0},
-    "x60_rvv": {"name": "SpacemiT X60", "simd": "rvv", "isa": "RVV 1.0 (256b)", "peak_fc": 8.0},
-    "a100_rvv": {"name": "SpacemiT A100", "simd": "rvv", "isa": "RVV 1.0 (1024b)", "peak_fc": 8.0},
-}
-
-plt.rcParams.update({
-    "figure.facecolor": LIGHT_BG,
-    "figure.edgecolor": LIGHT_BG,
-    "axes.facecolor": CARD_BG,
-    "axes.edgecolor": BORDER_COLOR,
-    "axes.labelcolor": TEXT_PRIMARY,
-    "axes.labelsize": 10.5,
-    "axes.titlesize": 12,
-    "axes.titleweight": "bold",
-    "axes.titlecolor": TEXT_PRIMARY,
-    "axes.grid": True,
-    "grid.color": GRID_COLOR,
-    "grid.alpha": 0.8,
-    "grid.linestyle": "--",
-    "grid.linewidth": 0.8,
-    "xtick.color": TEXT_SECONDARY,
-    "ytick.color": TEXT_SECONDARY,
-    "xtick.labelsize": 9.5,
-    "ytick.labelsize": 9.5,
-    "legend.facecolor": CARD_BG,
-    "legend.edgecolor": BORDER_COLOR,
-    "legend.fontsize": 9.0,
-    "text.color": TEXT_PRIMARY,
-    "font.family": "sans-serif",
-    "font.sans-serif": ["DejaVu Sans", "Liberation Sans", "Helvetica", "Arial", "sans-serif"],
-    "svg.fonttype": "none",
-})
-
-
-def parse_filename(filepath: Path) -> Tuple[str, str, str]:
-    """
-    Extracts (platform, format, compiler) from filename.
-    e.g. 'gemm_results_zen4_avx512_crr_clang.csv' -> ('zen4_avx512', 'crr', 'clang')
-    """
-    stem = filepath.stem
-    m = re.match(r"gemm_results_(.+)_(crr|rrr)_(gcc|clang)$", stem)
-    if m:
-        return m.group(1), m.group(2), m.group(3)
-    parts = stem.split("_")
-    compiler = parts[-1] if parts[-1] in ("gcc", "clang") else "unknown"
-    layout = parts[-2] if parts[-2] in ("crr", "rrr") else "unknown"
-    platform = "_".join(parts[2:-2]) if len(parts) > 4 else "unknown"
-    return platform, layout, compiler
+setup_matplotlib_theme()
 
 
 def load_dataset(input_dir: Path) -> pd.DataFrame:
@@ -419,10 +358,16 @@ def plot_k_scaling_grid(details: Dict, out_dir: Path, enable_png: bool = True) -
         # Theoretical peak line
         ax.axhline(meta["peak_fc"], color="#cbd5e1", linestyle=":", linewidth=1.2, zorder=2)
 
-        ax.set_title(f"{meta['name']} ({comp.upper()})", fontsize=11, fontweight="bold", pad=4)
-
         ylim_max = 17.5 if meta["peak_fc"] == 16.0 else 9.0
         ax.set_ylim(0, ylim_max)
+
+        # Cache residency threshold (K <= 128 L1d resident compute bound vs K >= 256 L2 spill)
+        ax.axvline(L1_CACHE_BOUNDARY_K, color="#cbd5e1", linestyle="--", linewidth=1.0, alpha=0.85, zorder=2)
+        if idx == 0:
+            ax.text(L1_CACHE_BOUNDARY_K * 0.88, ylim_max * 0.06, "L1d", color="#94a3b8", fontsize=8.0, ha="right", va="bottom", fontweight="bold")
+            ax.text(L1_CACHE_BOUNDARY_K * 1.12, ylim_max * 0.06, "L2", color="#94a3b8", fontsize=8.0, ha="left", va="bottom", fontweight="bold")
+
+        ax.set_title(f"{meta['name']} ({comp.upper()})", fontsize=11, fontweight="bold", pad=4)
         ax.set_xscale("log", base=2)
         ax.set_xticks(ks)
         ax.set_xticklabels([str(k) for k in ks], fontsize=8.5)
