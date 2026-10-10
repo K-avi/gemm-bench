@@ -57,3 +57,7 @@ results_rpi5/
 logs/
 gemm-bench-results-backup/
 notes.md
+
+# Working audit and evaluation documents (kept as Antigravity artifacts, never committed)
+*audit*.md
+*evaluation*.md
