@@ -486,7 +486,9 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
         CSV="${target_dir}/${CSV_PREFIX}${file_suffix}_${COMPILER_TAG}.csv"
     fi
     mkdir -p "$(dirname "$CSV")"
-    echo "Build,Kernel,M,N,K,Alpha,Beta,Time_median_s,Time_min_s,Time_max_s,Time_stddev_s,Time_cv_pct,GFLOPS_median,GFLOPS_peak,Cycles_median,Cycles_min,Cycles_max,Cycles_stddev,Cycles_cv_pct,Eff_GHz,FLOP_per_cycle_median,FLOP_per_cycle_peak,Repetitions,InterRun_CV_pct" > "$CSV"
+    TMP_CSV="${CSV}.tmp.$$"
+    trap 'rm -f "${TMP_CSV}" 2>/dev/null || true' EXIT INT TERM
+    echo "Build,Kernel,M,N,K,Alpha,Beta,Time_median_s,Time_min_s,Time_max_s,Time_stddev_s,Time_cv_pct,GFLOPS_median,GFLOPS_peak,Cycles_median,Cycles_min,Cycles_max,Cycles_stddev,Cycles_cv_pct,Eff_GHz,IPC,FLOP_per_cycle_median,FLOP_per_cycle_peak,Repetitions,InterRun_CV_pct" > "$TMP_CSV"
 
     # Log provenance metadata
     GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -747,7 +749,7 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
                 fi
 
                 if [[ -n "$BEST_LINE" ]]; then
-                    echo "${VERSION},${BEST_LINE},${INTER_CV}" >> "${CSV}"
+                    echo "${VERSION},${BEST_LINE},${INTER_CV}" >> "${TMP_CSV}"
                     INTER_CV_MSG=""
                     if awk "BEGIN {exit !(${INTER_CV} > 5.0)}" 2>/dev/null; then
                         INTER_CV_MSG=" ⚠ inter-run CV=${INTER_CV}%"
@@ -774,6 +776,14 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
             done
         done
     done
+
+    # Atomic CSV publication: commit temporary file only if at least one benchmark data row was generated
+    if [[ -f "$TMP_CSV" ]] && awk 'NR>1 {found=1; exit} END {exit !found}' "$TMP_CSV"; then
+        mv -f "$TMP_CSV" "$CSV"
+    else
+        echo "Warning: No valid benchmark rows generated for ${COMPILER_TAG}; existing CSV preserved." >&2
+        rm -f "$TMP_CSV"
+    fi
 done
 
 echo

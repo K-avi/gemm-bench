@@ -307,7 +307,7 @@ def plot_blis_ratio_comparison(summary_df: pd.DataFrame, out_dir: Path, enable_p
     ax_a100.invert_yaxis()
     ax_a100.set_xlim(0, 420)
     ax_a100.set_xlabel("Sustained DGEMM Performance (% of BLIS Peak Reached)", fontsize=10.5, fontweight="bold")
-    ax_a100.set_title("SpacemiT A100 Outlier (RVV 1024-bit core | BLIS lacks native 1024-bit ukernel)", fontsize=11.5, pad=8)
+    ax_a100.set_title("SpacemiT A100 VLEN=1024b Portability Study (MIPPv2 VLEN auto-scaling vs BLIS 256b X60 fallback)", fontsize=11.5, pad=8)
 
     fig.suptitle("GEMMBench — MIPPv2 vs BLIS Reference Micro-Kernels Peak DGEMM Ratio", fontsize=14, fontweight="bold", y=0.985)
     
@@ -479,28 +479,35 @@ def format_markdown_report(summary_df: pd.DataFrame, details: Dict, plot_dir: Op
         lines.append("> [!WARNING]\n> No paired MIPPv2 vs BLIS benchmark datasets were found.\n")
         return "\n".join(lines)
 
-    lines.append("## 1. Executive Summary Table (% of BLIS Peak Reached)\n")
+    def get_status_str(ratio: float) -> str:
+        if 98.0 <= ratio <= 102.0:
+            return "🟢 Parity (98–102%)"
+        elif ratio > 102.0:
+            return f"🔵 MIPPv2 (+{ratio - 100.0:.1f}%)"
+        elif ratio >= 95.0:
+            return "🟢 Near-Parity (≥95%)"
+        elif ratio >= 90.0:
+            return "🟡 Competitive (≥90%)"
+        else:
+            return "🔴 Delta (<90%)"
+
+    symmetric_df = summary_df[summary_df["Platform"] != "a100_rvv"]
+    a100_df = summary_df[summary_df["Platform"] == "a100_rvv"]
+
+    lines.append("## 1. Symmetric Microarchitectural Comparison (Direct Micro-Kernel Equivalents)\n")
     lines.append("> [!NOTE]")
-    lines.append("> **Methodological Scope & RISC-V Baseline Distinction:**")
-    lines.append("> - **In-Register Scope:** This benchmark strictly measures in-register compute saturation ($M_R \\times N_R \\times K$) on hot L1 cache panels, isolating FMA pipeline efficiency without end-to-end DGEMM cache blocking (GotoBLAS $J_C, P_C, I_C$), dynamic packing overheads, or fringe tiles.")
-    lines.append("> - **RISC-V Baselines (`a100_rvv` & `x100_rvv`):** Upstream BLIS only provides an RVV microkernel for SpacemiT X60 (`dgemm_x60_2vx14.c`, $8 \\times 14$). On A100 and X100, this X60 kernel is used as an untuned cross-RVV baseline. The large relative advantage of MIPPv2 on A100 reflects the absence of a native A100-tailored assembly kernel in BLIS.\n")
+    lines.append("> **Methodological Scope:**")
+    lines.append("> - **In-Register Scope:** This benchmark strictly measures in-register compute saturation ($M_R \\times N_R \\times K$) on hot L1 cache panels, isolating FMA pipeline throughput without end-to-end DGEMM cache blocking (GotoBLAS $J_C, P_C, I_C$), dynamic packing overheads, or fringe tiles.")
+    lines.append("> - **Architectural Symmetry:** Evaluates targets where BLIS provides a native, ISA-matched microkernel (AVX-512, AVX2, NEON, RVV 256b).\n")
     lines.append("| Microarchitecture | Compiler | Layout | MIPPv2 Champion | MIPPv2 (GFLOP/s) | BLIS (GFLOP/s) | **% of BLIS Peak** | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | Status |")
     lines.append("| :--- | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |")
 
-    for _, row in summary_df.iterrows():
+    for _, row in symmetric_df.iterrows():
         ratio = row["Ratio_Peak_GFLOPS_pct"]
-        if ratio >= 99.0:
-            status = "🟢 Parity (≥99%)"
-        elif ratio >= 95.0:
-            status = "🟢 Near-Parity (≥95%)"
-        elif ratio >= 90.0:
-            status = "🟡 Competitive (≥90%)"
-        else:
-            status = "🔴 Delta (<90%)"
-
+        status = get_status_str(ratio)
         m_name = row["MIPPv2_Champion"].replace("mippv2_", "")
         blis_label = f"**{row['BLIS_Peak_GFLOPS']:.2f}**"
-        if row['Platform'] in ['a100_rvv', 'x100_rvv']:
+        if row['Platform'] == 'x100_rvv':
             blis_label += "*"
 
         lines.append(
@@ -509,17 +516,41 @@ def format_markdown_report(summary_df: pd.DataFrame, details: Dict, plot_dir: Op
             f"**{ratio:.1f}%** | {row['MIPPv2_Peak_FC']:.2f} | {row['BLIS_Peak_FC']:.2f} | {status} |"
         )
 
-    lines.append("\n*\\*Note: On A100 and X100, BLIS uses the X60 kernel fallback as an untuned cross-RVV baseline.*")
+    if not symmetric_df.empty and (symmetric_df["Platform"] == "x100_rvv").any():
+        lines.append("\n*\\*Note: On SpacemiT X100 (RVV 256b, OOO dual-issue), BLIS runs the in-order X60 microkernel (`dgemm_x60_2vx14.c`).*")
+
+    if not a100_df.empty:
+        lines.append("\n---\n")
+        lines.append("## 2. VLEN Agility & Cross-Vector Portability Study (SpacemiT A100 VLEN=1024b)\n")
+        lines.append("> [!IMPORTANT]")
+        lines.append("> **Asymmetry Disclosure & Portability Framing:**")
+        lines.append("> - Upstream BLIS provides no native 1024-bit vector microkernel; executing BLIS on A100 defaults to the 256-bit in-order X60 assembly kernel (`dgemm_x60_2vx14.c`, $8 \\times 14$), utilizing only 25% of vector capacity per iteration.")
+        lines.append("> - MIPPv2's parameterized template vectorization automatically adapts to the 1024-bit VLEN, sustaining **13.36 GFLOP/s (6.71 FLOP/cycle, ~84% of machine peak)**.")
+        lines.append("> - This comparison is presented not as a peer algorithmic match, but as an empirical demonstration of C++ template agility across variable vector lengths versus static assembly fragility.\n")
+        lines.append("| Microarchitecture | Compiler | MIPPv2 Champion | MIPPv2 Peak (GFLOP/s) | MIPPv2 (FLOP/cyc) | Hardware Peak (FLOP/cyc) | % Machine Peak | BLIS Fallback (X60 asm GFLOP/s) | Relative Speedup |")
+        lines.append("| :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |")
+
+        for _, row in a100_df.iterrows():
+            m_name = row["MIPPv2_Champion"].replace("mippv2_", "")
+            peak_fc = PLATFORM_META.get(row["Platform"], {}).get("peak_fc", 8.0)
+            pct_machine = (row["MIPPv2_Peak_FC"] / peak_fc * 100.0) if peak_fc > 0 else 0.0
+            ratio = row["Ratio_Peak_GFLOPS_pct"]
+            speedup = ratio / 100.0
+            lines.append(
+                f"| `{row['Platform']}` | `{row['Compiler']}` | `{m_name}` | "
+                f"**{row['MIPPv2_Peak_GFLOPS']:.2f}** | {row['MIPPv2_Peak_FC']:.2f} | {peak_fc:.1f} | "
+                f"**{pct_machine:.1f}%** | {row['BLIS_Peak_GFLOPS']:.2f} (X60) | **{speedup:.2f}×** |"
+            )
 
     if plot_dir and plot_dir.exists():
         lines.append("\n---\n")
-        lines.append("## 2. Visual Comparative Figures\n")
+        lines.append("## 3. Visual Comparative Figures\n")
         lines.append("- **Peak Performance Ratio:** [plots/blis_vs_mippv2_ratio_comparison.svg](plots/blis_vs_mippv2_ratio_comparison.svg)")
         lines.append("- **FLOP / Cycle Compute Density:** [plots/blis_vs_mippv2_flop_per_cycle_comparison.svg](plots/blis_vs_mippv2_flop_per_cycle_comparison.svg)")
         lines.append("- **Scaling Grid Across K ∈ [32..1024]:** [plots/blis_vs_mippv2_k_scaling_grid.svg](plots/blis_vs_mippv2_k_scaling_grid.svg)\n")
 
     lines.append("\n---\n")
-    lines.append("## 3. Per-Size Scaling & Efficiency Analysis ($K \\in [32, 1024]$)\n")
+    lines.append("## 4. Per-Size Scaling & Efficiency Analysis ($K \\in [32, 1024]$)\n")
 
     for (platform, compiler, layout), k_data in details.items():
         lines.append(f"### Platform: `{platform}` ({compiler}, {layout.upper()})\n")

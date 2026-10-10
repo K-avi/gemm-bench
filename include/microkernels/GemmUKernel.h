@@ -142,7 +142,7 @@ inline constexpr KernelDescriptor kernelTable[] = {
     {UKernelType::IJK, "ijk", RRR, 64, 1, 1},
 
     // Champions
-    {UKernelType::mippv2_meteorlake_mr4_nr3, "mippv2_meteorlake_mr4_nr3", RRR, 64, 4, 3},
+    {UKernelType::mippv2_meteorlake_mr4_nr3, "mippv2_meteorlake_mr4_nr3", RRR, 64, 4, 3, 12},
     {UKernelType::mippv2_a76_mr6_nr3, "mippv2_a76_mr6_nr3", RRR, 64, 6, 3},
     {UKernelType::mippv2_a76_mr6_nr4_fmaddi, "mippv2_a76_mr6_nr4_fmaddi", RRR, 64, 6, 4},
     {UKernelType::mippv2_zen4_mr4_nr4_fmaddi, "mippv2_zen4_mr4_nr4_fmaddi", RRR, 64, 4, 4},
@@ -154,7 +154,7 @@ inline constexpr KernelDescriptor kernelTable[] = {
     {UKernelType::mippv2_a100_mr7_nr2_lmul2_pipe, "mippv2_a100_mr7_nr2_lmul2_pipe", RRR, 64, 7, 4},
 
     // Champions (CRR)
-    {UKernelType::mippv2_meteorlake_mr4_nr3_crr, "mippv2_meteorlake_mr4_nr3_crr", CRR, 64, 4, 3},
+    {UKernelType::mippv2_meteorlake_mr4_nr3_crr, "mippv2_meteorlake_mr4_nr3_crr", CRR, 64, 4, 3, 12},
     {UKernelType::mippv2_a76_mr6_nr4_fmaddi_crr, "mippv2_a76_mr6_nr4_fmaddi_crr", CRR, 64, 6, 4},
     {UKernelType::mippv2_a76_mr6_nr4_fmaddi_crr, "mippv2_a76_mr6_nr3_crr", CRR, 64, 6, 4},
     {UKernelType::mippv2_zen4_mr4_nr4_fmaddi_crr, "mippv2_zen4_mr4_nr4_fmaddi_crr", CRR, 64, 4, 4},

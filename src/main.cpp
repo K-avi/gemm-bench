@@ -35,7 +35,7 @@
 
 using namespace GEMMBench;
 
-// User-mode CPU cycle counter via Linux perf_event_open (PERF_COUNT_HW_CPU_CYCLES).
+// User-mode CPU cycle and instruction counters via Linux perf_event_open.
 // Supported across all Linux architectures (x86_64, AArch64, RISC-V).
 // If unavailable (non-Linux or restricted PMU), ok() is false and cycle metrics are 0 / NaN.
 class CycleCounter {
@@ -64,17 +64,34 @@ public:
                   << "). Cycle-derived metrics (Eff_GHz, FLOP_per_cycle) will be 0.\n";
       }
     }
+
+    perf_event_attr pe_ins;
+    std::memset(&pe_ins, 0, sizeof(pe_ins));
+    pe_ins.type = PERF_TYPE_HARDWARE;
+    pe_ins.size = sizeof(pe_ins);
+    pe_ins.config = PERF_COUNT_HW_INSTRUCTIONS;
+    pe_ins.disabled = 1;
+    pe_ins.exclude_kernel = 1;
+    pe_ins.exclude_hv = 1;
+    fd_ins_ = static_cast<int>(syscall(SYS_perf_event_open, &pe_ins, 0, -1, -1, 0));
+    if (fd_ins_ >= 0) {
+      ioctl(fd_ins_, PERF_EVENT_IOC_RESET, 0);
+      ioctl(fd_ins_, PERF_EVENT_IOC_ENABLE, 0);
+      ok_ins_ = true;
+    }
 #endif
   }
   ~CycleCounter() {
 #if defined(__linux__)
     if (fd_ >= 0) close(fd_);
+    if (fd_ins_ >= 0) close(fd_ins_);
 #endif
   }
   CycleCounter(const CycleCounter &) = delete;
   CycleCounter &operator=(const CycleCounter &) = delete;
 
   bool ok() const { return ok_; }
+  bool ok_ins() const { return ok_ins_; }
 
   uint64_t read_cycles() const {
 #if defined(__linux__)
@@ -87,9 +104,22 @@ public:
     return 0;
   }
 
+  uint64_t read_instructions() const {
+#if defined(__linux__)
+    if (fd_ins_ >= 0) {
+      uint64_t v = 0;
+      if (::read(fd_ins_, &v, sizeof(v)) == static_cast<ssize_t>(sizeof(v)))
+        return v;
+    }
+#endif
+    return 0;
+  }
+
 private:
   int fd_ = -1;
+  int fd_ins_ = -1;
   bool ok_ = false;
+  bool ok_ins_ = false;
 };
 
 struct BenchmarkStats {
@@ -108,6 +138,9 @@ struct BenchmarkStats {
   double cycles_stddev = 0.0;
   double cycles_cv_pct = 0.0;
 
+  double instructions_median = 0.0;
+  double ipc_median           = 0.0;
+
   double eff_ghz               = 0.0;
   double flop_per_cycle_median = 0.0;
   double flop_per_cycle_peak   = 0.0;
@@ -117,6 +150,7 @@ struct BenchmarkStats {
 
 inline BenchmarkStats compute_stats(const std::vector<double> &times,
                                     const std::vector<double> &cycles,
+                                    const std::vector<double> &instructions,
                                     double ops) {
   const size_t R = times.size();
   std::vector<double> sorted_times = times;
@@ -185,13 +219,29 @@ inline BenchmarkStats compute_stats(const std::vector<double> &times,
     }
   }
 
+  // Process instructions independently if available
+  std::vector<double> valid_ins;
+  valid_ins.reserve(R);
+  for (double ins : instructions) {
+    if (ins > 0.0) valid_ins.push_back(ins);
+  }
+
+  if (!valid_ins.empty()) {
+    std::sort(valid_ins.begin(), valid_ins.end());
+    const size_t num_ins = valid_ins.size();
+    s.instructions_median = valid_ins[num_ins / 2];
+    if (s.cycles_median > 0.0 && s.instructions_median > 0.0) {
+      s.ipc_median = s.instructions_median / s.cycles_median;
+    }
+  }
+
   return s;
 }
 
 // Timing & Cycle measurement note:
 // pipeline_fence() serializes out-of-order execution (lfence on x86, isb on ARM, fence on RISC-V).
 // compiler_fence() prevents compiler instruction reordering.
-// Cycle counting brackets are isolated from clock_gettime VDSO calls.
+// Inner computation timing is strictly isolated inside [cyc0, cyc1], excluding sys_read() latency.
 #define BENCH_KERNEL(CALL)                                                     \
   do {                                                                         \
     CycleCounter cyc_counter;                                                  \
@@ -202,32 +252,65 @@ inline BenchmarkStats compute_stats(const std::vector<double> &times,
     const size_t reps = (cfg.repetitions > 0) ? cfg.repetitions : 1;           \
     std::vector<double> samples_s(reps);                                       \
     std::vector<double> samples_cyc(reps, 0.0);                                \
+    std::vector<double> samples_ins(reps, 0.0);                                \
+                                                                               \
+    std::vector<T> c_backup;                                                   \
+    if (cfg.beta != 0.0 && C.data) {                                           \
+      const size_t c_span = std::max(C.padded_rows * C.padded_cols,             \
+                                     std::max(C.rows * C.ld, C.cols * C.ld));  \
+      c_backup.assign(C.data, C.data + c_span);                                \
+    }                                                                          \
+                                                                               \
     for (size_t r = 0; r < reps; ++r) {                                        \
+      if (cfg.beta != 0.0 && !c_backup.empty()) {                              \
+        std::memcpy(C.data, c_backup.data(), c_backup.size() * sizeof(T));     \
+      }                                                                        \
+                                                                               \
+      pipeline_fence();                                                        \
+      const uint64_t cyc0 = cyc_counter.read_cycles();                         \
+      const uint64_t ins0 = cyc_counter.read_instructions();                   \
+      pipeline_fence();                                                        \
+                                                                               \
       compiler_fence();                                                        \
       const auto start = std::chrono::steady_clock::now();                     \
       compiler_fence();                                                        \
-      pipeline_fence();                                                        \
-      const uint64_t cyc0 = cyc_counter.read_cycles();                         \
-      pipeline_fence();                                                        \
+                                                                               \
       LIKWID_MARKER_START(cfg.kernel_name.c_str());                            \
       for (size_t i = 0; i < cfg.iterations; ++i) {                            \
         CALL;                                                                  \
         asm volatile("" :: "r"(C.data) : "memory");                            \
       }                                                                        \
       LIKWID_MARKER_STOP(cfg.kernel_name.c_str());                             \
-      pipeline_fence();                                                        \
-      const uint64_t cyc1 = cyc_counter.read_cycles();                         \
-      pipeline_fence();                                                        \
+                                                                               \
+      compiler_fence();                                                        \
       const auto end = std::chrono::steady_clock::now();                       \
       compiler_fence();                                                        \
+                                                                               \
+      pipeline_fence();                                                        \
+      const uint64_t ins1 = cyc_counter.read_instructions();                   \
+      const uint64_t cyc1 = cyc_counter.read_cycles();                         \
+      pipeline_fence();                                                        \
+                                                                               \
       const auto duration =                                                    \
           std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);   \
       samples_s[r] = (duration.count() * 1e-9) / cfg.iterations;               \
       if (cyc_counter.ok() && cyc1 > cyc0)                                     \
         samples_cyc[r] = static_cast<double>(cyc1 - cyc0) / cfg.iterations;    \
+      if (cyc_counter.ok_ins() && ins1 >= ins0)                                \
+        samples_ins[r] = static_cast<double>(ins1 - ins0) / cfg.iterations;    \
     }                                                                          \
+                                                                               \
+    for (size_t r_i = 0; r_i < C.rows; ++r_i) {                                \
+      for (size_t c_j = 0; c_j < C.cols; ++c_j) {                              \
+        const double v = static_cast<double>(C(r_i, c_j));                     \
+        if (std::isnan(v) || std::isinf(v)) {                                  \
+          throw std::runtime_error("Numerical corruption: NaN/Inf detected in output tile C"); \
+        }                                                                      \
+      }                                                                        \
+    }                                                                          \
+                                                                               \
     const double ops = 2.0 * cfg.M * cfg.N * cfg.K;                           \
-    return compute_stats(samples_s, samples_cyc, ops);                         \
+    return compute_stats(samples_s, samples_cyc, samples_ins, ops);           \
   } while (false)
 
 #define BENCH_KERNEL_FASTPATH(CALL_FAST, CALL_FULL)                            \
@@ -580,8 +663,12 @@ void printResults(const BenchConfig &cfg,
       std::cout << "Cycles [median]:  " << std::fixed << std::setprecision(1) << stats.cycles_median << "\n"
                 << "Cycles [min]:     " << std::fixed << std::setprecision(1) << stats.cycles_min << "\n"
                 << "Cycles CV (%):    " << std::fixed << std::setprecision(2) << stats.cycles_cv_pct << " %\n"
-                << "Eff Freq (GHz):   " << std::fixed << std::setprecision(3) << stats.eff_ghz << "\n"
-                << "FLOP/cyc [median]:" << std::fixed << std::setprecision(4) << stats.flop_per_cycle_median << "\n"
+                << "Eff Freq (GHz):   " << std::fixed << std::setprecision(3) << stats.eff_ghz << "\n";
+      if (stats.ipc_median > 0.0) {
+        std::cout << "Instructions:     " << std::fixed << std::setprecision(1) << stats.instructions_median << "\n"
+                  << "IPC [median]:     " << std::fixed << std::setprecision(2) << stats.ipc_median << "\n";
+      }
+      std::cout << "FLOP/cyc [median]:" << std::fixed << std::setprecision(4) << stats.flop_per_cycle_median << "\n"
                 << "FLOP/cyc [peak]:  " << std::fixed << std::setprecision(4) << stats.flop_per_cycle_peak << "\n";
     }
   } else {
@@ -601,6 +688,7 @@ void printResults(const BenchConfig &cfg,
               << std::fixed << std::setprecision(1) << stats.cycles_stddev << ","
               << std::fixed << std::setprecision(2) << stats.cycles_cv_pct << ","
               << std::fixed << std::setprecision(4) << stats.eff_ghz << ","
+              << std::fixed << std::setprecision(2) << stats.ipc_median << ","
               << std::fixed << std::setprecision(4) << stats.flop_per_cycle_median << ","
               << std::fixed << std::setprecision(4) << stats.flop_per_cycle_peak << ","
               << stats.repetitions << "\n";
