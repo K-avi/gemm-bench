@@ -552,8 +552,15 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
             echo "Notice: Using precompiled clang binary for x60 from NFS ($BIN)"
             echo "======================================="
         else
-            # Configure if CMakeCache is missing or full rebuild requested
+            # Configure if CMakeCache is missing, full rebuild requested, or test targets not yet configured
+            local need_config=false
             if [[ ! -f "${BUILD_DIR}/CMakeCache.txt" || "$FORCE_REBUILD" == "true" ]]; then
+                need_config=true
+            elif [[ "$RUN_TESTS" == "true" || "$TESTS_ONLY" == "true" ]] && ! grep -q "GEMMBENCH_BUILD_TESTS:BOOL=ON" "${BUILD_DIR}/CMakeCache.txt" 2>/dev/null; then
+                need_config=true
+            fi
+
+            if [[ "$need_config" == "true" ]]; then
                 if [[ "$FORCE_REBUILD" == "true" ]]; then
                     rm -rf "${BUILD_DIR}"
                 fi
