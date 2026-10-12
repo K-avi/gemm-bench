@@ -93,6 +93,11 @@ declare -A ARCH_FLAGS
 # Source platform configuration
 source "$CONFIG_FILE"
 
+# Isolate build directory per platform tag on shared filesystems (e.g. zen4 vs zen5 on AVX-512)
+if [[ -n "${PLATFORM_TAG:-}" && "${BUILD_DIR_PREFIX}" != *"${PLATFORM_TAG}"* ]]; then
+    BUILD_DIR_PREFIX="${BUILD_DIR_PREFIX}_${PLATFORM_TAG}"
+fi
+
 ################################################################################
 # Options & CLI Argument Parsing
 ################################################################################
