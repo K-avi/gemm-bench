@@ -39,6 +39,7 @@ struct BenchConfig
     std::string kernel_name = "ijk";
     bool legacy_mode = false;
     bool validate = false;
+    bool fp32 = false;
 };
 
 inline BenchConfig& config()
@@ -92,6 +93,7 @@ inline void parseArgs(int argc,
                       << "  --lmul <N>          RVV/MIPP LMUL factor (default: 1)\n"
                       << "  --alignment <N>     Memory alignment in bytes (default: 32)\n"
                       << "  --seed <N>          Random seed (default: 12)\n"
+                      << "  --fp32, --float     Run single-precision (float / FP32) microkernel\n"
                       << "  --csv               Output in CSV format\n"
                       << "  --help, -h          Show this help message\n";
             std::exit(EXIT_SUCCESS);
@@ -122,6 +124,11 @@ inline void parseArgs(int argc,
             cfg.alignment = next_ulong();
         else if(arg == "--seed")
             cfg.seed = static_cast<uint32_t>(next_ulong());
+        else if(arg == "--fp32" || arg == "--float" || arg == "--single")
+        {
+            cfg.fp32 = true;
+            cfg.packet_size = mipp::N<float, 1>();
+        }
         else if(arg == "--kernel")
         {
             cfg.kernel_name = next();

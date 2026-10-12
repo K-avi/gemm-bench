@@ -86,6 +86,7 @@ ${BOLD}Options :${NC}
   --rebuild         Forcer la recompilation complète sur les nœuds
   --crr-only        Exécuter uniquement les variantes CRR des champions
   --rrr-only        Exécuter uniquement les variantes RRR des champions
+  --fp32, --float   Exécuter les benchmarks en simple précision (FP32 float)
   --blis, --with-blis Inclure également le micro-kernel de référence BLIS (blis_native)
   --no-fast-math, --strict-ieee Désactiver -ffast-math (-fno-fast-math -ffp-contract=fast)
   --likwid          Activer l'instrumentation LIKWID Marker API (-DGEMMBENCH_ENABLE_LIKWID=ON)
@@ -113,6 +114,7 @@ RUN_ALL_FLAG=false
 CRR_ONLY=false
 RRR_ONLY=false
 FASTMATH_FLAG=""
+FP32_FLAG=""
 LIKWID_FLAG=""
 REBUILD_FLAG=""
 CUSTOM_SIZES=""
@@ -157,6 +159,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --rrr-only)
             RRR_ONLY=true
+            shift
+            ;;
+        --fp32|--float|--single)
+            FP32_FLAG="--fp32"
             shift
             ;;
         --blis|--with-blis)
@@ -251,6 +257,7 @@ fi
 # -----------------------------------------------------------------------------
 target_res_dir="results"
 [[ "$WITH_BLIS" == "true" ]] && target_res_dir="results_blis"
+[[ -n "$FP32_FLAG" ]] && target_res_dir="results_fp32"
 echo -e "${BLUE}[+] Nettoyage / Archivage (${target_res_dir}) sur ${FRONT_HOST}...${NC}"
 ssh "$FRONT_HOST" "bash -l -c 'cd ${REMOTE_DIR} && if [ -d ${target_res_dir} ] && [ \"\$(ls -A ${target_res_dir} 2>/dev/null)\" ]; then ARCHIVE_DIR=\"${target_res_dir}_archive_\$(date +%Y%m%d_%H%M%S)\"; mkdir -p \"\$ARCHIVE_DIR\" && mv ${target_res_dir}/* \"\$ARCHIVE_DIR/\" 2>/dev/null || true; echo \"✓ Résultats antérieurs archivés dans \$ARCHIVE_DIR\"; fi && mkdir -p ${target_res_dir}'"
 
@@ -369,6 +376,7 @@ run_target() {
     [[ -n "$CUSTOM_COOLDOWN" ]] && bench_flags+="--cooldown ${CUSTOM_COOLDOWN} "
     [[ "$CRR_ONLY" == "true" ]] && bench_flags+="--crr-only "
     [[ "$RRR_ONLY" == "true" ]] && bench_flags+="--rrr-only "
+    [[ -n "$FP32_FLAG" ]] && bench_flags+="${FP32_FLAG} "
     [[ -n "$LIKWID_FLAG" ]] && bench_flags+="${LIKWID_FLAG} "
     [[ -n "$FASTMATH_FLAG" ]] && bench_flags+="${FASTMATH_FLAG} "
 
@@ -401,6 +409,7 @@ run_target() {
 
     local results_env=""
     [[ "$WITH_BLIS" == "true" ]] && results_env="RESULTS_DIR=results_blis "
+    [[ -n "$FP32_FLAG" ]] && results_env="RESULTS_DIR=results_fp32 "
 
     local bench_cmd="${pre_cmd} PLATFORM_TAG=${target} ${results_env}${wrapper}./run_benchmarks.sh ${platform} ${target_bench_flags} ${compilers}"
 
@@ -535,6 +544,10 @@ if [[ "$WITH_BLIS" == "true" ]]; then
     remote_res_dir="results_blis"
     local_crr_dir="gemm-bench-results/blis_comparison"
     local_rrr_dir="gemm-bench-results/blis_comparison_rrr"
+elif [[ -n "$FP32_FLAG" ]]; then
+    remote_res_dir="results_fp32"
+    local_crr_dir="gemm-bench-results/crr_fp32"
+    local_rrr_dir="gemm-bench-results/rrr_fp32"
 fi
 
 echo -e "Les fichiers de résultats CSV sont disponibles dans le dossier partagé : ${BOLD}${REMOTE_DIR}/${remote_res_dir}/${NC}"

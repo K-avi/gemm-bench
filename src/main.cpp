@@ -646,7 +646,8 @@ void printResults(const BenchConfig &cfg,
                   const BenchmarkStats &stats) {
 
   if (!cfg.csv_mode) {
-    std::cout << "M: " << cfg.M << "\n"
+    std::cout << "Precision: " << (cfg.fp32 ? "FP32 (float)" : "FP64 (double)") << "\n"
+              << "M: " << cfg.M << "\n"
               << "N: " << cfg.N << "\n"
               << "K: " << cfg.K << "\n"
               << "Alpha: " << cfg.alpha << "\n"
@@ -806,35 +807,40 @@ void runBenchmark(BenchConfig &cfg) {
   alloc.freePacked(C);
 }
 
-void dispatchBenchmark(BenchConfig &cfg) {
+template <typename T>
+void dispatchBenchmarkTyped(BenchConfig &cfg) {
   const auto &desc = getKernelDescriptor(cfg.kernel);
 
   if (desc.defaultPacking.A == PLayout::Row &&
       desc.defaultPacking.B == PLayout::Row &&
       desc.defaultPacking.C == PLayout::Row) {
-    runBenchmark<double, PackedRowMajor<double>, PackedRowMajor<double>,
-                 PackedRowMajor<double>>(cfg);
-  }
-
-  else if (desc.defaultPacking.A == PLayout::Row &&
-           desc.defaultPacking.B == PLayout::Col &&
-           desc.defaultPacking.C == PLayout::Row) {
-    runBenchmark<double, PackedRowMajor<double>, PackedColMajor<double>,
-                 PackedRowMajor<double>>(cfg);
+    runBenchmark<T, PackedRowMajor<T>, PackedRowMajor<T>,
+                 PackedRowMajor<T>>(cfg);
+  } else if (desc.defaultPacking.A == PLayout::Row &&
+             desc.defaultPacking.B == PLayout::Col &&
+             desc.defaultPacking.C == PLayout::Row) {
+    runBenchmark<T, PackedRowMajor<T>, PackedColMajor<T>,
+                 PackedRowMajor<T>>(cfg);
   } else if (desc.defaultPacking.A == PLayout::Col &&
              desc.defaultPacking.B == PLayout::Row &&
              desc.defaultPacking.C == PLayout::Row) {
-    runBenchmark<double, PackedColMajor<double>, PackedRowMajor<double>,
-                 PackedRowMajor<double>>(cfg);
+    runBenchmark<T, PackedColMajor<T>, PackedRowMajor<T>,
+                 PackedRowMajor<T>>(cfg);
   } else if (desc.defaultPacking.A == PLayout::Col &&
              desc.defaultPacking.B == PLayout::Row &&
              desc.defaultPacking.C == PLayout::Col) {
-    runBenchmark<double, PackedColMajor<double>, PackedRowMajor<double>,
-                 PackedColMajor<double>>(cfg);
-  }
-
-  else {
+    runBenchmark<T, PackedColMajor<T>, PackedRowMajor<T>,
+                 PackedColMajor<T>>(cfg);
+  } else {
     throw std::runtime_error("Unsupported packing");
+  }
+}
+
+void dispatchBenchmark(BenchConfig &cfg) {
+  if (cfg.fp32) {
+    dispatchBenchmarkTyped<float>(cfg);
+  } else {
+    dispatchBenchmarkTyped<double>(cfg);
   }
 }
 int main(int argc, char **argv) {

@@ -114,7 +114,7 @@ class UArchSpecCRR:
         return self.frequency_ghz * self.peak_flop_per_cycle
 
 
-def load_uarch_config_crr(config_path: Path) -> Dict[str, UArchSpecCRR]:
+def load_uarch_config_crr(config_path: Path, is_fp32: bool = False) -> Dict[str, UArchSpecCRR]:
     """Loads hierarchical JSON configuration and specializes it for CRR kernels."""
     if not config_path.is_file():
         raise FileNotFoundError(f"Configuration file not found: {config_path}")
@@ -130,9 +130,12 @@ def load_uarch_config_crr(config_path: Path) -> Dict[str, UArchSpecCRR]:
             if not expected_crr:
                 expected_crr = f"{base_exp}_crr" if base_exp and not base_exp.endswith("_crr") else base_exp
 
-            csv_pattern = spec.get("crr_csv_pattern")
-            if not csv_pattern:
-                csv_pattern = f"*gemm_results_*{uarch_id}*crr*_{{compiler}}.csv"
+            if is_fp32:
+                csv_pattern = spec.get("crr_csv_pattern_fp32", f"*gemm_results_*{uarch_id}*crr*fp32*_{{compiler}}.csv")
+                peak_fc = float(spec.get("peak_flop_per_cycle_fp32", float(spec.get("peak_flop_per_cycle", 1.0)) * 2.0))
+            else:
+                csv_pattern = spec.get("crr_csv_pattern", f"*gemm_results_*{uarch_id}*crr*_{{compiler}}.csv")
+                peak_fc = float(spec.get("peak_flop_per_cycle", 1.0))
 
             csv_pattern_rrr = spec.get("csv_pattern", f"*gemm_results_*{uarch_id}*_{{compiler}}.csv")
 
@@ -142,7 +145,7 @@ def load_uarch_config_crr(config_path: Path) -> Dict[str, UArchSpecCRR]:
                 name=spec.get("name", uarch_id),
                 cpu_model=spec.get("cpu_model", ""),
                 frequency_ghz=float(spec.get("frequency_ghz", 1.0)),
-                peak_flop_per_cycle=float(spec.get("peak_flop_per_cycle", 1.0)),
+                peak_flop_per_cycle=peak_fc,
                 expected_best_kernel=expected_crr,
                 csv_pattern=csv_pattern,
                 expected_best_kernel_rrr=base_exp,
@@ -158,7 +161,7 @@ def load_uarch_config_crr(config_path: Path) -> Dict[str, UArchSpecCRR]:
 # Data Loading and Normalization
 # ==============================================================================
 
-def find_crr_csv_files(input_dir: Path, spec: UArchSpecCRR) -> List[Tuple[Path, str]]:
+def find_crr_csv_files(input_dir: Path, spec: UArchSpecCRR, is_fp32: bool = False) -> List[Tuple[Path, str]]:
     """Finds CSV files matching the CRR uarch specification and returns (path, compiler)."""
     matched: List[Tuple[Path, str]] = []
     if not input_dir.exists():
@@ -167,22 +170,28 @@ def find_crr_csv_files(input_dir: Path, spec: UArchSpecCRR) -> List[Tuple[Path, 
     for compiler in ["gcc", "clang"]:
         pattern = spec.csv_pattern.replace("{compiler}", compiler)
         for p in input_dir.glob("**/*.csv"):
+            # Ensure strict separation between FP32 and FP64 files
+            if is_fp32 and "fp32" not in p.name.lower():
+                continue
+            if not is_fp32 and "fp32" in p.name.lower():
+                continue
+
             if fnmatch.fnmatch(p.name, pattern):
                 if (p, compiler) not in matched:
                     matched.append((p, compiler))
             elif fnmatch.fnmatch(p.name, f"*gemm_results_*{spec.uarch_id}*crr*_{compiler}.csv") or \
                  fnmatch.fnmatch(p.name, f"*gemm_results_{spec.uarch_id}*crr*_{compiler}.csv") or \
                  fnmatch.fnmatch(p.name, f"*{spec.uarch_id}*crr*_{compiler}.csv") or \
-                 (input_dir.name == "crr" and fnmatch.fnmatch(p.name, f"*gemm_results_*{spec.uarch_id}*_{compiler}.csv")):
+                 (input_dir.name in ("crr", "crr_fp32") and fnmatch.fnmatch(p.name, f"*gemm_results_*{spec.uarch_id}*_{compiler}.csv")):
                 if (p, compiler) not in matched:
                     matched.append((p, compiler))
 
     return matched
 
 
-def load_crr_dataset_for_uarch(input_dir: Path, spec: UArchSpecCRR) -> pd.DataFrame:
+def load_crr_dataset_for_uarch(input_dir: Path, spec: UArchSpecCRR, is_fp32: bool = False) -> pd.DataFrame:
     """Loads and enriches CRR benchmark CSV files for a given uarch."""
-    files = find_crr_csv_files(input_dir, spec)
+    files = find_crr_csv_files(input_dir, spec, is_fp32=is_fp32)
     dfs: List[pd.DataFrame] = []
 
     for path, compiler in files:
@@ -439,7 +448,7 @@ def group_crr_champions_by_family(champions: List[UArchChampionCRR], sort_metric
     return list(reversed(grouped))
 
 
-def plot_crr_cross_uarch_efficiency(champions: List[UArchChampionCRR], output_path: Path) -> None:
+def plot_crr_cross_uarch_efficiency(champions: List[UArchChampionCRR], output_path: Path, is_fp32: bool = False) -> None:
     """Generates an executive horizontal ranking bar chart grouped by SIMD family for CRR micro-kernels."""
     fig, ax = plt.subplots(figsize=(14.0, 7.5))
 
@@ -507,11 +516,13 @@ def plot_crr_cross_uarch_efficiency(champions: List[UArchChampionCRR], output_pa
     ax.set_xlim(0, 108)
     ax.set_xticks([0, 20, 40, 60, 80, 100])
     ax.set_xticklabels(["0%", "20%", "40%", "60%", "80%", "100%"], fontsize=10)
-    ax.set_xlabel("Sustained DGEMM Efficiency (% of Theoretical Peak: Achieved GFLOP/s / R_peak)", fontsize=11, fontweight="bold", labelpad=10)
+    gemm_name = "SGEMM" if is_fp32 else "DGEMM"
+    prec_name = "FP32" if is_fp32 else "FP64"
+    ax.set_xlabel(f"Sustained {gemm_name} Efficiency (% of Theoretical Peak: Achieved GFLOP/s / R_peak)", fontsize=11, fontweight="bold", labelpad=10)
 
     fig.text(
         0.04, 0.965,
-        "Cross-Microarchitecture DGEMM Peak Efficiency — CRR BLIS Micro-Kernels",
+        f"Cross-Microarchitecture {gemm_name} Peak Efficiency — CRR BLIS Micro-Kernels",
         fontsize=13.5,
         fontweight="bold",
         color=TEXT_PRIMARY,
@@ -519,7 +530,7 @@ def plot_crr_cross_uarch_efficiency(champions: List[UArchChampionCRR], output_pa
     )
     fig.text(
         0.04, 0.930,
-        "FP64 BLIS-like Micro-Kernel | Single native register tile MRxNR streaming over K ∈ [32..1024] | Normalized to theoretical peak GFLOP/s (f_boost × Peak_FLOP/cycle)",
+        f"{prec_name} BLIS-like Micro-Kernel | Single native register tile MRxNR streaming over K ∈ [32..1024] | Normalized to theoretical peak GFLOP/s (f_boost × Peak_FLOP/cycle)",
         fontsize=9.5,
         color=TEXT_SECONDARY,
         ha="left",
@@ -559,8 +570,8 @@ def plot_crr_cross_uarch_efficiency(champions: List[UArchChampionCRR], output_pa
     print(f"Generated: {output_path}")
 
 
-def plot_crr_cross_uarch_flop_per_cycle(champions: List[UArchChampionCRR], output_path: Path) -> None:
-    """Generates comparison in raw DP FLOP/cycle grouped by SIMD family for CRR micro-kernels."""
+def plot_crr_cross_uarch_flop_per_cycle(champions: List[UArchChampionCRR], output_path: Path, is_fp32: bool = False) -> None:
+    """Generates comparison in raw FLOP/cycle grouped by SIMD family for CRR micro-kernels."""
     fig, ax = plt.subplots(figsize=(14.0, 7.5))
 
     sorted_champs = group_crr_champions_by_family(champions, sort_metric="flop_cycle")
@@ -607,60 +618,55 @@ def plot_crr_cross_uarch_flop_per_cycle(champions: List[UArchChampionCRR], outpu
                 zorder=5,
             )
 
-    # Theoretical ceiling lines: 8 FLOP/cyc and 16 FLOP/cyc groups
-    idx_8 = [i for i, c in enumerate(sorted_champs) if np.isclose(c.spec.peak_flop_per_cycle, 8.0)]
-    idx_16 = [i for i, c in enumerate(sorted_champs) if np.isclose(c.spec.peak_flop_per_cycle, 16.0)]
+    # Theoretical ceiling lines determined dynamically from champions specs
+    ceilings = sorted(list({round(c.spec.peak_flop_per_cycle, 1) for c in sorted_champs}))
+    if len(ceilings) > 1:
+        # Draw dotted boundary between distinct ceiling tiers
+        c_low = ceilings[0]
+        c_high = ceilings[-1]
+        idx_low = [i for i, c in enumerate(sorted_champs) if np.isclose(c.spec.peak_flop_per_cycle, c_low)]
+        idx_high = [i for i, c in enumerate(sorted_champs) if np.isclose(c.spec.peak_flop_per_cycle, c_high)]
+        if idx_low and idx_high:
+            split_y = (max(idx_low) + min(idx_high)) / 2.0
+            ax.axhline(split_y, color=BORDER_COLOR, linestyle=":", linewidth=1.0, zorder=2)
 
-    if idx_8 and idx_16:
-        split_y = (max(idx_8) + min(idx_16)) / 2.0
-        ax.axhline(split_y, color=BORDER_COLOR, linestyle=":", linewidth=1.0, zorder=2)
-
-    if idx_8:
-        ymin_8 = min(idx_8) - 0.45
-        ymax_8 = max(idx_8) + 0.45
-        ax.vlines(8.0, ymin_8, ymax_8, color="#475569", linestyle="--", linewidth=1.6, zorder=4)
-        ax.text(
-            8.15,
-            (ymin_8 + ymax_8) / 2.0,
-            "Theoretical Peak: 8 FLOP/cyc",
-            ha="left",
-            va="center",
-            fontsize=9.5,
-            fontweight="bold",
-            color="#475569",
-            bbox=dict(boxstyle="round,pad=0.25", facecolor="#ffffff", edgecolor="none", alpha=0.9),
-            zorder=4,
-        )
-
-    if idx_16:
-        ymin_16 = min(idx_16) - 0.45
-        ymax_16 = max(idx_16) + 0.45
-        ax.vlines(16.0, ymin_16, ymax_16, color="#475569", linestyle="--", linewidth=1.6, zorder=4)
-        ax.text(
-            16.0,
-            ymax_16 + 0.15,
-            "Theoretical Peak: 16 FLOP/cyc",
-            ha="right",
-            va="bottom",
-            fontsize=9.5,
-            fontweight="bold",
-            color="#475569",
-            bbox=dict(boxstyle="round,pad=0.25", facecolor="#ffffff", edgecolor="none", alpha=0.9),
-            zorder=4,
-        )
+    for ceil in ceilings:
+        idx_c = [i for i, c in enumerate(sorted_champs) if np.isclose(c.spec.peak_flop_per_cycle, ceil)]
+        if idx_c:
+            ymin = min(idx_c) - 0.45
+            ymax = max(idx_c) + 0.45
+            ax.vlines(ceil, ymin, ymax, color="#475569", linestyle="--", linewidth=1.6, zorder=4)
+            ax.text(
+                ceil + 0.25,
+                (ymin + ymax) / 2.0,
+                f"Theoretical Peak: {ceil:.0f} FLOP/cyc",
+                ha="left",
+                va="center",
+                fontsize=9.5,
+                fontweight="bold",
+                color="#475569",
+                bbox=dict(boxstyle="round,pad=0.25", facecolor="#ffffff", edgecolor="none", alpha=0.9),
+                zorder=4,
+            )
 
     y_labels = [format_crr_axis_label(c) for c in sorted_champs]
     ax.set_yticks(y_positions)
     ax.set_yticklabels(y_labels, fontsize=9.5)
 
-    ax.set_xlim(0, 18.0)
-    ax.set_xticks(range(0, 19, 2))
+    max_c = max(ceilings) if ceilings else 16.0
+    max_val = max([c.peak_flop_per_cycle for c in sorted_champs] + [max_c])
+    x_limit = max_val * 1.15
+    ax.set_xlim(0, x_limit)
+    tick_step = 4 if x_limit > 20 else 2
+    ax.set_xticks(range(0, int(x_limit) + 1, tick_step))
     ax.set_ylim(-0.6, len(sorted_champs) - 0.4 + 0.6)
-    ax.set_xlabel("Compute Density (DP FLOP / cycle)", fontsize=11, fontweight="bold", labelpad=10)
+    prec_flop = "SP" if is_fp32 else "DP"
+    ax.set_xlabel(f"Compute Density ({prec_flop} FLOP / cycle)", fontsize=11, fontweight="bold", labelpad=10)
 
+    prec_title = "FP32" if is_fp32 else "FP64"
     fig.text(
         0.04, 0.965,
-        "Cross-Microarchitecture GEMM Compute Density — CRR BLIS Micro-Kernels",
+        f"Cross-Microarchitecture GEMM Compute Density — CRR BLIS Micro-Kernels ({prec_title})",
         fontsize=13.5,
         fontweight="bold",
         color=TEXT_PRIMARY,
@@ -668,7 +674,7 @@ def plot_crr_cross_uarch_flop_per_cycle(champions: List[UArchChampionCRR], outpu
     )
     fig.text(
         0.04, 0.935,
-        "Higher is better | FP64 BLIS-like CRR micro-kernel streaming over K ∈ [32..1024] | Single native register tile",
+        f"Higher is better | {prec_title} BLIS-like CRR micro-kernel streaming over K ∈ [32..1024] | Single native register tile",
         fontsize=9.5,
         color=TEXT_SECONDARY,
         ha="left",
@@ -1153,12 +1159,28 @@ def main() -> None:
         action="store_true",
         help="Also export figures as PNG alongside SVG",
     )
+    parser.add_argument(
+        "--fp32", "--float",
+        action="store_true",
+        help="Analyze and plot FP32 (Single-Precision) benchmark results",
+    )
     args = parser.parse_args()
+
+    is_fp32 = args.fp32 or (args.input_dir and "fp32" in str(args.input_dir).lower())
 
     # 1. Determine input directory
     input_dir = args.input_dir
     if input_dir is None:
-        if Path("gemm-bench-results/crr").is_dir():
+        if is_fp32:
+            if Path("gemm-bench-results/crr_fp32").is_dir():
+                input_dir = Path("gemm-bench-results/crr_fp32")
+            elif Path("results_fp32/crr").is_dir():
+                input_dir = Path("results_fp32/crr")
+            elif Path("results_fp32").is_dir():
+                input_dir = Path("results_fp32")
+            else:
+                input_dir = Path("gemm-bench-results/crr_fp32")
+        elif Path("gemm-bench-results/crr").is_dir():
             input_dir = Path("gemm-bench-results/crr")
         elif Path("results/crr").is_dir():
             input_dir = Path("results/crr")
@@ -1166,11 +1188,17 @@ def main() -> None:
             input_dir = Path("results")
         else:
             input_dir = Path("gemm-bench-results")
+    else:
+        if "fp32" in str(input_dir).lower():
+            is_fp32 = True
 
-    print(f"Scanning for CRR benchmark results in: {input_dir}")
+    if is_fp32 and args.output == Path("plots_crr"):
+        args.output = Path("plots_crr_fp32")
+
+    print(f"Scanning for CRR benchmark results in: {input_dir} (Precision: {'FP32' if is_fp32 else 'FP64'})")
 
     # 2. Load microarchitectural specifications
-    specs = load_uarch_config_crr(args.config)
+    specs = load_uarch_config_crr(args.config, is_fp32=is_fp32)
 
     # 3. Apply frequency overrides if specified
     if args.freq:
@@ -1198,7 +1226,7 @@ def main() -> None:
     loaded_data: Dict[str, pd.DataFrame] = {}
 
     for spec in target_specs:
-        df = load_crr_dataset_for_uarch(input_dir, spec)
+        df = load_crr_dataset_for_uarch(input_dir, spec, is_fp32=is_fp32)
         if df.empty:
             print(f"Notice: No CRR data found for {spec.name} ({spec.uarch_id}) in {input_dir}")
             continue
@@ -1223,17 +1251,18 @@ def main() -> None:
 
     # 7. Generate Cross-UArch Comparison Plots
     if len(champions) > 1:
-        plot_crr_cross_uarch_efficiency(champions, args.output / "cross_uarch_crr_efficiency_comparison.svg")
-        plot_crr_cross_uarch_flop_per_cycle(champions, args.output / "cross_uarch_crr_flop_cycle_comparison.svg")
+        plot_crr_cross_uarch_efficiency(champions, args.output / "cross_uarch_crr_efficiency_comparison.svg", is_fp32=is_fp32)
+        plot_crr_cross_uarch_flop_per_cycle(champions, args.output / "cross_uarch_crr_flop_cycle_comparison.svg", is_fp32=is_fp32)
         if args.png:
-            plot_crr_cross_uarch_efficiency(champions, args.output / "cross_uarch_crr_efficiency_comparison.png")
-            plot_crr_cross_uarch_flop_per_cycle(champions, args.output / "cross_uarch_crr_flop_cycle_comparison.png")
+            plot_crr_cross_uarch_efficiency(champions, args.output / "cross_uarch_crr_efficiency_comparison.png", is_fp32=is_fp32)
+            plot_crr_cross_uarch_flop_per_cycle(champions, args.output / "cross_uarch_crr_flop_cycle_comparison.png", is_fp32=is_fp32)
 
     # 8. Print Console Summary and Export Hardware Execution Markdown Table
     print_crr_summary_table(champions)
     export_crr_markdown_table(champions, args.output / "crr_hardware_summary_table.md")
-    if Path("gemm-bench-results/crr").is_dir():
-        export_crr_markdown_table(champions, Path("gemm-bench-results/crr/summary_crr_table.md"))
+    summary_path = Path("gemm-bench-results/crr_fp32/summary_crr_fp32_table.md") if is_fp32 else Path("gemm-bench-results/crr/summary_crr_table.md")
+    if summary_path.parent.is_dir():
+        export_crr_markdown_table(champions, summary_path)
 
     # 9. Optional RRR vs CRR comparison
     if args.compare_rrr:

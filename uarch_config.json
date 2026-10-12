@@ -5,11 +5,13 @@
       "cpu_model": "i5-6200U",
       "frequency_ghz": 2.3,
       "peak_flop_per_cycle": 16.0,
+      "peak_flop_per_cycle_fp32": 32.0,
       "measured_peak_flop_per_cycle": 15.1,
       "expected_best_kernel": "mippv2_meteorlake_mr4_nr3",
       "expected_best_kernel_crr": "mippv2_meteorlake_mr4_nr3_crr",
       "csv_pattern": "*gemm_results_*skylake*_{compiler}.csv",
       "crr_csv_pattern": "*gemm_results_*skylake*crr*_{compiler}.csv",
+      "crr_csv_pattern_fp32": "*gemm_results_*skylake*crr*fp32*_{compiler}.csv",
       "notes": "Core i5-6200U (2.3 GHz nominal, sustained 256b AVX2 throttles to ~2.25 GHz under powersave governor)"
     },
     "meteorlake": {
@@ -18,11 +20,13 @@
       "frequency_ghz": 4.78,
       "nominal_frequency_ghz": 5.1,
       "peak_flop_per_cycle": 16.0,
+      "peak_flop_per_cycle_fp32": 32.0,
       "measured_peak_flop_per_cycle": 15.96,
       "expected_best_kernel": "mippv2_meteorlake_mr4_nr3",
       "expected_best_kernel_crr": "mippv2_meteorlake_mr4_nr3_crr",
       "csv_pattern": "*gemm_results_*meteorlake*_{compiler}.csv",
       "crr_csv_pattern": "*gemm_results_*meteorlake*crr*_{compiler}.csv",
+      "crr_csv_pattern_fp32": "*gemm_results_*meteorlake*crr*fp32*_{compiler}.csv",
       "notes": "Redwood Cove P-core has a 5.10 GHz light-load burst ceiling; sustained 256-bit AVX2 FMA execution operates at 4.78 GHz effective due to thermal/power limits."
     }
   },
@@ -32,22 +36,26 @@
       "cpu_model": "Ryzen 9 7945HX",
       "frequency_ghz": 5.463,
       "peak_flop_per_cycle": 16.0,
+      "peak_flop_per_cycle_fp32": 32.0,
       "measured_peak_flop_per_cycle": 15.88,
       "expected_best_kernel": "mippv2_firestorm_mr4_nr4_fmaddi",
       "expected_best_kernel_crr": "mippv2_firestorm_mr4_nr4_fmaddi_crr",
       "csv_pattern": "*gemm_results_*zen4*_{compiler}.csv",
-      "crr_csv_pattern": "*gemm_results_*zen4*crr*_{compiler}.csv"
+      "crr_csv_pattern": "*gemm_results_*zen4*crr*_{compiler}.csv",
+      "crr_csv_pattern_fp32": "*gemm_results_*zen4*crr*fp32*_{compiler}.csv"
     },
     "zen5": {
       "name": "AMD Zen 5 Strix Point",
       "cpu_model": "Ryzen AI 9 HX 370",
       "frequency_ghz": 5.158,
       "peak_flop_per_cycle": 16.0,
+      "peak_flop_per_cycle_fp32": 32.0,
       "measured_peak_flop_per_cycle": 15.97,
       "expected_best_kernel": "mippv2_firestorm_mr4_nr4_fmaddi",
       "expected_best_kernel_crr": "mippv2_firestorm_mr4_nr4_fmaddi_crr",
       "csv_pattern": "*gemm_results_*zen5*_{compiler}.csv",
       "crr_csv_pattern": "*gemm_results_*zen5*crr*_{compiler}.csv",
+      "crr_csv_pattern_fp32": "*gemm_results_*zen5*crr*fp32*_{compiler}.csv",
       "notes": "Strix Point implements dual 256-bit FPU pipelines (double-pumped 512-bit FMA, 16 DP FLOP/cyc max; 5.158 GHz hardware boost)"
     }
   },
@@ -58,22 +66,26 @@
       "frequency_ghz": 3.036,
       "hardware_max_frequency_ghz": 3.036,
       "peak_flop_per_cycle": 16.0,
+      "peak_flop_per_cycle_fp32": 32.0,
       "measured_peak_flop_per_cycle": 15.97,
       "expected_best_kernel": "mippv2_x60_mr6_nr4_fmaddi",
       "expected_best_kernel_crr": "mippv2_x60_mr6_nr4_fmaddi_crr",
       "csv_pattern": "*gemm_results_*m1*_{compiler}.csv",
-      "crr_csv_pattern": "*gemm_results_*m1*crr*_{compiler}.csv"
+      "crr_csv_pattern": "*gemm_results_*m1*crr*_{compiler}.csv",
+      "crr_csv_pattern_fp32": "*gemm_results_*m1*crr*fp32*_{compiler}.csv"
     },
     "rpi5": {
       "name": "Raspberry Pi 5",
       "cpu_model": "Cortex-A76",
       "frequency_ghz": 2.4,
       "peak_flop_per_cycle": 8.0,
+      "peak_flop_per_cycle_fp32": 16.0,
       "measured_peak_flop_per_cycle": 8.0,
       "expected_best_kernel": "mippv2_a76_mr6_nr3",
       "expected_best_kernel_crr": "mippv2_a76_mr6_nr4_fmaddi_crr",
       "csv_pattern": "*gemm_results_*rpi5*_{compiler}.csv",
-      "crr_csv_pattern": "*gemm_results_*rpi5*crr*_{compiler}.csv"
+      "crr_csv_pattern": "*gemm_results_*rpi5*crr*_{compiler}.csv",
+      "crr_csv_pattern_fp32": "*gemm_results_*rpi5*crr*fp32*_{compiler}.csv"
     }
   },
   "rvv": {
@@ -83,22 +95,26 @@
       "frequency_ghz": 2.4,
       "hardware_max_frequency_ghz": 2.4,
       "peak_flop_per_cycle": 8.0,
+      "peak_flop_per_cycle_fp32": 16.0,
       "measured_peak_flop_per_cycle": 7.942,
       "expected_best_kernel": "mippv2_x100_register_blocked_apack4",
       "expected_best_kernel_crr": "mippv2_x100_register_blocked_apack4_crr",
       "csv_pattern": "*gemm_results_*x100*_{compiler}.csv",
-      "crr_csv_pattern": "*gemm_results_*x100*crr*_{compiler}.csv"
+      "crr_csv_pattern": "*gemm_results_*x100*crr*_{compiler}.csv",
+      "crr_csv_pattern_fp32": "*gemm_results_*x100*crr*fp32*_{compiler}.csv"
     },
     "x60": {
       "name": "SpacemiT X60",
       "cpu_model": "SpacemiT X60",
       "frequency_ghz": 1.6,
       "peak_flop_per_cycle": 8.0,
+      "peak_flop_per_cycle_fp32": 16.0,
       "measured_peak_flop_per_cycle": 8.0,
       "expected_best_kernel": "mippv2_x60_mr6_nr4_fmaddi",
       "expected_best_kernel_crr": "mippv2_a100_mr7_nr4_pipe_crr",
       "csv_pattern": "*gemm_results_*x60*_{compiler}.csv",
-      "crr_csv_pattern": "*gemm_results_*x60*crr*_{compiler}.csv"
+      "crr_csv_pattern": "*gemm_results_*x60*crr*_{compiler}.csv",
+      "crr_csv_pattern_fp32": "*gemm_results_*x60*crr*fp32*_{compiler}.csv"
     },
     "a100": {
       "name": "SpacemiT A100",
@@ -106,11 +122,13 @@
       "frequency_ghz": 2.0,
       "hardware_max_frequency_ghz": 2.0,
       "peak_flop_per_cycle": 8.0,
+      "peak_flop_per_cycle_fp32": 16.0,
       "measured_peak_flop_per_cycle": 7.9785,
       "expected_best_kernel": "mippv2_a100_mr7_nr2_lmul2_pipe",
       "expected_best_kernel_crr": "mippv2_a100_mr7_nr2_lmul2_pipe_crr",
       "csv_pattern": "*gemm_results_*a100*_{compiler}.csv",
-      "crr_csv_pattern": "*gemm_results_*a100*crr*_{compiler}.csv"
+      "crr_csv_pattern": "*gemm_results_*a100*crr*_{compiler}.csv",
+      "crr_csv_pattern_fp32": "*gemm_results_*a100*crr*fp32*_{compiler}.csv"
     }
   }
 }

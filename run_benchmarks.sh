@@ -30,6 +30,7 @@ Options:
   --sizes "N1 N2 ..."     Run specified list of sizes
   -r, --repetitions <N>   Number of independent repetitions per measurement (default: 15)
   --cooldown <sec>        Cooldown pause in seconds after large sizes (default: 2.0)
+  --fp32, --float         Run single-precision (float / FP32) benchmarks
   --validate              Run numerical correctness validation against scalar reference before benchmark
   --likwid                Enable LIKWID Marker API instrumentation (-DGEMMBENCH_ENABLE_LIKWID=ON)
   -o, --output <prefix>   Prefix for result CSV filename (e.g. --output zen4 -> zen4_gemm_results_gcc.csv)
@@ -116,9 +117,14 @@ REPETITIONS=15
 COOLDOWN_SEC=2.0
 ENABLE_LIKWID_FLAG=false
 FAST_MATH=true
+FP32_FLAG=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --fp32|--float|--single)
+            FP32_FLAG=true
+            shift
+            ;;
         --no-fast-math|--strict-ieee)
             FAST_MATH=false
             shift
@@ -473,6 +479,9 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
     if [[ "$FAST_MATH" == "false" ]]; then
         file_suffix="${file_suffix}_strict"
     fi
+    if [[ "$FP32_FLAG" == "true" ]]; then
+        file_suffix="${file_suffix}_fp32"
+    fi
 
     target_dir="${RESULTS_DIR:-results}"
     if [[ -n "${OUTPUT_PREFIX}" ]]; then
@@ -690,6 +699,9 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
                 EXTRA_BENCH_ARGS=()
                 if [[ "$VALIDATE_FLAG" == "true" ]]; then
                     EXTRA_BENCH_ARGS+=(--validate)
+                fi
+                if [[ "$FP32_FLAG" == "true" ]]; then
+                    EXTRA_BENCH_ARGS+=(--fp32)
                 fi
 
                 if [[ "$KERNEL" == *_crr* || "$KERNEL" == "blis_native" ]]; then

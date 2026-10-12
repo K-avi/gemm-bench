@@ -43,23 +43,32 @@ UARCH_COLORS: Dict[str, str] = {
     "a100": "#047857",       # Dark Emerald (SpacemiT A100 RVV)
 }
 
-# Microarchitectural hardware specifications and ceilings
+# Microarchitectural hardware specifications and ceilings (FP64 base, FP32 2x scaled)
 PLATFORM_META: Dict[str, Dict[str, Union[str, float]]] = {
-    "zen4_avx512": {"name": "AMD Zen 4", "simd": "avx512", "isa": "AVX-512", "peak_fc": 16.0, "uarch_id": "zen4"},
-    "zen5_avx512": {"name": "AMD Zen 5", "simd": "avx512", "isa": "AVX-512", "peak_fc": 16.0, "uarch_id": "zen5"},
-    "meteorlake_avx2": {"name": "Intel Meteor Lake", "simd": "avx2", "isa": "AVX2", "peak_fc": 16.0, "uarch_id": "meteorlake"},
-    "skylake_avx2": {"name": "Intel Skylake", "simd": "avx2", "isa": "AVX2", "peak_fc": 16.0, "uarch_id": "skylake"},
-    "m1_neon": {"name": "Apple M1", "simd": "neon", "isa": "NEON", "peak_fc": 16.0, "uarch_id": "m1"},
-    "rpi5_neon": {"name": "Raspberry Pi 5", "simd": "neon", "isa": "NEON", "peak_fc": 8.0, "uarch_id": "rpi5"},
-    "x100_rvv": {"name": "SpacemiT X100", "simd": "rvv", "isa": "RVV 1.0 (256b)", "peak_fc": 8.0, "uarch_id": "x100"},
-    "x60_rvv": {"name": "SpacemiT X60", "simd": "rvv", "isa": "RVV 1.0 (256b)", "peak_fc": 8.0, "uarch_id": "x60"},
-    "a100_rvv": {"name": "SpacemiT A100", "simd": "rvv", "isa": "RVV 1.0 (1024b)", "peak_fc": 8.0, "uarch_id": "a100"},
+    "zen4_avx512": {"name": "AMD Zen 4", "simd": "avx512", "isa": "AVX-512", "peak_fc": 16.0, "peak_fc_fp32": 32.0, "uarch_id": "zen4"},
+    "zen5_avx512": {"name": "AMD Zen 5", "simd": "avx512", "isa": "AVX-512", "peak_fc": 16.0, "peak_fc_fp32": 32.0, "uarch_id": "zen5"},
+    "meteorlake_avx2": {"name": "Intel Meteor Lake", "simd": "avx2", "isa": "AVX2", "peak_fc": 16.0, "peak_fc_fp32": 32.0, "uarch_id": "meteorlake"},
+    "skylake_avx2": {"name": "Intel Skylake", "simd": "avx2", "isa": "AVX2", "peak_fc": 16.0, "peak_fc_fp32": 32.0, "uarch_id": "skylake"},
+    "m1_neon": {"name": "Apple M1", "simd": "neon", "isa": "NEON", "peak_fc": 16.0, "peak_fc_fp32": 32.0, "uarch_id": "m1"},
+    "rpi5_neon": {"name": "Raspberry Pi 5", "simd": "neon", "isa": "NEON", "peak_fc": 8.0, "peak_fc_fp32": 16.0, "uarch_id": "rpi5"},
+    "x100_rvv": {"name": "SpacemiT X100", "simd": "rvv", "isa": "RVV 1.0 (256b)", "peak_fc": 8.0, "peak_fc_fp32": 16.0, "uarch_id": "x100"},
+    "x60_rvv": {"name": "SpacemiT X60", "simd": "rvv", "isa": "RVV 1.0 (256b)", "peak_fc": 8.0, "peak_fc_fp32": 16.0, "uarch_id": "x60"},
+    "a100_rvv": {"name": "SpacemiT A100", "simd": "rvv", "isa": "RVV 1.0 (1024b)", "peak_fc": 8.0, "peak_fc_fp32": 16.0, "uarch_id": "a100"},
 }
 
 # Empirical hardware cache residency boundary (elements in K panel dimension)
 # K <= 128 corresponds to <= 48 KiB working set (L1d cache resident compute bound)
 # K >= 256 spills into L2 cache (memory latency / bandwidth bound)
 L1_CACHE_BOUNDARY_K = 128
+
+
+def get_platform_peak_fc(platform_key: str, precision: str = "fp64") -> float:
+    """Returns the theoretical peak FLOP/cycle ceiling for a given platform and precision."""
+    meta = PLATFORM_META.get(platform_key, {})
+    base = float(meta.get("peak_fc", 16.0))
+    if precision.lower() in ("fp32", "float", "single"):
+        return float(meta.get("peak_fc_fp32", base * 2.0))
+    return base
 
 
 def setup_matplotlib_theme() -> None:
@@ -96,17 +105,47 @@ def setup_matplotlib_theme() -> None:
     })
 
 
-def parse_benchmark_filename(filepath: Union[str, Path]) -> Tuple[str, str, str]:
+def parse_benchmark_filename_full(filepath: Union[str, Path]) -> Tuple[str, str, str, str]:
     """
-    Extracts canonical (platform, format, compiler) from benchmark CSV filename.
-    e.g. 'gemm_results_zen4_avx512_crr_clang.csv' -> ('zen4_avx512', 'crr', 'clang')
+    Extracts (platform, format, compiler, precision) from benchmark CSV filename.
+    e.g. 'gemm_results_zen4_avx512_crr_clang.csv' -> ('zen4_avx512', 'crr', 'clang', 'fp64')
+    e.g. 'gemm_results_meteorlake_avx2_crr_fp32_gcc.csv' -> ('meteorlake_avx2', 'crr', 'gcc', 'fp32')
     """
     stem = Path(filepath).stem
-    m = re.match(r"gemm_results_(.+)_(crr|rrr)_(gcc|clang)$", stem)
+    m = re.match(r"gemm_results_(.+)_(crr|rrr)(?:_(fp32|fp64))?_(gcc|clang)$", stem)
     if m:
-        return m.group(1), m.group(2), m.group(3)
+        platform = m.group(1)
+        layout = m.group(2)
+        precision = m.group(3) if m.group(3) else "fp64"
+        compiler = m.group(4)
+        return platform, layout, compiler, precision
+
     parts = stem.split("_")
     compiler = parts[-1] if parts[-1] in ("gcc", "clang") else "unknown"
-    layout = parts[-2] if parts[-2] in ("crr", "rrr") else "unknown"
-    platform = "_".join(parts[2:-2]) if len(parts) > 4 else "unknown"
+    precision = "fp64"
+    if len(parts) >= 3 and parts[-2] in ("fp32", "fp64"):
+        precision = parts[-2]
+        layout = parts[-3] if parts[-3] in ("crr", "rrr") else "unknown"
+        platform = "_".join(parts[2:-3]) if len(parts) > 5 else "unknown"
+    else:
+        layout = parts[-2] if parts[-2] in ("crr", "rrr") else "unknown"
+        platform = "_".join(parts[2:-2]) if len(parts) > 4 else "unknown"
+
+    return platform, layout, compiler, precision
+
+
+def parse_benchmark_filename(filepath: Union[str, Path]) -> Tuple[str, str, str]:
+    """
+    Extracts canonical (platform, format, compiler) from benchmark CSV filename,
+    ignoring precision tag for backwards-compatibility.
+    e.g. 'gemm_results_zen4_avx512_crr_clang.csv' -> ('zen4_avx512', 'crr', 'clang')
+    e.g. 'gemm_results_zen4_avx512_crr_fp32_clang.csv' -> ('zen4_avx512', 'crr', 'clang')
+    """
+    platform, layout, compiler, _ = parse_benchmark_filename_full(filepath)
     return platform, layout, compiler
+
+
+def detect_precision(filepath_or_name: Union[str, Path]) -> str:
+    """Returns 'fp32' if 'fp32' is present in the path/stem, otherwise 'fp64'."""
+    stem = Path(filepath_or_name).stem.lower()
+    return "fp32" if "fp32" in stem else "fp64"
