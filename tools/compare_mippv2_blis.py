@@ -178,7 +178,7 @@ def _get_platform_rows(summary_df: pd.DataFrame, target_plats: List[str]) -> Lis
     return rows
 
 
-def plot_blis_ratio_comparison(summary_df: pd.DataFrame, out_dir: Path, enable_png: bool = True) -> None:
+def plot_blis_ratio_comparison(summary_df: pd.DataFrame, out_dir: Path, enable_png: bool = True, is_fp32: bool = False) -> None:
     """
     Generates an executive horizontal bar chart of the % of BLIS Peak Reached.
     Uses a 2-panel layout to clearly display standard architectures without squishing them
@@ -220,7 +220,8 @@ def plot_blis_ratio_comparison(summary_df: pd.DataFrame, out_dir: Path, enable_p
     ax_main.set_yticklabels(labels, fontsize=9.5)
     ax_main.invert_yaxis()
     ax_main.set_xlim(0, 125)
-    ax_main.set_xlabel("Sustained DGEMM Performance (% of BLIS Peak Reached)", fontsize=10.5, fontweight="bold")
+    prec_label = "SGEMM" if is_fp32 else "DGEMM"
+    ax_main.set_xlabel(f"Sustained {prec_label} Performance (% of BLIS Peak Reached)", fontsize=10.5, fontweight="bold")
     ax_main.set_title("Standard Architectural Targets (Direct BLIS Equivalent / Hand-Tuned Micro-Kernel)", fontsize=11.5, pad=8)
 
     # Panel 2: A100 Outlier
@@ -237,7 +238,8 @@ def plot_blis_ratio_comparison(summary_df: pd.DataFrame, out_dir: Path, enable_p
         val = r["Ratio_Peak_GFLOPS_pct"]
         m_gf = r["MIPPv2_Peak_GFLOPS"]
         b_gf = r["BLIS_Peak_GFLOPS"]
-        lbl = f"{val:.1f}% ({m_gf:.2f} vs {b_gf:.2f} GFLOP/s) — 3.65× Speedup"
+        speedup = (m_gf / b_gf) if b_gf > 0 else 1.0
+        lbl = f"{val:.1f}% ({m_gf:.2f} vs {b_gf:.2f} GFLOP/s) — {speedup:.2f}× Speedup"
         ax_a100.text(val + 3.0, idx, lbl, va="center", ha="left", color=TEXT_PRIMARY, fontweight="bold", fontsize=9.0)
 
     labels_a100 = [f"{PLATFORM_META.get(p, {}).get('name', p)} ({comp.upper()})" for p, comp, _ in a100_rows]
@@ -245,10 +247,10 @@ def plot_blis_ratio_comparison(summary_df: pd.DataFrame, out_dir: Path, enable_p
     ax_a100.set_yticklabels(labels_a100, fontsize=9.5)
     ax_a100.invert_yaxis()
     ax_a100.set_xlim(0, 420)
-    ax_a100.set_xlabel("Sustained DGEMM Performance (% of BLIS Peak Reached)", fontsize=10.5, fontweight="bold")
+    ax_a100.set_xlabel(f"Sustained {prec_label} Performance (% of BLIS Peak Reached)", fontsize=10.5, fontweight="bold")
     ax_a100.set_title("SpacemiT A100 VLEN=1024b Portability Study (MIPPv2 VLEN auto-scaling vs BLIS 256b X60 fallback)", fontsize=11.5, pad=8)
 
-    fig.suptitle("GEMMBench — MIPPv2 vs BLIS Reference Micro-Kernels Peak DGEMM Ratio", fontsize=14, fontweight="bold", y=0.985)
+    fig.suptitle(f"GEMMBench — MIPPv2 vs BLIS Reference Micro-Kernels Peak {prec_label} Ratio", fontsize=14, fontweight="bold", y=0.985)
     
     svg_path = out_dir / "blis_vs_mippv2_ratio_comparison.svg"
     fig.savefig(svg_path, bbox_inches="tight")
@@ -262,9 +264,9 @@ def plot_blis_ratio_comparison(summary_df: pd.DataFrame, out_dir: Path, enable_p
     plt.close(fig)
 
 
-def plot_flop_per_cycle_comparison(summary_df: pd.DataFrame, out_dir: Path, enable_png: bool = True) -> None:
+def plot_flop_per_cycle_comparison(summary_df: pd.DataFrame, out_dir: Path, enable_png: bool = True, is_fp32: bool = False) -> None:
     """
-    Generates a grouped horizontal bar chart comparing raw Peak DP FLOP/cycle
+    Generates a grouped horizontal bar chart comparing raw Peak FLOP/cycle
     between MIPPv2 and BLIS Native across all targets.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -286,22 +288,31 @@ def plot_flop_per_cycle_comparison(summary_df: pd.DataFrame, out_dir: Path, enab
 
     # Value annotations
     for idx, (m_val, b_val) in enumerate(zip(m_fc, b_fc)):
-        ax.text(m_val + 0.2, idx - bar_h/2, f"{m_val:.2f}", va="center", ha="left", color=TEXT_PRIMARY, fontweight="bold", fontsize=8.5)
-        ax.text(b_val + 0.2, idx + bar_h/2, f"{b_val:.2f}", va="center", ha="left", color="#475569", fontsize=8.5)
+        ax.text(m_val + 0.3, idx - bar_h/2, f"{m_val:.2f}", va="center", ha="left", color=TEXT_PRIMARY, fontweight="bold", fontsize=8.5)
+        ax.text(b_val + 0.3, idx + bar_h/2, f"{b_val:.2f}", va="center", ha="left", color="#475569", fontsize=8.5)
 
-    # Ceiling lines at 8 and 16
-    ax.axvline(8.0, color="#94a3b8", linestyle=":", linewidth=1.2, zorder=2)
-    ax.axvline(16.0, color="#94a3b8", linestyle=":", linewidth=1.2, zorder=2)
-    ax.text(8.0, len(all_rows) - 0.4, "8.0 FLOP/cyc Ceiling", color="#64748b", fontsize=9.0, fontweight="bold", ha="center")
-    ax.text(16.0, len(all_rows) - 0.4, "16.0 FLOP/cyc Ceiling", color="#64748b", fontsize=9.0, fontweight="bold", ha="center")
+    # Ceiling lines
+    if is_fp32:
+        ax.axvline(16.0, color="#94a3b8", linestyle=":", linewidth=1.2, zorder=2)
+        ax.axvline(32.0, color="#94a3b8", linestyle=":", linewidth=1.2, zorder=2)
+        ax.text(16.0, len(all_rows) - 0.4, "16.0 FLOP/cyc Ceiling", color="#64748b", fontsize=9.0, fontweight="bold", ha="center")
+        ax.text(32.0, len(all_rows) - 0.4, "32.0 FLOP/cyc Ceiling", color="#64748b", fontsize=9.0, fontweight="bold", ha="center")
+        ax.set_xlim(0, 36.5)
+        prec_desc = "SP FLOP / cycle"
+    else:
+        ax.axvline(8.0, color="#94a3b8", linestyle=":", linewidth=1.2, zorder=2)
+        ax.axvline(16.0, color="#94a3b8", linestyle=":", linewidth=1.2, zorder=2)
+        ax.text(8.0, len(all_rows) - 0.4, "8.0 FLOP/cyc Ceiling", color="#64748b", fontsize=9.0, fontweight="bold", ha="center")
+        ax.text(16.0, len(all_rows) - 0.4, "16.0 FLOP/cyc Ceiling", color="#64748b", fontsize=9.0, fontweight="bold", ha="center")
+        ax.set_xlim(0, 18.5)
+        prec_desc = "DP FLOP / cycle"
 
     labels_all = [f"{PLATFORM_META.get(p, {}).get('name', p)} ({comp.upper()})" for p, comp, _ in all_rows]
     ax.set_yticks(y_pos)
     ax.set_yticklabels(labels_all, fontsize=9.5)
     ax.invert_yaxis()
-    ax.set_xlim(0, 18.5)
-    ax.set_xlabel("Peak Sustained Compute Density (DP FLOP / cycle)", fontsize=11, fontweight="bold")
-    ax.set_title("Cross-Microarchitecture Sustained Compute Density — MIPPv2 vs BLIS Reference Micro-Kernels", fontsize=13, fontweight="bold", pad=12)
+    ax.set_xlabel(f"Peak Sustained Compute Density ({prec_desc})", fontsize=11, fontweight="bold")
+    ax.set_title(f"Cross-Microarchitecture Sustained Compute Density ({'FP32' if is_fp32 else 'FP64'}) — MIPPv2 vs BLIS Reference Micro-Kernels", fontsize=13, fontweight="bold", pad=12)
 
     legend_patches = [
         Patch(facecolor="#10b981", edgecolor=BORDER_COLOR, label="MIPPv2 Champion"),
@@ -321,7 +332,7 @@ def plot_flop_per_cycle_comparison(summary_df: pd.DataFrame, out_dir: Path, enab
     plt.close(fig)
 
 
-def plot_k_scaling_grid(details: Dict, out_dir: Path, enable_png: bool = True) -> None:
+def plot_k_scaling_grid(details: Dict, out_dir: Path, enable_png: bool = True, is_fp32: bool = False) -> None:
     """
     Generates a 2x4 multipanel grid showing FLOP/cycle scaling over K ∈ [32..1024]
     for both MIPPv2 and BLIS across all 8 microarchitectures.
@@ -335,6 +346,7 @@ def plot_k_scaling_grid(details: Dict, out_dir: Path, enable_png: bool = True) -
     for idx, p in enumerate(grid_plats):
         ax = axes[idx]
         meta = PLATFORM_META.get(p, {"name": p, "simd": "avx2", "peak_fc": 16.0})
+        peak_fc = meta.get("peak_flop_per_cycle_fp32", meta["peak_fc"] * 2.0) if is_fp32 else meta["peak_fc"]
 
         # Pick gcc or clang (prefer gcc, fallback to clang)
         comp = "gcc"
@@ -356,9 +368,12 @@ def plot_k_scaling_grid(details: Dict, out_dir: Path, enable_png: bool = True) -
         ax.plot(ks, b_fc_vals, marker="s", markersize=5.0, linewidth=1.8, linestyle="--", color="#64748b", label="BLIS Native", zorder=3)
 
         # Theoretical peak line
-        ax.axhline(meta["peak_fc"], color="#cbd5e1", linestyle=":", linewidth=1.2, zorder=2)
+        ax.axhline(peak_fc, color="#cbd5e1", linestyle=":", linewidth=1.2, zorder=2)
 
-        ylim_max = 17.5 if meta["peak_fc"] == 16.0 else 9.0
+        if is_fp32:
+            ylim_max = 35.0 if peak_fc >= 32.0 else 18.0
+        else:
+            ylim_max = 17.5 if peak_fc >= 16.0 else 9.0
         ax.set_ylim(0, ylim_max)
 
         # Cache residency threshold (K <= 128 L1d resident compute bound vs K >= 256 L2 spill)
@@ -413,12 +428,13 @@ def plot_k_scaling_grid(details: Dict, out_dir: Path, enable_png: bool = True) -
 # Markdown Report Generation
 # ==============================================================================
 
-def format_markdown_report(summary_df: pd.DataFrame, details: Dict, plot_dir: Optional[Path] = None) -> str:
+def format_markdown_report(summary_df: pd.DataFrame, details: Dict, plot_dir: Optional[Path] = None, is_fp32: bool = False) -> str:
     """Generates a GitHub-flavored Markdown comparative analysis document."""
     lines = []
-    lines.append("# GEMMBench — Comparative Analysis: MIPPv2 vs BLIS Reference Micro-Kernels\n")
-    lines.append("Empirical comparison of sustained in-register compute density and throughput between MIPPv2 champions")
-    lines.append("and hand-tuned BLIS assembly micro-kernels across target microarchitectures.\n")
+    prec_str = "Single-Precision (FP32 / SGEMM)" if is_fp32 else "Double-Precision (FP64 / DGEMM)"
+    lines.append(f"# GEMMBench — Comparative Analysis: MIPPv2 vs BLIS Reference Micro-Kernels ({prec_str})\n")
+    lines.append(f"Empirical comparison of sustained in-register compute density and throughput between MIPPv2 champions")
+    lines.append(f"and hand-tuned BLIS assembly micro-kernels across target microarchitectures in {prec_str}.\n")
 
     if summary_df.empty:
         lines.append("> [!WARNING]\n> No paired MIPPv2 vs BLIS benchmark datasets were found.\n")
@@ -521,21 +537,27 @@ def format_markdown_report(summary_df: pd.DataFrame, details: Dict, plot_dir: Op
 def main():
     parser = argparse.ArgumentParser(description="Compare MIPPv2 champion kernels vs BLIS reference micro-kernels")
     parser.add_argument(
+        "--fp32", "--float",
+        action="store_true",
+        dest="fp32",
+        help="Run analysis on FP32 (SGEMM) datasets instead of default FP64",
+    )
+    parser.add_argument(
         "--input-dir",
         type=str,
-        default="gemm-bench-results/blis_comparison",
-        help="Directory containing benchmark CSV files (default: gemm-bench-results/blis_comparison)",
+        default=None,
+        help="Directory containing benchmark CSV files (default: gemm-bench-results/blis_comparison[_fp32])",
     )
     parser.add_argument(
         "--fallback-crr",
         action="store_true",
-        help="Fallback to gemm-bench-results/crr if blis_comparison is empty",
+        help="Fallback to gemm-bench-results/crr[_fp32] if blis_comparison is empty",
     )
     parser.add_argument(
         "--output-md",
         type=str,
         default=None,
-        help="Path to save generated Markdown report (e.g. blis_vs_mippv2_report.md)",
+        help="Path to save generated Markdown report",
     )
     parser.add_argument(
         "--output-csv",
@@ -546,7 +568,7 @@ def main():
     parser.add_argument(
         "--plot",
         action="store_true",
-        help="Generate publication-grade comparative SVG & PNG plots",
+        help="Generate publication-grade comparative SVG plots",
     )
     parser.add_argument(
         "--plot-dir",
@@ -557,21 +579,32 @@ def main():
     parser.add_argument(
         "--no-png",
         action="store_true",
-        help="Disable PNG raster generation (only generate SVG)",
+        default=True,
+        help="Disable PNG raster generation (only generate SVG, default: True)",
+    )
+    parser.add_argument(
+        "--png",
+        action="store_false",
+        dest="no_png",
+        help="Enable PNG raster generation alongside SVG",
     )
     args = parser.parse_args()
 
-    input_path = Path(args.input_dir)
+    default_input = "gemm-bench-results/blis_comparison_fp32" if args.fp32 else "gemm-bench-results/blis_comparison"
+    input_str = args.input_dir if args.input_dir else default_input
+    input_path = Path(input_str)
+
     if not input_path.exists() or not list(input_path.glob("*.csv")):
-        if args.fallback_crr and Path("gemm-bench-results/crr").exists():
-            input_path = Path("gemm-bench-results/crr")
+        fallback_str = "gemm-bench-results/crr_fp32" if args.fp32 else "gemm-bench-results/crr"
+        if args.fallback_crr and Path(fallback_str).exists():
+            input_path = Path(fallback_str)
             print(f"Notice: Falling back to {input_path}", file=sys.stderr)
         else:
             print(f"Error: Directory '{input_path}' does not exist or contains no CSV files.", file=sys.stderr)
-            print("Run the cluster benchmarks first: ./tools/run_cluster_benchmarks.sh all --crr-only --with-blis", file=sys.stderr)
+            print(f"Run the cluster benchmarks first: ./tools/run_cluster_benchmarks.sh all --crr-only --with-blis {'--fp32' if args.fp32 else ''}", file=sys.stderr)
             sys.exit(1)
 
-    print(f"Loading benchmark datasets from {input_path}...")
+    print(f"Loading benchmark datasets from {input_path} (FP32={args.fp32})...")
     df = load_dataset(input_path)
     if df.empty:
         print("No valid data loaded.", file=sys.stderr)
@@ -581,20 +614,25 @@ def main():
 
     plot_dir_path = None
     if args.plot or args.plot_dir:
-        plot_dir_path = Path(args.plot_dir) if args.plot_dir else input_path / "plots"
+        default_plot_dir = Path("plots_blis_fp32") if args.fp32 else (input_path / "plots")
+        plot_dir_path = Path(args.plot_dir) if args.plot_dir else default_plot_dir
         print(f"\nGenerating publication-grade comparative figures in {plot_dir_path}...")
         enable_png = not args.no_png
-        plot_blis_ratio_comparison(summary_df, plot_dir_path, enable_png=enable_png)
-        plot_flop_per_cycle_comparison(summary_df, plot_dir_path, enable_png=enable_png)
-        plot_k_scaling_grid(details, plot_dir_path, enable_png=enable_png)
+        plot_blis_ratio_comparison(summary_df, plot_dir_path, enable_png=enable_png, is_fp32=args.fp32)
+        plot_flop_per_cycle_comparison(summary_df, plot_dir_path, enable_png=enable_png, is_fp32=args.fp32)
+        plot_k_scaling_grid(details, plot_dir_path, enable_png=enable_png, is_fp32=args.fp32)
 
-    md_report = format_markdown_report(summary_df, details, plot_dir=plot_dir_path)
+    md_report = format_markdown_report(summary_df, details, plot_dir=plot_dir_path, is_fp32=args.fp32)
 
     # Print to console
     print("\n" + md_report)
 
-    if args.output_md:
-        out_p = Path(args.output_md)
+    out_md_path = args.output_md
+    if not out_md_path and args.plot:
+        out_md_path = plot_dir_path / ("blis_fp32_summary_table.md" if args.fp32 else "blis_summary_table.md")
+
+    if out_md_path:
+        out_p = Path(out_md_path)
         out_p.parent.mkdir(parents=True, exist_ok=True)
         out_p.write_text(md_report, encoding="utf-8")
         print(f"\n✓ Markdown report written to {out_p}")

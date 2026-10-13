@@ -122,13 +122,14 @@
       "frequency_ghz": 2.0,
       "hardware_max_frequency_ghz": 2.0,
       "peak_flop_per_cycle": 8.0,
-      "peak_flop_per_cycle_fp32": 16.0,
+      "peak_flop_per_cycle_fp32": 32.0,
       "measured_peak_flop_per_cycle": 7.9785,
       "expected_best_kernel": "mippv2_a100_mr7_nr2_lmul2_pipe",
       "expected_best_kernel_crr": "mippv2_a100_mr7_nr2_lmul2_pipe_crr",
       "csv_pattern": "*gemm_results_*a100*_{compiler}.csv",
       "crr_csv_pattern": "*gemm_results_*a100*crr*_{compiler}.csv",
-      "crr_csv_pattern_fp32": "*gemm_results_*a100*crr*fp32*_{compiler}.csv"
+      "crr_csv_pattern_fp32": "*gemm_results_*a100*crr*fp32*_{compiler}.csv",
+      "notes": "SpacemiT K3 / A100 VPU provisions dual 256-bit FMA units for SEW=16/32 (32 SP FLOP/cycle) but narrows to dual 128-bit units for SEW=64 (8 DP FLOP/cycle), creating a 4x theoretical throughput gap between FP32 and FP64."
     }
   }
 }

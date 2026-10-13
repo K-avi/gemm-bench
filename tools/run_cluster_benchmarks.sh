@@ -256,8 +256,13 @@ fi
 # 1bis. Archivage des résultats antérieurs sur la frontale
 # -----------------------------------------------------------------------------
 target_res_dir="results"
-[[ "$WITH_BLIS" == "true" ]] && target_res_dir="results_blis"
-[[ -n "$FP32_FLAG" ]] && target_res_dir="results_fp32"
+if [[ "$WITH_BLIS" == "true" && -n "$FP32_FLAG" ]]; then
+    target_res_dir="results_blis_fp32"
+elif [[ "$WITH_BLIS" == "true" ]]; then
+    target_res_dir="results_blis"
+elif [[ -n "$FP32_FLAG" ]]; then
+    target_res_dir="results_fp32"
+fi
 echo -e "${BLUE}[+] Nettoyage / Archivage (${target_res_dir}) sur ${FRONT_HOST}...${NC}"
 ssh "$FRONT_HOST" "bash -l -c 'cd ${REMOTE_DIR} && if [ -d ${target_res_dir} ] && [ \"\$(ls -A ${target_res_dir} 2>/dev/null)\" ]; then ARCHIVE_DIR=\"${target_res_dir}_archive_\$(date +%Y%m%d_%H%M%S)\"; mkdir -p \"\$ARCHIVE_DIR\" && mv ${target_res_dir}/* \"\$ARCHIVE_DIR/\" 2>/dev/null || true; echo \"✓ Résultats antérieurs archivés dans \$ARCHIVE_DIR\"; fi && mkdir -p ${target_res_dir}'"
 
@@ -408,8 +413,13 @@ run_target() {
     fi
 
     local results_env=""
-    [[ "$WITH_BLIS" == "true" ]] && results_env="RESULTS_DIR=results_blis "
-    [[ -n "$FP32_FLAG" ]] && results_env="RESULTS_DIR=results_fp32 "
+    if [[ "$WITH_BLIS" == "true" && -n "$FP32_FLAG" ]]; then
+        results_env="RESULTS_DIR=results_blis_fp32 "
+    elif [[ "$WITH_BLIS" == "true" ]]; then
+        results_env="RESULTS_DIR=results_blis "
+    elif [[ -n "$FP32_FLAG" ]]; then
+        results_env="RESULTS_DIR=results_fp32 "
+    fi
 
     local bench_cmd="${pre_cmd} PLATFORM_TAG=${target} ${results_env}${wrapper}./run_benchmarks.sh ${platform} ${target_bench_flags} ${compilers}"
 
@@ -540,7 +550,11 @@ remote_res_dir="results"
 local_crr_dir="gemm-bench-results/crr"
 local_rrr_dir="gemm-bench-results/rrr"
 
-if [[ "$WITH_BLIS" == "true" ]]; then
+if [[ "$WITH_BLIS" == "true" && -n "$FP32_FLAG" ]]; then
+    remote_res_dir="results_blis_fp32"
+    local_crr_dir="gemm-bench-results/blis_comparison_fp32"
+    local_rrr_dir="gemm-bench-results/blis_comparison_rrr_fp32"
+elif [[ "$WITH_BLIS" == "true" ]]; then
     remote_res_dir="results_blis"
     local_crr_dir="gemm-bench-results/blis_comparison"
     local_rrr_dir="gemm-bench-results/blis_comparison_rrr"

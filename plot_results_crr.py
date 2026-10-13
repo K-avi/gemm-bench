@@ -448,6 +448,23 @@ def group_crr_champions_by_family(champions: List[UArchChampionCRR], sort_metric
     return list(reversed(grouped))
 
 
+def group_crr_champions_by_tier_and_family(champions: List[UArchChampionCRR]) -> List[UArchChampionCRR]:
+    """Groups champions primarily by their theoretical peak FLOP/cycle tier (descending)
+    and secondarily by SIMD family, ensuring contiguous tiers for theoretical ceiling lines.
+    """
+    tiers = sorted(list({round(c.spec.peak_flop_per_cycle, 1) for c in champions}), reverse=True)
+    family_order = ["avx512", "avx2", "neon", "rvv"]
+    grouped: List[UArchChampionCRR] = []
+    for tier in tiers:
+        tier_champs = [c for c in champions if np.isclose(c.spec.peak_flop_per_cycle, tier)]
+        for fam in family_order:
+            fam_champs = [c for c in tier_champs if c.spec.simd == fam]
+            fam_champs.sort(key=lambda c: c.peak_flop_per_cycle, reverse=True)
+            grouped.extend(fam_champs)
+
+    return list(reversed(grouped))
+
+
 def plot_crr_cross_uarch_efficiency(champions: List[UArchChampionCRR], output_path: Path, is_fp32: bool = False) -> None:
     """Generates an executive horizontal ranking bar chart grouped by SIMD family for CRR micro-kernels."""
     fig, ax = plt.subplots(figsize=(14.0, 7.5))
@@ -574,7 +591,7 @@ def plot_crr_cross_uarch_flop_per_cycle(champions: List[UArchChampionCRR], outpu
     """Generates comparison in raw FLOP/cycle grouped by SIMD family for CRR micro-kernels."""
     fig, ax = plt.subplots(figsize=(14.0, 7.5))
 
-    sorted_champs = group_crr_champions_by_family(champions, sort_metric="flop_cycle")
+    sorted_champs = group_crr_champions_by_tier_and_family(champions)
     y_positions = np.arange(len(sorted_champs))
     bar_height = 0.58
 

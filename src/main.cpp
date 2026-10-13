@@ -753,8 +753,14 @@ void runBenchmark(BenchConfig &cfg) {
   const size_t simd_width = cfg.packet_size * cfg.lmul;
 
   if (!cfg.legacy_mode) {
-    if (cfg.M == 0) cfg.M = desc.MR;
-    if (cfg.N == 0) cfg.N = (desc.NR > 0) ? desc.NR : (desc.NR_vec * simd_width);
+    if (cfg.M == 0) cfg.M = (cfg.fp32 && desc.MR_fp32 > 0) ? desc.MR_fp32 : desc.MR;
+    if (cfg.N == 0) {
+      if (cfg.fp32 && desc.NR_fp32 > 0) {
+        cfg.N = desc.NR_fp32;
+      } else {
+        cfg.N = (desc.NR > 0) ? desc.NR : (desc.NR_vec * simd_width);
+      }
+    }
     if (cfg.K == 0) cfg.K = 128;
   } else {
     if (cfg.M == 0) cfg.M = 32;

@@ -53,7 +53,7 @@ PLATFORM_META: Dict[str, Dict[str, Union[str, float]]] = {
     "rpi5_neon": {"name": "Raspberry Pi 5", "simd": "neon", "isa": "NEON", "peak_fc": 8.0, "peak_fc_fp32": 16.0, "uarch_id": "rpi5"},
     "x100_rvv": {"name": "SpacemiT X100", "simd": "rvv", "isa": "RVV 1.0 (256b)", "peak_fc": 8.0, "peak_fc_fp32": 16.0, "uarch_id": "x100"},
     "x60_rvv": {"name": "SpacemiT X60", "simd": "rvv", "isa": "RVV 1.0 (256b)", "peak_fc": 8.0, "peak_fc_fp32": 16.0, "uarch_id": "x60"},
-    "a100_rvv": {"name": "SpacemiT A100", "simd": "rvv", "isa": "RVV 1.0 (1024b)", "peak_fc": 8.0, "peak_fc_fp32": 16.0, "uarch_id": "a100"},
+    "a100_rvv": {"name": "SpacemiT A100", "simd": "rvv", "isa": "RVV 1.0 (1024b)", "peak_fc": 8.0, "peak_fc_fp32": 32.0, "uarch_id": "a100"},
 }
 
 # Empirical hardware cache residency boundary (elements in K panel dimension)
