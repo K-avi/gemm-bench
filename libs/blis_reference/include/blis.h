@@ -27,8 +27,17 @@ typedef struct cntx_s {
 #define restrict __restrict__
 
 #define bli_auxinfo_next_a(data) ((data) ? ((const auxinfo_t*)(data))->next_a : NULL)
-#define bli_auxinfo_next_b(data) ((data) ? ((const auxinfo_t*)(data))->next_b : NULL)
-#define bli_cntx_get_blksz_def_dt(dt, bs, cntx) ((dim_t)8)
+#define BLIS_FLOAT  0
+#define BLIS_SINGLE 0
+#define BLIS_DOUBLE 2
+
+#define BLIS_MR 0
+#define BLIS_NR 1
+
+// On SpacemiT X60 (VLEN=256b = 32 bytes):
+// For Double precision: MR = 2 * (32 / sizeof(double)) = 8
+// For Single precision: MR = 2 * (32 / sizeof(float))  = 16
+#define bli_cntx_get_blksz_def_dt(dt, bs, cntx) (((dt) == BLIS_DOUBLE) ? (dim_t)8 : (dim_t)16)
 #define bli_rvv_get_vlen() ((uint64_t)32)
 
 // Complex-transpose helpers (no-op when native tile layout matches)

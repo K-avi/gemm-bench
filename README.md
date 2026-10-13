@@ -62,14 +62,14 @@ The table below presents execution unit pipeline saturation with rated system th
 
 ### 3. Native BLIS Assembly vs. Portable MIPPv2 C++ Comparison
 
-To establish a reference against industry-standard hand-tuned kernels, GEMMBench incorporates comparison against assembly microkernels from the [BLIS framework](https://github.com/flame/blis):
+To establish a reference against industry-standard hand-tuned kernels, GEMMBench incorporates comparison against reference assembly microkernels from the upstream [FLAME BLIS framework](https://github.com/flame/blis) and community ports ([Stepan Nassyr's SpacemiT X60 port](https://github.com/stepannassyr/blis/tree/x60/kernels)):
 
-| Architecture / SIMD | Native BLIS Reference Kernel | Geometry ($M_R \times N_R$) | Implementation |
-| :--- | :--- | :---: | :--- |
-| **x86-64 AVX-512** (Zen 4, Zen 5) | `skx_d16x14.c` | $16 \times 14$ | Inline GNU assembly, 32 ZMM registers |
-| **x86-64 AVX2** (Meteor Lake, Skylake) | `haswell_d6x8.c` | $6 \times 8$ | Inline GNU assembly, 16 YMM registers |
-| **AArch64 NEON** (M1, Cortex-A76) | `armv8a_d6x8.c` | $6 \times 8$ | Inline GNU assembly, 32 V-registers |
-| **RISC-V Vector 1.0** (SpacemiT X60) | `dgemm_x60_2vx14.c` | $2\text{v} \times 14$ ($8 \times 14$) | Inline assembly with genetic algorithm scheduling |
+| Architecture / SIMD | Precision | Reference Assembly Kernel | Geometry ($M_R \times N_R$) | Source Repository & Attribution |
+| :--- | :---: | :--- | :---: | :--- |
+| **x86-64 AVX-512** (Zen 4, Zen 5) | DP / SP | `skx_d16x14.c` / `skx_s32x12.c` | $16 \times 14$ / $32 \times 12$ | [flame/blis](https://github.com/flame/blis/tree/a8037cfc4330030c726efaec1ffeb1f93d468aa3) (`a8037cf`, Upstream) |
+| **x86-64 AVX2** (Meteor Lake, Skylake) | DP / SP | `haswell_d6x8.c` (`d6x8` / `s6x16`) | $6 \times 8$ / $6 \times 16$ | [flame/blis](https://github.com/flame/blis/tree/a8037cfc4330030c726efaec1ffeb1f93d468aa3) (`a8037cf`, Upstream / AMD) |
+| **AArch64 NEON** (M1, Cortex-A76) | DP / SP | `armv8a_d6x8.c` (`d6x8` / `s8x12`) | $6 \times 8$ / $8 \times 12$ | [flame/blis](https://github.com/flame/blis/tree/a8037cfc4330030c726efaec1ffeb1f93d468aa3) (`a8037cf`, Upstream) |
+| **RISC-V Vector 1.0** (SpacemiT X60) | DP / SP | `dgemm_x60_2vx14.c` / `sgemm_x60_2vx14.c` | $8 \times 14$ / $16 \times 14$ | [stepannassyr/blis (`x60`)](https://github.com/stepannassyr/blis/tree/6ffc1d35fcafe74788b2aeaf00d5792d2618e0b9/kernels/x60) (`6ffc1d3`, Stepan Nassyr) |
 
 #### Comparative Performance Across Microarchitectures
 
@@ -248,8 +248,11 @@ Refer to the step-by-step guide: [**Developer Tutorial: Adding a New Microkernel
 
 ---
 
-## Acknowledgments
+## Acknowledgments & Third-Party Credits
 
+- **The FLAME Project / BLIS** ([flame/blis](https://github.com/flame/blis)): The University of Texas at Austin and contributors for the open-source BLIS framework and the hand-tuned x86-64 (AVX2, AVX-512) and AArch64 (NEON) reference assembly microkernels (tracked commit [`a8037cf`](https://github.com/flame/blis/commit/a8037cfc4330030c726efaec1ffeb1f93d468aa3)).
+- **Stepan Nassyr** ([@stepannassyr](https://github.com/stepannassyr)): For porting BLIS to RISC-V Vector 1.0, and creating/tuning the dedicated SpacemiT X60 assembly microkernels (`dgemm_x60_2vx14.c`, `sgemm_x60_2vx14.c`) via `asmgen-gemm` in the [`stepannassyr/blis`](https://github.com/stepannassyr/blis/tree/x60/kernels) repository (`x60` branch, tracked commit [`6ffc1d3`](https://github.com/stepannassyr/blis/commit/6ffc1d35fcafe74788b2aeaf00d5792d2618e0b9)).
+- **MIPP / MIPPv2**: Adrien Cassagne and the AFF3CT / LIP6 team for the MyIntrinsics++ portable vectorization wrapper.
 - **Adrien Cassagne** ([@kouchy](https://github.com/kouchy/)) for access to the single-board computers (SBCs) and nodes on the [Dalek Cluster](https://dalek.proj.lip6.fr/) (*"Dalek: An Unconventional and Energy-Aware Heterogeneous Cluster"*, [arXiv:2508.10481](https://arxiv.org/abs/2508.10481)).
 - **SpacemiT**, for the [SpacemiT K3 Technical Whitepaper](https://forum.spacemit.com/uploads/short-url/60aJ8cYNmrFWqHn4ddwwSzMLjlY.pdf).
 - **camel-cdr**, for the [RVV Benchmark Results](https://camel-cdr.github.io/rvv-bench-results/index.html) project.

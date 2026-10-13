@@ -1,5 +1,21 @@
 #pragma once
 
+/**
+ * BLIS Native Microkernel C++ Adapter
+ *
+ * Provides typed declarations and dispatching to standalone reference assembly
+ * microkernels sourced from:
+ *   - RISC-V Vector 1.0 (SpacemiT X60):
+ *       Stepan Nassyr (https://github.com/stepannassyr/blis/tree/x60, commit 6ffc1d3)
+ *       - bli_dgemm_x60_2vx14_2u (FP64 8x14)
+ *       - bli_sgemm_x60_2vx14_2u (FP32 16x14)
+ *   - x86-64 (AVX-512, AVX2) and AArch64 (NEON):
+ *       Upstream FLAME BLIS (https://github.com/flame/blis, commit a8037cf)
+ *       - bli_dgemm_skx_asm_16x14, bli_sgemm_skx_asm_32x12_l2
+ *       - bli_dgemm_haswell_asm_6x8, bli_sgemm_haswell_asm_6x16
+ *       - bli_dgemm_armv8a_asm_6x8, bli_sgemm_armv8a_asm_8x12
+ */
+
 #include "StorageType.h"
 #include "Alloc.h"
 

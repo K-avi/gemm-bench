@@ -251,6 +251,7 @@ def plot_blis_ratio_comparison(summary_df: pd.DataFrame, out_dir: Path, enable_p
     ax_a100.set_title("SpacemiT A100 VLEN=1024b Portability Study (MIPPv2 VLEN auto-scaling vs BLIS 256b X60 fallback)", fontsize=11.5, pad=8)
 
     fig.suptitle(f"GEMMBench — MIPPv2 vs BLIS Reference Micro-Kernels Peak {prec_label} Ratio", fontsize=14, fontweight="bold", y=0.985)
+    fig.text(0.5, 0.005, "Reference microkernels: flame/blis (x86/ARM) & stepannassyr/blis (RVV X60)", ha="center", fontsize=8.5, color="#64748b", fontstyle="italic")
     
     svg_path = out_dir / "blis_vs_mippv2_ratio_comparison.svg"
     fig.savefig(svg_path, bbox_inches="tight")
@@ -319,6 +320,7 @@ def plot_flop_per_cycle_comparison(summary_df: pd.DataFrame, out_dir: Path, enab
         Patch(facecolor="#64748b", edgecolor=BORDER_COLOR, hatch="//", label="BLIS Native Reference"),
     ]
     ax.legend(handles=legend_patches, loc="lower right", framealpha=0.95)
+    fig.text(0.5, 0.005, "Reference microkernels: flame/blis (x86/ARM) & stepannassyr/blis (RVV X60)", ha="center", fontsize=8.5, color="#64748b", fontstyle="italic")
 
     svg_path = out_dir / "blis_vs_mippv2_flop_per_cycle_comparison.svg"
     fig.savefig(svg_path, bbox_inches="tight")
@@ -411,6 +413,7 @@ def plot_k_scaling_grid(details: Dict, out_dir: Path, enable_png: bool = True, i
 
     fig.suptitle("Scaling Across Panel Depth K ∈ [32, 1024] — MIPPv2 vs BLIS Reference Micro-Kernels", fontsize=14, fontweight="bold", y=0.98)
     plt.subplots_adjust(top=0.91, bottom=0.09, left=0.06, right=0.98, hspace=0.28, wspace=0.22)
+    fig.text(0.5, 0.015, "Reference microkernels: flame/blis (x86/ARM) & stepannassyr/blis (RVV X60)", ha="center", fontsize=8.5, color="#64748b", fontstyle="italic")
 
     svg_path = out_dir / "blis_vs_mippv2_k_scaling_grid.svg"
     fig.savefig(svg_path, bbox_inches="tight")
@@ -526,6 +529,12 @@ def format_markdown_report(summary_df: pd.DataFrame, details: Dict, plot_dir: Op
                 f"**{r:.1f}%** | {entry['MIPPv2_FC']:.2f} | {entry['BLIS_FC']:.2f} | {adv} |"
             )
         lines.append("")
+
+    lines.append("\n---\n")
+    lines.append("## 5. Reference Assembly Kernels Provenance & Acknowledgements\n")
+    lines.append("The hand-tuned assembly microkernels used as baseline references in this benchmark originate from:\n")
+    lines.append("- **RISC-V Vector 1.0 (SpacemiT X60):** Authored and tuned by **Stepan Nassyr** via genetic loop exploration (`asmgen-gemm`), available in the [`stepannassyr/blis`](https://github.com/stepannassyr/blis/tree/x60/kernels) repository (`x60` branch, commit [`6ffc1d3`](https://github.com/stepannassyr/blis/commit/6ffc1d35fcafe74788b2aeaf00d5792d2618e0b9)).")
+    lines.append("- **x86-64 (AVX2, AVX-512) & AArch64 (NEON):** Sourced from the official upstream **FLAME BLIS** project ([`flame/blis`](https://github.com/flame/blis)), maintained by The University of Texas at Austin and contributors (commit [`a8037cf`](https://github.com/flame/blis/commit/a8037cfc4330030c726efaec1ffeb1f93d468aa3), based on BLIS 2.1).\n")
 
     return "\n".join(lines)
 

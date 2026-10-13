@@ -1,5 +1,14 @@
 #pragma once
 
+/**
+ * BLIS Native Microkernel Invocation Methods
+ *
+ * Implements high-level microkernel execution wrappers for CRR and CRC layouts
+ * targeting hand-tuned BLIS reference kernels:
+ *   - Stepan Nassyr (https://github.com/stepannassyr/blis/tree/x60/kernels) for RVV 1.0 (X60)
+ *   - Upstream FLAME BLIS (https://github.com/flame/blis) for x86-64 and AArch64
+ */
+
 #ifdef GEMMBENCH_HAS_BLIS
 
 // CRR Variant: A is PackedColMajor, B is PackedRowMajor, C is PackedRowMajor

@@ -4,6 +4,11 @@
    An object-based framework for developing high-performance BLAS-like
    libraries.
 
+   Source: Upstream FLAME BLIS (https://github.com/flame/blis)
+   Original path: kernels/skx/3/bli_sgemm_skx_asm_32x12_l2.c
+   Commit: a8037cfc4330030c726efaec1ffeb1f93d468aa3
+   Project: The FLAME Project, The University of Texas at Austin
+
    Copyright (C) 2014, The University of Texas at Austin
 
    Redistribution and use in source and binary forms, with or without
