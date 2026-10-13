@@ -27,6 +27,7 @@ typedef struct cntx_s {
 #define restrict __restrict__
 
 #define bli_auxinfo_next_a(data) ((data) ? ((const auxinfo_t*)(data))->next_a : NULL)
+#define bli_auxinfo_next_b(data) ((data) ? ((const auxinfo_t*)(data))->next_b : NULL)
 #define BLIS_FLOAT  0
 #define BLIS_SINGLE 0
 #define BLIS_DOUBLE 2
