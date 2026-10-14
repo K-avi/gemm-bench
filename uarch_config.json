@@ -112,6 +112,7 @@
       "measured_peak_flop_per_cycle": 8.0,
       "expected_best_kernel": "mippv2_x60_mr6_nr4_fmaddi",
       "expected_best_kernel_crr": "mippv2_a100_mr7_nr4_pipe_crr",
+      "expected_best_kernel_crr_fp32": "mippv2_x60_mr6_nr4_fmaddi_crr",
       "csv_pattern": "*gemm_results_*x60*_{compiler}.csv",
       "crr_csv_pattern": "*gemm_results_*x60*crr*_{compiler}.csv",
       "crr_csv_pattern_fp32": "*gemm_results_*x60*crr*fp32*_{compiler}.csv"

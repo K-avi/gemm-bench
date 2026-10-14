@@ -5,14 +5,24 @@ CSV_PREFIX="gemm_results_rvv_x60"
 DEFAULT_VERSION="rvv"
 DEFAULT_PIN_CORE="1"
 
-# NOTE: The A100 mr7_nr4_pipe kernel is the empirical champion on X60 despite
-# being designed for the A100 core. Both share VLEN=256 and the wider 7×4 tile
-# outperforms the X60-native 6×4 tile on this in-order pipeline.
+# NOTE: For FP64, the A100 mr7_nr4_pipe kernel is the empirical champion on X60
+# despite being designed for the A100 core (both share VLEN=256).
+# For FP32, the 7×4 tile (7×32 floats) causes severe vector register pressure (28 accumulators / 32),
+# so the X60-native 6×4 tile (24 accumulators, leaving 8 regs for loads/staging) is the FP32 champion.
 # No Clang results: no LLVM version with functional RVV support on this platform.
 DEFAULT_KERNELS=(
     mippv2_a100_mr7_nr4_pipe
     mippv2_a100_mr7_nr4_pipe_crr
 )
+
+platform_setup() {
+    if [[ "${FP32_FLAG:-false}" == "true" ]]; then
+        DEFAULT_KERNELS=(
+            mippv2_x60_mr6_nr4_fmaddi
+            mippv2_x60_mr6_nr4_fmaddi_crr
+        )
+    fi
+}
 
 ALL_KERNELS=(
     mippv2_a100_mr7_nr4_pipe

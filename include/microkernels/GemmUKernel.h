@@ -173,7 +173,7 @@ inline constexpr KernelDescriptor kernelTable[] = {
 #elif defined(GEMMBENCH_BLIS_SKX)
     {UKernelType::blis_native, "blis_native", CRC, 64, 16, 0, 14, 32, 12},
 #elif defined(GEMMBENCH_BLIS_ARMV8A)
-    {UKernelType::blis_native, "blis_native", CRR, 64, 6, 2, 8, 8, 12},
+    {UKernelType::blis_native, "blis_native", CRC, 64, 6, 2, 8, 8, 12},
 #elif defined(GEMMBENCH_BLIS_X60)
     {UKernelType::blis_native, "blis_native", CRC, 64, 8, 0, 14, 16, 14},
 #else

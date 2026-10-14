@@ -43,7 +43,7 @@ from matplotlib.patches import Patch
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from gemmbench_common import (
     LIGHT_BG, CARD_BG, BORDER_COLOR, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, GRID_COLOR,
-    SIMD_FAMILY_COLORS, PLATFORM_META, L1_CACHE_BOUNDARY_K,
+    SIMD_FAMILY_COLORS, PLATFORM_META, L1_CACHE_BOUNDARY_K, get_platform_peak_fc,
     setup_matplotlib_theme, parse_benchmark_filename as parse_filename
 )
 
@@ -273,7 +273,15 @@ def plot_flop_per_cycle_comparison(summary_df: pd.DataFrame, out_dir: Path, enab
     out_dir.mkdir(parents=True, exist_ok=True)
     fig, ax = plt.subplots(figsize=(14.0, 8.5))
 
-    ordered_plats = ["zen4_avx512", "zen5_avx512", "meteorlake_avx2", "m1_neon", "rpi5_neon", "x100_rvv", "x60_rvv", "a100_rvv"]
+    if is_fp32:
+        # Group targets by theoretical peak: 32.0 FLOP/cycle tier, then 16.0 FLOP/cycle tier
+        ordered_plats = [
+            "zen4_avx512", "zen5_avx512", "meteorlake_avx2", "m1_neon", "a100_rvv",
+            "rpi5_neon", "x100_rvv", "x60_rvv"
+        ]
+    else:
+        ordered_plats = ["zen4_avx512", "zen5_avx512", "meteorlake_avx2", "m1_neon", "rpi5_neon", "x100_rvv", "x60_rvv", "a100_rvv"]
+
     all_rows = _get_platform_rows(summary_df, ordered_plats)
     y_pos = np.arange(len(all_rows))
     bar_h = 0.35
@@ -292,19 +300,32 @@ def plot_flop_per_cycle_comparison(summary_df: pd.DataFrame, out_dir: Path, enab
         ax.text(m_val + 0.3, idx - bar_h/2, f"{m_val:.2f}", va="center", ha="left", color=TEXT_PRIMARY, fontweight="bold", fontsize=8.5)
         ax.text(b_val + 0.3, idx + bar_h/2, f"{b_val:.2f}", va="center", ha="left", color="#475569", fontsize=8.5)
 
-    # Ceiling lines
+    # Ceiling lines and Tier annotations
     if is_fp32:
         ax.axvline(16.0, color="#94a3b8", linestyle=":", linewidth=1.2, zorder=2)
         ax.axvline(32.0, color="#94a3b8", linestyle=":", linewidth=1.2, zorder=2)
-        ax.text(16.0, len(all_rows) - 0.4, "16.0 FLOP/cyc Ceiling", color="#64748b", fontsize=9.0, fontweight="bold", ha="center")
-        ax.text(32.0, len(all_rows) - 0.4, "32.0 FLOP/cyc Ceiling", color="#64748b", fontsize=9.0, fontweight="bold", ha="center")
+        ax.text(16.0, -0.6, "16.0 FLOP/cyc Ceiling", color="#64748b", fontsize=9.0, fontweight="bold", ha="center")
+        ax.text(32.0, -0.6, "32.0 FLOP/cyc Ceiling", color="#64748b", fontsize=9.0, fontweight="bold", ha="center")
+
+        sep_y = None
+        for idx in range(len(all_rows) - 1):
+            p1 = all_rows[idx][0]
+            p2 = all_rows[idx + 1][0]
+            if get_platform_peak_fc(p1, "fp32") == 32.0 and get_platform_peak_fc(p2, "fp32") == 16.0:
+                sep_y = idx + 0.5
+                break
+        if sep_y is not None:
+            ax.axhline(sep_y, color="#94a3b8", linestyle="--", linewidth=1.0, alpha=0.7, zorder=2)
+            ax.text(36.0, sep_y - 0.35, "▲ Theoretical Peak: 32.0 FLOP/cycle", color="#64748b", fontsize=8.5, fontweight="bold", fontstyle="italic", ha="right", va="bottom")
+            ax.text(36.0, sep_y + 0.35, "▼ Theoretical Peak: 16.0 FLOP/cycle", color="#64748b", fontsize=8.5, fontweight="bold", fontstyle="italic", ha="right", va="top")
+
         ax.set_xlim(0, 36.5)
         prec_desc = "SP FLOP / cycle"
     else:
         ax.axvline(8.0, color="#94a3b8", linestyle=":", linewidth=1.2, zorder=2)
         ax.axvline(16.0, color="#94a3b8", linestyle=":", linewidth=1.2, zorder=2)
-        ax.text(8.0, len(all_rows) - 0.4, "8.0 FLOP/cyc Ceiling", color="#64748b", fontsize=9.0, fontweight="bold", ha="center")
-        ax.text(16.0, len(all_rows) - 0.4, "16.0 FLOP/cyc Ceiling", color="#64748b", fontsize=9.0, fontweight="bold", ha="center")
+        ax.text(8.0, -0.6, "8.0 FLOP/cyc Ceiling", color="#64748b", fontsize=9.0, fontweight="bold", ha="center")
+        ax.text(16.0, -0.6, "16.0 FLOP/cyc Ceiling", color="#64748b", fontsize=9.0, fontweight="bold", ha="center")
         ax.set_xlim(0, 18.5)
         prec_desc = "DP FLOP / cycle"
 
@@ -312,6 +333,7 @@ def plot_flop_per_cycle_comparison(summary_df: pd.DataFrame, out_dir: Path, enab
     ax.set_yticks(y_pos)
     ax.set_yticklabels(labels_all, fontsize=9.5)
     ax.invert_yaxis()
+    ax.set_ylim(len(all_rows) - 0.2, -1.2)
     ax.set_xlabel(f"Peak Sustained Compute Density ({prec_desc})", fontsize=11, fontweight="bold")
     ax.set_title(f"Cross-Microarchitecture Sustained Compute Density ({'FP32' if is_fp32 else 'FP64'}) — MIPPv2 vs BLIS Reference Micro-Kernels", fontsize=13, fontweight="bold", pad=12)
 
@@ -348,7 +370,7 @@ def plot_k_scaling_grid(details: Dict, out_dir: Path, enable_png: bool = True, i
     for idx, p in enumerate(grid_plats):
         ax = axes[idx]
         meta = PLATFORM_META.get(p, {"name": p, "simd": "avx2", "peak_fc": 16.0})
-        peak_fc = meta.get("peak_flop_per_cycle_fp32", meta["peak_fc"] * 2.0) if is_fp32 else meta["peak_fc"]
+        peak_fc = get_platform_peak_fc(p, "fp32" if is_fp32 else "fp64")
 
         # Pick gcc or clang (prefer gcc, fallback to clang)
         comp = "gcc"
@@ -461,8 +483,11 @@ def format_markdown_report(summary_df: pd.DataFrame, details: Dict, plot_dir: Op
     lines.append("## 1. Symmetric Microarchitectural Comparison (Direct Micro-Kernel Equivalents)\n")
     lines.append("> [!NOTE]")
     lines.append("> **Methodological Scope:**")
-    lines.append("> - **In-Register Scope:** This benchmark strictly measures in-register compute saturation ($M_R \\times N_R \\times K$) on hot L1 cache panels, isolating FMA pipeline throughput without end-to-end DGEMM cache blocking (GotoBLAS $J_C, P_C, I_C$), dynamic packing overheads, or fringe tiles.")
-    lines.append("> - **Architectural Symmetry:** Evaluates targets where BLIS provides a native, ISA-matched microkernel (AVX-512, AVX2, NEON, RVV 256b).\n")
+    prec_gemm = "SGEMM" if is_fp32 else "DGEMM"
+    lines.append(f"> - **In-Register Scope:** This benchmark strictly measures in-register compute saturation ($M_R \\times N_R \\times K$) on hot L1 cache panels, isolating FMA pipeline throughput without end-to-end {prec_gemm} cache blocking (GotoBLAS $J_C, P_C, I_C$), dynamic packing overheads, or fringe tiles.")
+    lines.append("> - **Architectural Symmetry:** Evaluates targets where BLIS provides a native, ISA-matched microkernel (AVX-512, AVX2, NEON, RVV 256b).")
+    lines.append("> - **Native Epilogue Layout Alignment:** Each microkernel is evaluated against its optimal hardware storage layout: MIPPv2 writes $C$ in row-major (`CRR`), while BLIS writes $C$ in native column-major (`CRC` on SKX, X60, and ARMv8A) to ensure both frameworks leverage contiguous vector stores and avoid scalar scatter/gather epilogue distortion.")
+    lines.append("> - **L1d/L2 Working Set Boundary:** While $K \\in [32, 128]$ fits entirely within L1d cache, $K \\ge 256$ spills the packed panel $B$ ($W_B = K \\times N_R \\times 4\\text{ bytes}$) into L2 cache (e.g. 64–256 KiB on AVX-512 with $N_R=64$), testing sustained L2 streaming throughput rather than pure in-register FMA saturation.\n")
     lines.append("| Microarchitecture | Compiler | Layout | MIPPv2 Champion | MIPPv2 (GFLOP/s) | BLIS (GFLOP/s) | **% of BLIS Peak** | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | Status |")
     lines.append("| :--- | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |")
 
@@ -481,22 +506,24 @@ def format_markdown_report(summary_df: pd.DataFrame, details: Dict, plot_dir: Op
         )
 
     if not symmetric_df.empty and (symmetric_df["Platform"] == "x100_rvv").any():
-        lines.append("\n*\\*Note: On SpacemiT X100 (RVV 256b, OOO dual-issue), BLIS runs the in-order X60 microkernel (`dgemm_x60_2vx14.c`).*")
+        ukr_fn = "sgemm_x60_2vx14.c" if is_fp32 else "dgemm_x60_2vx14.c"
+        lines.append(f"\n*\\*Note: On SpacemiT X100 (RVV 256b, OOO dual-issue), BLIS runs the in-order X60 microkernel (`{ukr_fn}`).*")
 
     if not a100_df.empty:
         lines.append("\n---\n")
         lines.append("## 2. VLEN Agility & Cross-Vector Portability Study (SpacemiT A100 VLEN=1024b)\n")
         lines.append("> [!IMPORTANT]")
         lines.append("> **Asymmetry Disclosure & Portability Framing:**")
-        lines.append("> - Upstream BLIS provides no native 1024-bit vector microkernel; executing BLIS on A100 defaults to the 256-bit in-order X60 assembly kernel (`dgemm_x60_2vx14.c`, $8 \\times 14$), utilizing only 25% of vector capacity per iteration.")
-        lines.append("> - MIPPv2's parameterized template vectorization automatically adapts to the 1024-bit VLEN, sustaining **13.36 GFLOP/s (6.71 FLOP/cycle, ~84% of machine peak)**.")
+        ref_ukr = "sgemm_x60_2vx14.c, 16×14" if is_fp32 else "dgemm_x60_2vx14.c, 8×14"
+        lines.append(f"> - Upstream BLIS provides no native 1024-bit vector microkernel; executing BLIS on A100 defaults to the 256-bit in-order X60 assembly kernel (`{ref_ukr}`), utilizing only 25% of vector capacity per iteration.")
+        lines.append(f"> - MIPPv2's parameterized template vectorization automatically adapts to the 1024-bit VLEN across precision targets.")
         lines.append("> - This comparison is presented not as a peer algorithmic match, but as an empirical demonstration of C++ template agility across variable vector lengths versus static assembly fragility.\n")
         lines.append("| Microarchitecture | Compiler | MIPPv2 Champion | MIPPv2 Peak (GFLOP/s) | MIPPv2 (FLOP/cyc) | Hardware Peak (FLOP/cyc) | % Machine Peak | BLIS Fallback (X60 asm GFLOP/s) | Relative Speedup |")
         lines.append("| :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |")
 
         for _, row in a100_df.iterrows():
             m_name = row["MIPPv2_Champion"].replace("mippv2_", "")
-            peak_fc = PLATFORM_META.get(row["Platform"], {}).get("peak_fc", 8.0)
+            peak_fc = get_platform_peak_fc(row["Platform"], "fp32" if is_fp32 else "fp64")
             pct_machine = (row["MIPPv2_Peak_FC"] / peak_fc * 100.0) if peak_fc > 0 else 0.0
             ratio = row["Ratio_Peak_GFLOPS_pct"]
             speedup = ratio / 100.0
