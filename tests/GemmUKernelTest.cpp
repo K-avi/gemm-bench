@@ -923,10 +923,22 @@ template <typename T> static void testGemmNonSquare() {
               gemm.gemm_mippv2_meteorlake_mr4_nr3(A, B, C_test));
   TEST_KERNEL("MIPPv2 Cortex-A76 MR6 NR3",
               gemm.gemm_mippv2_a76_mr6_nr3(A, B, C_test));
+  TEST_KERNEL("MIPPv2 Cortex-A76 MR6 NR4 fmaddi",
+              gemm.gemm_mippv2_a76_mr6_nr4_fmaddi(A, B, C_test));
+  TEST_KERNEL("MIPPv2 Zen 4 MR4 NR4 fmaddi",
+              gemm.gemm_mippv2_zen4_mr4_nr4_fmaddi(A, B, C_test));
+  TEST_KERNEL("MIPPv2 Firestorm MR4 NR4 fmaddi",
+              gemm.gemm_mippv2_firestorm_mr4_nr4_fmaddi(A, B, C_test));
+  TEST_KERNEL("MIPPv2 Firestorm MR6 NR4 fmaddi",
+              gemm.gemm_mippv2_firestorm_mr6_nr4_fmaddi(A, B, C_test));
   TEST_KERNEL("MIPPv2 x60 MR6 NR4 fmaddi",
               gemm.gemm_mippv2_x60_mr6_nr4_fmaddi(A, B, C_test));
+  TEST_KERNEL("MIPPv2 x100 register blocked apack4",
+              gemm.gemm_mippv2_x100_register_blocked_apack4(A, B, C_test));
   TEST_KERNEL("MIPPv2 A100 MR7 NR4 pipe",
               gemm.gemm_mippv2_a100_mr7_nr4_pipe(A, B, C_test));
+  TEST_KERNEL("MIPPv2 A100 MR7 NR2 lmul2 pipe",
+              gemm.gemm_mippv2_a100_mr7_nr2_lmul2_pipe(A, B, C_test));
 
 #ifdef GEMMBENCH_ENABLE_EXPLO
   TEST_KERNEL("Blocked register blocked",
@@ -976,29 +988,40 @@ TEST_CASE("GEMM Alpha Beta scaling float", "[gemm][float]") {
   testAlphaBetaSuiteCRR<float>(32, 4 * VL, 32, 42);
 }
 
-TEST_CASE("GEMM CRR single micro-tile float", "[gemm][crr][float]") {
-  constexpr size_t VL = mipp::N<float>();
+template <typename T>
+static void testSingleMicroTileCRRSuite() {
+  constexpr size_t VL = mipp::N<T>();
   auto &cfg = GEMMBench::config();
-  SimdAlloc<float> alloc(cfg.packet_size, cfg.lmul, cfg.alignment, 42);
-  GemmUKernel<float> gemm;
+  SimdAlloc<T> alloc(cfg.packet_size, cfg.lmul, cfg.alignment, 42);
+  GemmUKernel<T> gemm;
 
-  auto testSingleTile = [&](size_t M, size_t N, size_t K, auto call) {
-    auto A = alloc.template allocatePackedTile<PackedColMajor<float>>(M, K, InitMode::Random);
-    auto B = alloc.template allocatePackedTile<PackedRowMajor<float>>(K, N, InitMode::Random);
-    auto C_ref = alloc.template allocatePackedTile<PackedRowMajor<float>>(M, N, InitMode::Zero);
-    auto C_test = alloc.template allocatePackedTile<PackedRowMajor<float>>(M, N, InitMode::Zero);
+  auto testSingleTile = [&](size_t M, size_t N, size_t K, auto call_fast, auto call_full) {
+    auto A = alloc.template allocatePackedTile<PackedColMajor<T>>(M, K, InitMode::Random);
+    auto B = alloc.template allocatePackedTile<PackedRowMajor<T>>(K, N, InitMode::Random);
+    auto C_ref = alloc.template allocatePackedTile<PackedRowMajor<T>>(M, N, InitMode::Zero);
+    // Pre-fill C_test with random non-zero values to ensure beta=0 (FastPath and FullPath) overwrites C
+    auto C_test = alloc.template allocatePackedTile<PackedRowMajor<T>>(M, N, InitMode::Random);
 
     for (size_t i = 0; i < M; ++i) {
       for (size_t j = 0; j < N; ++j) {
-        float acc = 0.0f;
+        T acc = T{0};
         for (size_t k = 0; k < K; ++k) {
           acc += A(i, k) * B(k, j);
         }
         C_ref(i, j) = acc;
       }
     }
-    call(A, B, C_test);
-    checkMatrixEqual(C_ref, C_test);
+    call_fast(A, B, C_test);
+    checkMatrixEqual(C_ref, C_test, K);
+
+    // Also verify runtime alpha=1, beta=0 (non-FastPath overload on non-zero C_test)
+    for (size_t i = 0; i < M; ++i) {
+      for (size_t j = 0; j < N; ++j) {
+        C_test(i, j) = static_cast<T>(-999.0);
+      }
+    }
+    call_full(A, B, C_test);
+    checkMatrixEqual(C_ref, C_test, K);
 
     alloc.freePacked(A);
     alloc.freePacked(B);
@@ -1007,41 +1030,67 @@ TEST_CASE("GEMM CRR single micro-tile float", "[gemm][crr][float]") {
   };
 
   SECTION("mippv2_meteorlake_mr4_nr3_crr (4 x 3*VL)") {
-    testSingleTile(4, 3 * VL, 128, [&](const auto &A, const auto &B, auto &C) {
-      gemm.gemm_mippv2_meteorlake_mr4_nr3_crr(A, B, C);
-    });
+    testSingleTile(4, 3 * VL, 128,
+                   [&](const auto &A, const auto &B, auto &C) { gemm.gemm_mippv2_meteorlake_mr4_nr3_crr(A, B, C); },
+                   [&](const auto &A, const auto &B, auto &C) { gemm.gemm_mippv2_meteorlake_mr4_nr3_crr(A, B, C, T{1}, T{0}); });
   }
 
   SECTION("mippv2_a76_mr6_nr4_fmaddi_crr (6 x 4*VL)") {
-    testSingleTile(6, 4 * VL, 128, [&](const auto &A, const auto &B, auto &C) {
-      gemm.gemm_mippv2_a76_mr6_nr4_fmaddi_crr(A, B, C);
-    });
+    testSingleTile(6, 4 * VL, 128,
+                   [&](const auto &A, const auto &B, auto &C) { gemm.gemm_mippv2_a76_mr6_nr4_fmaddi_crr(A, B, C); },
+                   [&](const auto &A, const auto &B, auto &C) { gemm.gemm_mippv2_a76_mr6_nr4_fmaddi_crr(A, B, C, T{1}, T{0}); });
   }
 
   SECTION("mippv2_zen4_mr4_nr4_fmaddi_crr (4 x 4*VL)") {
-    testSingleTile(4, 4 * VL, 128, [&](const auto &A, const auto &B, auto &C) {
-      gemm.gemm_mippv2_zen4_mr4_nr4_fmaddi_crr(A, B, C);
-    });
+    testSingleTile(4, 4 * VL, 128,
+                   [&](const auto &A, const auto &B, auto &C) { gemm.gemm_mippv2_zen4_mr4_nr4_fmaddi_crr(A, B, C); },
+                   [&](const auto &A, const auto &B, auto &C) { gemm.gemm_mippv2_zen4_mr4_nr4_fmaddi_crr(A, B, C, T{1}, T{0}); });
   }
 
   SECTION("mippv2_firestorm_mr4_nr4_fmaddi_crr (4 x 4*VL)") {
-    testSingleTile(4, 4 * VL, 128, [&](const auto &A, const auto &B, auto &C) {
-      gemm.gemm_mippv2_firestorm_mr4_nr4_fmaddi_crr(A, B, C);
-    });
+    testSingleTile(4, 4 * VL, 128,
+                   [&](const auto &A, const auto &B, auto &C) { gemm.gemm_mippv2_firestorm_mr4_nr4_fmaddi_crr(A, B, C); },
+                   [&](const auto &A, const auto &B, auto &C) { gemm.gemm_mippv2_firestorm_mr4_nr4_fmaddi_crr(A, B, C, T{1}, T{0}); });
+  }
+
+  SECTION("mippv2_firestorm_mr6_nr4_fmaddi_crr (6 x 4*VL)") {
+    testSingleTile(6, 4 * VL, 128,
+                   [&](const auto &A, const auto &B, auto &C) { gemm.gemm_mippv2_firestorm_mr6_nr4_fmaddi_crr(A, B, C); },
+                   [&](const auto &A, const auto &B, auto &C) { gemm.gemm_mippv2_firestorm_mr6_nr4_fmaddi_crr(A, B, C, T{1}, T{0}); });
+  }
+
+  SECTION("mippv2_x60_mr6_nr4_fmaddi_crr (6 x 4*VL)") {
+    testSingleTile(6, 4 * VL, 128,
+                   [&](const auto &A, const auto &B, auto &C) { gemm.gemm_mippv2_x60_mr6_nr4_fmaddi_crr(A, B, C); },
+                   [&](const auto &A, const auto &B, auto &C) { gemm.gemm_mippv2_x60_mr6_nr4_fmaddi_crr(A, B, C, T{1}, T{0}); });
   }
 
   SECTION("mippv2_x100_register_blocked_apack4_crr (3 x 4*VL)") {
-    testSingleTile(3, 4 * VL, 128, [&](const auto &A, const auto &B, auto &C) {
-      gemm.gemm_mippv2_x100_register_blocked_apack4_crr(A, B, C);
-    });
+    testSingleTile(3, 4 * VL, 128,
+                   [&](const auto &A, const auto &B, auto &C) { gemm.gemm_mippv2_x100_register_blocked_apack4_crr(A, B, C); },
+                   [&](const auto &A, const auto &B, auto &C) { gemm.gemm_mippv2_x100_register_blocked_apack4_crr(A, B, C, T{1}, T{0}); });
+  }
+
+  SECTION("mippv2_a100_mr7_nr4_pipe_crr (7 x 4*VL)") {
+    testSingleTile(7, 4 * VL, 128,
+                   [&](const auto &A, const auto &B, auto &C) { gemm.gemm_mippv2_a100_mr7_nr4_pipe_crr(A, B, C); },
+                   [&](const auto &A, const auto &B, auto &C) { gemm.gemm_mippv2_a100_mr7_nr4_pipe_crr(A, B, C, T{1}, T{0}); });
   }
 
   SECTION("mippv2_a100_mr7_nr2_lmul2_pipe_crr (7 x 2*VL_lmul2)") {
-    constexpr size_t VL2 = mipp::N<float, 2>();
-    testSingleTile(7, 2 * VL2, 128, [&](const auto &A, const auto &B, auto &C) {
-      gemm.gemm_mippv2_a100_mr7_nr2_lmul2_pipe_crr(A, B, C);
-    });
+    constexpr size_t VL2 = mipp::N<T, 2>();
+    testSingleTile(7, 2 * VL2, 128,
+                   [&](const auto &A, const auto &B, auto &C) { gemm.gemm_mippv2_a100_mr7_nr2_lmul2_pipe_crr(A, B, C); },
+                   [&](const auto &A, const auto &B, auto &C) { gemm.gemm_mippv2_a100_mr7_nr2_lmul2_pipe_crr(A, B, C, T{1}, T{0}); });
   }
+}
+
+TEST_CASE("GEMM CRR single micro-tile float", "[gemm][crr][float]") {
+  testSingleMicroTileCRRSuite<float>();
+}
+
+TEST_CASE("GEMM CRR single micro-tile double", "[gemm][crr]") {
+  testSingleMicroTileCRRSuite<double>();
 }
 
 #ifdef GEMMBENCH_HAS_BLIS

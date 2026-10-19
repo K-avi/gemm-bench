@@ -145,8 +145,8 @@ public:
         : packet_size_(packet_size),
           lmul_(lmul),
           alignment_(alignment),
-          rng_(seed),
-          TileSize(TileSize)
+          TileSize(TileSize),
+          rng_(seed)
     {
         assert(packet_size_ > 0);
         assert(lmul_ > 0);

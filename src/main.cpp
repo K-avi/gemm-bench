@@ -2,6 +2,7 @@
 #include "GemmUKernel.h"
 
 #include <algorithm>
+#include <bit>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
@@ -34,6 +35,21 @@
 #endif
 
 using namespace GEMMBench;
+
+// Bit-level IEEE-754 NaN/Inf inspection that remains well-defined and
+// cannot be optimized away when compiled with -ffast-math / -ffinite-math-only.
+template <typename T>
+constexpr bool is_nan_or_inf_ieee754(T val) noexcept {
+  if constexpr (sizeof(T) == sizeof(uint32_t)) {
+    const uint32_t bits = std::bit_cast<uint32_t>(val);
+    return (bits & 0x7F800000u) == 0x7F800000u;
+  } else if constexpr (sizeof(T) == sizeof(uint64_t)) {
+    const uint64_t bits = std::bit_cast<uint64_t>(val);
+    return (bits & 0x7FF0000000000000ULL) == 0x7FF0000000000000ULL;
+  } else {
+    return false;
+  }
+}
 
 // User-mode CPU cycle and instruction counters via Linux perf_event_open.
 // Supported across all Linux architectures (x86_64, AArch64, RISC-V).
@@ -302,8 +318,7 @@ inline BenchmarkStats compute_stats(const std::vector<double> &times,
                                                                                \
     for (size_t r_i = 0; r_i < C.rows; ++r_i) {                                \
       for (size_t c_j = 0; c_j < C.cols; ++c_j) {                              \
-        const double v = static_cast<double>(C(r_i, c_j));                     \
-        if (std::isnan(v) || std::isinf(v)) {                                  \
+        if (is_nan_or_inf_ieee754(C(r_i, c_j))) {                              \
           throw std::runtime_error("Numerical corruption: NaN/Inf detected in output tile C"); \
         }                                                                      \
       }                                                                        \
@@ -726,19 +741,26 @@ void validateKernel(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
   run<T>(val_cfg, gemm, A, B, C_val);
 
   double max_diff = 0.0;
+  bool nan_detected = false;
   for (size_t i = 0; i < cfg.M; ++i) {
     for (size_t j = 0; j < cfg.N; ++j) {
+      if (is_nan_or_inf_ieee754(C_val(i, j))) {
+        nan_detected = true;
+        break;
+      }
       double diff = std::abs(static_cast<double>(C_val(i, j) - C_ref(i, j)));
       if (diff > max_diff) max_diff = diff;
     }
+    if (nan_detected) break;
   }
   alloc.freePacked(C_val);
   alloc.freePacked(C_ref);
 
   const double tol = std::numeric_limits<T>::epsilon() * static_cast<double>(cfg.K) * 100.0;
-  if (max_diff > tol) {
+  if (nan_detected || max_diff > tol) {
     std::cerr << "VALIDATION FAILED for " << cfg.kernel_name
-              << ": max diff = " << max_diff << " (tolerance = " << tol << ")\n";
+              << ": " << (nan_detected ? "NaN/Inf detected" : ("max diff = " + std::to_string(max_diff)))
+              << " (tolerance = " << tol << ")\n";
     throw std::runtime_error("Numerical validation failed");
   } else if (!cfg.csv_mode) {
     std::cout << "Validation: OK (max diff = " << max_diff << ")\n";

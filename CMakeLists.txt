@@ -53,6 +53,9 @@ target_include_directories(gemmbench
     INTERFACE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/include/microkernels
+)
+target_include_directories(gemmbench
+    SYSTEM INTERFACE
         ${MIPPV2_INCLUDE_DIR}
 )
 
