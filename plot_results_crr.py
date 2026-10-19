@@ -125,7 +125,10 @@ def load_uarch_config_crr(config_path: Path, is_fp32: bool = False) -> Dict[str,
     specs: Dict[str, UArchSpecCRR] = {}
     for simd_family, uarchs in raw_data.items():
         for uarch_id, spec in uarchs.items():
-            expected_crr = spec.get("expected_best_kernel_crr")
+            if is_fp32 and spec.get("expected_best_kernel_crr_fp32"):
+                expected_crr = spec.get("expected_best_kernel_crr_fp32")
+            else:
+                expected_crr = spec.get("expected_best_kernel_crr")
             base_exp = spec.get("expected_best_kernel", "")
             if not expected_crr:
                 expected_crr = f"{base_exp}_crr" if base_exp and not base_exp.endswith("_crr") else base_exp
@@ -133,9 +136,16 @@ def load_uarch_config_crr(config_path: Path, is_fp32: bool = False) -> Dict[str,
             if is_fp32:
                 csv_pattern = spec.get("crr_csv_pattern_fp32", f"*gemm_results_*{uarch_id}*crr*fp32*_{{compiler}}.csv")
                 peak_fc = float(spec.get("peak_flop_per_cycle_fp32", float(spec.get("peak_flop_per_cycle", 1.0)) * 2.0))
+                if "measured_peak_flop_per_cycle_fp32" in spec:
+                    measured_fc = float(spec["measured_peak_flop_per_cycle_fp32"])
+                elif "measured_peak_flop_per_cycle" in spec:
+                    measured_fc = float(spec["measured_peak_flop_per_cycle"]) * 2.0
+                else:
+                    measured_fc = None
             else:
                 csv_pattern = spec.get("crr_csv_pattern", f"*gemm_results_*{uarch_id}*crr*_{{compiler}}.csv")
                 peak_fc = float(spec.get("peak_flop_per_cycle", 1.0))
+                measured_fc = float(spec["measured_peak_flop_per_cycle"]) if "measured_peak_flop_per_cycle" in spec else None
 
             csv_pattern_rrr = spec.get("csv_pattern", f"*gemm_results_*{uarch_id}*_{{compiler}}.csv")
 
@@ -150,7 +160,7 @@ def load_uarch_config_crr(config_path: Path, is_fp32: bool = False) -> Dict[str,
                 csv_pattern=csv_pattern,
                 expected_best_kernel_rrr=base_exp,
                 csv_pattern_rrr=csv_pattern_rrr,
-                measured_peak_flop_per_cycle=float(spec["measured_peak_flop_per_cycle"]) if "measured_peak_flop_per_cycle" in spec else None,
+                measured_peak_flop_per_cycle=measured_fc,
                 hardware_max_frequency_ghz=float(spec["hardware_max_frequency_ghz"]) if "hardware_max_frequency_ghz" in spec else None,
                 notes=spec.get("notes"),
             )
@@ -1084,7 +1094,7 @@ def export_crr_markdown_table(champions: List[UArchChampionCRR], output_path: Pa
         "> - **Pipe Saturation**: Execution unit saturation $\\text{FLOP/cycle} / \\text{Peak\\_FLOP/cycle}$. Measures pure code generation and FMA port saturation independently of frequency scaling.",
         "> - $f_{\\text{eff}}$: Effective core frequency measured in-process during microkernel execution ($\\text{Cycles} / \\text{Time}$ using Linux `perf_event_open` hardware cycle counters).",
         "> - $f_{\\text{boost}}$: Rated single-core burst frequency (from processor specifications / sysfs).",
-        "> - **Achieved**: Measured sustained performance $R_{\\text{achieved}} = 2MNK / t_{\\text{min}}$.",
+        "> - **Achieved**: Measured sustained performance $R_{\\text{achieved}} = 2MNK / t_{\\text{median}}$.",
         "> - **Peak Theo**: Rated theoretical ceiling $R_{\\text{peak}} = f_{\\text{boost}} \\times \\text{Peak\\_FLOP/cycle}$.",
         "> - **% Peak Theo**: Theoretical ceiling efficiency $R_{\\text{achieved}} / R_{\\text{peak}}$. Lower than Pipe Saturation when thermal or power scaling causes $f_{\\text{eff}} < f_{\\text{boost}}$ (e.g. Zen 4 operating at 5.25 GHz sustained vs 5.46 GHz burst).",
         "",

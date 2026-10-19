@@ -15,6 +15,6 @@
 > - **Pipe Saturation**: Execution unit saturation $\text{FLOP/cycle} / \text{Peak\_FLOP/cycle}$. Measures pure code generation and FMA port saturation independently of frequency scaling.
 > - $f_{\text{eff}}$: Effective core frequency measured in-process during microkernel execution ($\text{Cycles} / \text{Time}$ using Linux `perf_event_open` hardware cycle counters).
 > - $f_{\text{boost}}$: Rated single-core burst frequency (from processor specifications / sysfs).
-> - **Achieved**: Measured sustained performance $R_{\text{achieved}} = 2MNK / t_{\text{min}}$.
+> - **Achieved**: Measured sustained performance $R_{\text{achieved}} = 2MNK / t_{\text{median}}$.
 > - **Peak Theo**: Rated theoretical ceiling $R_{\text{peak}} = f_{\text{boost}} \times \text{Peak\_FLOP/cycle}$.
 > - **% Peak Theo**: Theoretical ceiling efficiency $R_{\text{achieved}} / R_{\text{peak}}$. Lower than Pipe Saturation when thermal or power scaling causes $f_{\text{eff}} < f_{\text{boost}}$ (e.g. Zen 4 operating at 5.25 GHz sustained vs 5.46 GHz burst).

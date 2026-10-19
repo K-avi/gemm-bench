@@ -10,24 +10,25 @@ and hand-tuned BLIS assembly micro-kernels across target microarchitectures in D
 > - **In-Register Scope:** This benchmark strictly measures in-register compute saturation ($M_R \times N_R \times K$) on hot L1 cache panels, isolating FMA pipeline throughput without end-to-end DGEMM cache blocking (GotoBLAS $J_C, P_C, I_C$), dynamic packing overheads, or fringe tiles.
 > - **Architectural Symmetry:** Evaluates targets where BLIS provides a native, ISA-matched microkernel (AVX-512, AVX2, NEON, RVV 256b).
 > - **Native Epilogue Layout Alignment:** Each microkernel is evaluated against its optimal hardware storage layout: MIPPv2 writes $C$ in row-major (`CRR`), while BLIS writes $C$ in native column-major (`CRC` on SKX, X60, and ARMv8A) to ensure both frameworks leverage contiguous vector stores and avoid scalar scatter/gather epilogue distortion.
+> - **Small-$K$ Epilogue & Prologue Specialization ($K=32, 64$):** By default, MIPPv2 microkernels use compile-time `FastPath` specialization ($\alpha=1, \beta=0$) that emits direct vector stores without $\alpha$ scaling or $\beta$ branch checks, whereas BLIS assembly microkernels execute runtime $\alpha/\beta$ epilogue scaling and unconditional prologue $C$-tile prefetches (e.g., 24 `prfm pldl1keep` instructions in `armv8a`). At $K=32$, this fixed prologue/epilogue instruction overhead accounts for the 25–35% throughput gap on ARMv8-A and AVX-512 (use `--no-fastpath` to evaluate MIPPv2 with runtime $\alpha/\beta$ epilogue).
 > - **L1d/L2 Working Set Boundary:** While $K \in [32, 128]$ fits entirely within L1d cache, $K \ge 256$ spills the packed panel $B$ ($W_B = K \times N_R \times 4\text{ bytes}$) into L2 cache (e.g. 64–256 KiB on AVX-512 with $N_R=64$), testing sustained L2 streaming throughput rather than pure in-register FMA saturation.
 
 | Microarchitecture | Compiler | Layout | MIPPv2 Champion | MIPPv2 (GFLOP/s) | BLIS (GFLOP/s) | **% of BLIS Peak** | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | Status |
 | :--- | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
-| `m1_neon` | `clang` | `CRR` | `x60_mr6_nr4_fmaddi_crr` | **48.28** | **47.95** | **100.7%** | 15.93 | 15.82 | 🟢 Parity (98–102%) |
-| `m1_neon` | `gcc` | `CRR` | `x60_mr6_nr4_fmaddi_crr` | **48.30** | **47.94** | **100.8%** | 15.93 | 15.81 | 🟢 Parity (98–102%) |
-| `meteorlake_avx2` | `clang` | `CRR` | `meteorlake_mr4_nr3_crr` | **74.80** | **74.75** | **100.1%** | 15.56 | 15.50 | 🟢 Parity (98–102%) |
-| `meteorlake_avx2` | `gcc` | `CRR` | `meteorlake_mr4_nr3_crr` | **72.73** | **74.66** | **97.4%** | 15.17 | 15.46 | 🟢 Near-Parity (≥95%) |
+| `m1_neon` | `clang` | `CRR` | `x60_mr6_nr4_fmaddi_crr` | **48.26** | **47.93** | **100.7%** | 15.93 | 15.82 | 🟢 Parity (98–102%) |
+| `m1_neon` | `gcc` | `CRR` | `x60_mr6_nr4_fmaddi_crr` | **48.29** | **47.93** | **100.8%** | 15.93 | 15.81 | 🟢 Parity (98–102%) |
+| `meteorlake_avx2` | `clang` | `CRR` | `meteorlake_mr4_nr3_crr` | **74.11** | **74.10** | **100.0%** | 15.54 | 15.44 | 🟢 Parity (98–102%) |
+| `meteorlake_avx2` | `gcc` | `CRR` | `meteorlake_mr4_nr3_crr` | **72.49** | **74.20** | **97.7%** | 15.14 | 15.43 | 🟢 Near-Parity (≥95%) |
 | `rpi5_neon` | `clang` | `CRR` | `a76_mr6_nr4_fmaddi_crr` | **18.90** | **18.77** | **100.7%** | 7.90 | 7.85 | 🟢 Parity (98–102%) |
-| `rpi5_neon` | `gcc` | `CRR` | `a76_mr6_nr4_fmaddi_crr` | **18.92** | **18.78** | **100.8%** | 7.91 | 7.85 | 🟢 Parity (98–102%) |
-| `x100_rvv` | `clang` | `CRR` | `x100_register_blocked_apack4_crr` | **18.51** | **18.02*** | **102.8%** | 7.72 | 7.52 | 🔵 MIPPv2 (+2.8%) |
-| `x100_rvv` | `gcc` | `CRR` | `x100_register_blocked_apack4_crr` | **16.20** | **18.07*** | **89.7%** | 6.76 | 7.54 | 🔴 Delta (<90%) |
+| `rpi5_neon` | `gcc` | `CRR` | `a76_mr6_nr4_fmaddi_crr` | **18.92** | **18.77** | **100.8%** | 7.91 | 7.85 | 🟢 Parity (98–102%) |
+| `x100_rvv` | `clang` | `CRR` | `x100_register_blocked_apack4_crr` | **18.51** | **18.01*** | **102.7%** | 7.72 | 7.51 | 🔵 MIPPv2 (+2.7%) |
+| `x100_rvv` | `gcc` | `CRR` | `x100_register_blocked_apack4_crr` | **16.20** | **18.05*** | **89.8%** | 6.76 | 7.53 | 🔴 Delta (<90%) |
 | `x60_rvv` | `clang` | `CRR` | `a100_mr7_nr4_pipe_crr` | **7.43** | **10.27** | **72.3%** | 4.65 | 6.43 | 🔴 Delta (<90%) |
-| `x60_rvv` | `gcc` | `CRR` | `a100_mr7_nr4_pipe_crr` | **7.30** | **10.27** | **71.0%** | 4.57 | 6.43 | 🔴 Delta (<90%) |
-| `zen4_avx512` | `clang` | `CRR` | `firestorm_mr4_nr4_fmaddi_crr` | **85.36** | **84.59** | **100.9%** | 16.00 | 15.95 | 🟢 Parity (98–102%) |
-| `zen4_avx512` | `gcc` | `CRR` | `firestorm_mr4_nr4_fmaddi_crr` | **86.22** | **84.78** | **101.7%** | 15.96 | 15.95 | 🟢 Parity (98–102%) |
-| `zen5_avx512` | `clang` | `CRR` | `firestorm_mr4_nr4_fmaddi_crr` | **81.32** | **81.09** | **100.3%** | 16.00 | 15.98 | 🟢 Parity (98–102%) |
-| `zen5_avx512` | `gcc` | `CRR` | `firestorm_mr4_nr4_fmaddi_crr` | **82.23** | **81.25** | **101.2%** | 16.00 | 15.98 | 🟢 Parity (98–102%) |
+| `x60_rvv` | `gcc` | `CRR` | `a100_mr7_nr4_pipe_crr` | **7.29** | **10.27** | **71.0%** | 4.57 | 6.43 | 🔴 Delta (<90%) |
+| `zen4_avx512` | `clang` | `CRR` | `firestorm_mr4_nr4_fmaddi_crr` | **85.25** | **84.54** | **100.8%** | 15.99 | 15.95 | 🟢 Parity (98–102%) |
+| `zen4_avx512` | `gcc` | `CRR` | `firestorm_mr4_nr4_fmaddi_crr` | **85.99** | **84.66** | **101.6%** | 15.95 | 15.95 | 🟢 Parity (98–102%) |
+| `zen5_avx512` | `clang` | `CRR` | `firestorm_mr4_nr4_fmaddi_crr` | **81.20** | **80.98** | **100.3%** | 16.00 | 15.98 | 🟢 Parity (98–102%) |
+| `zen5_avx512` | `gcc` | `CRR` | `firestorm_mr4_nr4_fmaddi_crr` | **82.11** | **81.13** | **101.2%** | 16.00 | 15.98 | 🟢 Parity (98–102%) |
 
 *\*Note: On SpacemiT X100 (RVV 256b, OOO dual-issue), BLIS runs the in-order X60 microkernel (`dgemm_x60_2vx14.c`).*
 
