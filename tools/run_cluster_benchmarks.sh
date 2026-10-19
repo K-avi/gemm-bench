@@ -37,6 +37,9 @@ WITH_BLIS=false
 get_target_champions() {
     local target="$1"
     local raw="${TARGET_CHAMPIONS[$target]:-}"
+    if [[ "$target" == "x60" && -n "$FP32_FLAG" ]]; then
+        raw="mippv2_x60_mr6_nr4_fmaddi mippv2_x60_mr6_nr4_fmaddi_crr"
+    fi
     local result=""
     if [[ "$CRR_ONLY" == "true" ]]; then
         local filtered=""
@@ -242,7 +245,7 @@ echo
 if [[ "$DO_PULL" == "true" ]]; then
     local_branch="$(git rev-parse --abbrev-ref HEAD)"
     echo -e "${BLUE}[1/3] Synchronisation du dépôt NFS via ${FRONT_HOST} (branche: ${local_branch})...${NC}"
-    if ssh "$FRONT_HOST" "cd ${REMOTE_DIR} && git fetch origin && git checkout ${local_branch} && git pull origin ${local_branch}"; then
+    if ssh "$FRONT_HOST" "cd ${REMOTE_DIR} && git fetch origin && git checkout ${local_branch} && git reset --hard origin/${local_branch}"; then
         echo -e "${GREEN}✓ Dépôt synchronisé sur la branche '${local_branch}' sur le NFS partagé.${NC}\n"
     else
         echo -e "${RED}✗ Échec de la synchronisation de la branche '${local_branch}' sur ${FRONT_HOST}.${NC}"
@@ -253,7 +256,7 @@ else
 fi
 
 # -----------------------------------------------------------------------------
-# 1bis. Archivage des résultats antérieurs sur la frontale
+# 1bis. Archivage des résultats antérieurs sur la frontale (uniquement cibles sélectionnées)
 # -----------------------------------------------------------------------------
 target_res_dir="results"
 if [[ "$WITH_BLIS" == "true" && -n "$FP32_FLAG" ]]; then
@@ -263,8 +266,9 @@ elif [[ "$WITH_BLIS" == "true" ]]; then
 elif [[ -n "$FP32_FLAG" ]]; then
     target_res_dir="results_fp32"
 fi
-echo -e "${BLUE}[+] Nettoyage / Archivage (${target_res_dir}) sur ${FRONT_HOST}...${NC}"
-ssh "$FRONT_HOST" "bash -l -c 'cd ${REMOTE_DIR} && if [ -d ${target_res_dir} ] && [ \"\$(ls -A ${target_res_dir} 2>/dev/null)\" ]; then ARCHIVE_DIR=\"${target_res_dir}_archive_\$(date +%Y%m%d_%H%M%S)\"; mkdir -p \"\$ARCHIVE_DIR\" && mv ${target_res_dir}/* \"\$ARCHIVE_DIR/\" 2>/dev/null || true; echo \"✓ Résultats antérieurs archivés dans \$ARCHIVE_DIR\"; fi && mkdir -p ${target_res_dir}'"
+echo -e "${BLUE}[+] Nettoyage / Archivage (${target_res_dir}) sur ${FRONT_HOST} pour: ${SELECTED_TARGETS[*]}...${NC}"
+targets_space="${SELECTED_TARGETS[*]}"
+ssh "$FRONT_HOST" "bash -l -c 'cd ${REMOTE_DIR} && mkdir -p ${target_res_dir} && ARCHIVE_DIR=\"${target_res_dir}_archive_\$(date +%Y%m%d_%H%M%S)\" && moved=0 && for t in ${targets_space}; do for f in ${target_res_dir}/gemm_results_\${t}_*.csv; do if [ -f \"\$f\" ]; then mkdir -p \"\$ARCHIVE_DIR\" && mv \"\$f\" \"\$ARCHIVE_DIR/\" 2>/dev/null && moved=1; fi; done; done && if [ \"\$moved\" -eq 1 ]; then echo \"✓ Résultats antérieurs archivés dans \$ARCHIVE_DIR\"; fi'"
 
 # -----------------------------------------------------------------------------
 # 1ter. Pré-compilation croisée X60 (Clang) sur le nœud X100 (mono-sip-k3)
@@ -362,7 +366,7 @@ run_target() {
             ;;
         meteorlake)
             partition="iml-ia770"
-            node="iml-ia770-0"
+            node="${METEORLAKE_NODE:-iml-ia770-1}"
             platform="avx2"
             out_prefix="meteorlake_avx2"
             pre_cmd="module load catch2 likwid 2>/dev/null || true;"
