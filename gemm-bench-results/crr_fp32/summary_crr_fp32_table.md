@@ -9,7 +9,7 @@
 | NEON | Raspberry Pi 5 | Cortex-A76 | `mippv2_a76_mr6_nr4_fmaddi_crr` | 6x16 | gcc | **99.3%** | 15.89 / 16 | 2.39 | 2.40 | 38.0 | 38.4 | 98.9% |
 | RVV | SpacemiT X100 | SpacemiT X100 | `mippv2_x100_register_blocked_apack4_crr` | 3x32 | clang | **96.6%** | 15.45 / 16 | 2.40 | 2.40 | 37.0 | 38.4 | 96.4% |
 | RVV | SpacemiT A100 | SpacemiT A100 | `mippv2_a100_mr7_nr2_lmul2_pipe_crr` | 7x128 | clang | **76.4%** | 24.44 / 32 | 1.99 | 2.00 | 48.7 | 64.0 | 76.1% |
-| RVV | SpacemiT X60 | SpacemiT X60 | `mippv2_a100_mr7_nr4_pipe_crr` | 7x32 | clang | **57.6%** | 9.21 / 16 | 1.60 | 1.60 | 14.7 | 25.6 | 57.5% |
+| RVV | SpacemiT X60 | SpacemiT X60 | `mippv2_x60_mr6_nr4_fmaddi_crr` | 6x32 | clang | **64.2%** | 10.27 / 16 | 1.60 | 1.60 | 16.4 | 25.6 | 64.1% |
 
 > **Notes on Metrics:**
 > - **Pipe Saturation**: Execution unit saturation $\text{FLOP/cycle} / \text{Peak\_FLOP/cycle}$. Measures pure code generation and FMA port saturation independently of frequency scaling.
