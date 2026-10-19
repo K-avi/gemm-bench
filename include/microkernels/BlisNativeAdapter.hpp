@@ -18,10 +18,24 @@
 
 #include "StorageType.h"
 #include "Alloc.h"
+#include <cstdint>
 
 #ifdef GEMMBENCH_HAS_BLIS
 
-#include "blis.h"
+extern "C" {
+typedef int64_t dim_t;
+typedef int64_t inc_t;
+
+typedef struct auxinfo_s {
+    const void* next_a;
+    const void* next_b;
+    uint64_t is;
+} auxinfo_t;
+
+typedef struct cntx_s {
+    void* dummy;
+} cntx_t;
+}
 
 #if defined(GEMMBENCH_BLIS_HASWELL)
 extern "C" void bli_dgemm_haswell_asm_6x8(

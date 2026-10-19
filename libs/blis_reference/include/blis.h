@@ -24,7 +24,9 @@ typedef struct cntx_s {
   void *dummy;
 } cntx_t;
 
+#ifndef __cplusplus
 #define restrict __restrict__
+#endif
 
 #define bli_auxinfo_next_a(data)                                               \
   ((data) ? ((const auxinfo_t *)(data))->next_a : NULL)
@@ -37,12 +39,14 @@ typedef struct cntx_s {
 #define BLIS_MR 0
 #define BLIS_NR 1
 
+#if defined(GEMMBENCH_BLIS_X60)
 // On SpacemiT X60 (VLEN=256b = 32 bytes):
 // For Double precision: MR = 2 * (32 / sizeof(double)) = 8
 // For Single precision: MR = 2 * (32 / sizeof(float))  = 16
 #define bli_cntx_get_blksz_def_dt(dt, bs, cntx)                                \
   (((dt) == BLIS_DOUBLE) ? (dim_t)8 : (dim_t)16)
 #define bli_rvv_get_vlen() ((uint64_t)32)
+#endif
 
 // Complex-transpose helpers (no-op when native tile layout matches)
 #define GEMM_UKR_SETUP_CT_ANY(...)

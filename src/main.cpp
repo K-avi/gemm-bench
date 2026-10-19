@@ -258,75 +258,80 @@ inline BenchmarkStats compute_stats(const std::vector<double> &times,
 // pipeline_fence() serializes out-of-order execution (lfence on x86, isb on ARM, fence on RISC-V).
 // compiler_fence() prevents compiler instruction reordering.
 // Inner computation timing is strictly isolated inside [cyc0, cyc1], excluding sys_read() latency.
+template <typename T, typename CPacked, typename KernelFn>
+inline BenchmarkStats measureKernel(const BenchConfig &cfg, CPacked &C,
+                                    KernelFn &&kernel_step) {
+  CycleCounter cyc_counter;
+  for (size_t w = 0; w < cfg.warmup; ++w) {
+    kernel_step();
+  }
+
+  const size_t reps = (cfg.repetitions > 0) ? cfg.repetitions : 1;
+  std::vector<double> samples_s(reps);
+  std::vector<double> samples_cyc(reps, 0.0);
+  std::vector<double> samples_ins(reps, 0.0);
+
+  std::vector<T> c_backup;
+  if (cfg.beta != 0.0 && C.data) {
+    const size_t c_span = std::max(C.padded_rows * C.padded_cols,
+                                   std::max(C.rows * C.ld, C.cols * C.ld));
+    c_backup.assign(C.data, C.data + c_span);
+  }
+
+  for (size_t r = 0; r < reps; ++r) {
+    if (cfg.beta != 0.0 && !c_backup.empty()) {
+      std::memcpy(C.data, c_backup.data(), c_backup.size() * sizeof(T));
+    }
+
+    pipeline_fence();
+    const uint64_t cyc0 = cyc_counter.read_cycles();
+    const uint64_t ins0 = cyc_counter.read_instructions();
+    pipeline_fence();
+
+    compiler_fence();
+    const auto start = std::chrono::steady_clock::now();
+    compiler_fence();
+
+    LIKWID_MARKER_START(cfg.kernel_name.c_str());
+    for (size_t i = 0; i < cfg.iterations; ++i) {
+      kernel_step();
+      asm volatile("" :: "r"(C.data) : "memory");
+    }
+    LIKWID_MARKER_STOP(cfg.kernel_name.c_str());
+
+    compiler_fence();
+    const auto end = std::chrono::steady_clock::now();
+    compiler_fence();
+
+    pipeline_fence();
+    const uint64_t ins1 = cyc_counter.read_instructions();
+    const uint64_t cyc1 = cyc_counter.read_cycles();
+    pipeline_fence();
+
+    const auto duration =
+        std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+    samples_s[r] = (duration.count() * 1e-9) / cfg.iterations;
+    if (cyc_counter.ok() && cyc1 > cyc0)
+      samples_cyc[r] = static_cast<double>(cyc1 - cyc0) / cfg.iterations;
+    if (cyc_counter.ok_ins() && ins1 >= ins0)
+      samples_ins[r] = static_cast<double>(ins1 - ins0) / cfg.iterations;
+  }
+
+  for (size_t r_i = 0; r_i < C.rows; ++r_i) {
+    for (size_t c_j = 0; c_j < C.cols; ++c_j) {
+      if (is_nan_or_inf_ieee754(C(r_i, c_j))) {
+        throw std::runtime_error(
+            "Numerical corruption: NaN/Inf detected in output tile C");
+      }
+    }
+  }
+
+  const double ops = 2.0 * cfg.M * cfg.N * cfg.K;
+  return compute_stats(samples_s, samples_cyc, samples_ins, ops);
+}
+
 #define BENCH_KERNEL(CALL)                                                     \
-  do {                                                                         \
-    CycleCounter cyc_counter;                                                  \
-    for (size_t w = 0; w < cfg.warmup; ++w) {                                  \
-      CALL;                                                                    \
-    }                                                                          \
-                                                                               \
-    const size_t reps = (cfg.repetitions > 0) ? cfg.repetitions : 1;           \
-    std::vector<double> samples_s(reps);                                       \
-    std::vector<double> samples_cyc(reps, 0.0);                                \
-    std::vector<double> samples_ins(reps, 0.0);                                \
-                                                                               \
-    std::vector<T> c_backup;                                                   \
-    if (cfg.beta != 0.0 && C.data) {                                           \
-      const size_t c_span = std::max(C.padded_rows * C.padded_cols,             \
-                                     std::max(C.rows * C.ld, C.cols * C.ld));  \
-      c_backup.assign(C.data, C.data + c_span);                                \
-    }                                                                          \
-                                                                               \
-    for (size_t r = 0; r < reps; ++r) {                                        \
-      if (cfg.beta != 0.0 && !c_backup.empty()) {                              \
-        std::memcpy(C.data, c_backup.data(), c_backup.size() * sizeof(T));     \
-      }                                                                        \
-                                                                               \
-      pipeline_fence();                                                        \
-      const uint64_t cyc0 = cyc_counter.read_cycles();                         \
-      const uint64_t ins0 = cyc_counter.read_instructions();                   \
-      pipeline_fence();                                                        \
-                                                                               \
-      compiler_fence();                                                        \
-      const auto start = std::chrono::steady_clock::now();                     \
-      compiler_fence();                                                        \
-                                                                               \
-      LIKWID_MARKER_START(cfg.kernel_name.c_str());                            \
-      for (size_t i = 0; i < cfg.iterations; ++i) {                            \
-        CALL;                                                                  \
-        asm volatile("" :: "r"(C.data) : "memory");                            \
-      }                                                                        \
-      LIKWID_MARKER_STOP(cfg.kernel_name.c_str());                             \
-                                                                               \
-      compiler_fence();                                                        \
-      const auto end = std::chrono::steady_clock::now();                       \
-      compiler_fence();                                                        \
-                                                                               \
-      pipeline_fence();                                                        \
-      const uint64_t ins1 = cyc_counter.read_instructions();                   \
-      const uint64_t cyc1 = cyc_counter.read_cycles();                         \
-      pipeline_fence();                                                        \
-                                                                               \
-      const auto duration =                                                    \
-          std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);   \
-      samples_s[r] = (duration.count() * 1e-9) / cfg.iterations;               \
-      if (cyc_counter.ok() && cyc1 > cyc0)                                     \
-        samples_cyc[r] = static_cast<double>(cyc1 - cyc0) / cfg.iterations;    \
-      if (cyc_counter.ok_ins() && ins1 >= ins0)                                \
-        samples_ins[r] = static_cast<double>(ins1 - ins0) / cfg.iterations;    \
-    }                                                                          \
-                                                                               \
-    for (size_t r_i = 0; r_i < C.rows; ++r_i) {                                \
-      for (size_t c_j = 0; c_j < C.cols; ++c_j) {                              \
-        if (is_nan_or_inf_ieee754(C(r_i, c_j))) {                              \
-          throw std::runtime_error("Numerical corruption: NaN/Inf detected in output tile C"); \
-        }                                                                      \
-      }                                                                        \
-    }                                                                          \
-                                                                               \
-    const double ops = 2.0 * cfg.M * cfg.N * cfg.K;                           \
-    return compute_stats(samples_s, samples_cyc, samples_ins, ops);           \
-  } while (false)
+  return measureKernel<T>(cfg, C, [&]() __attribute__((always_inline)) { CALL; })
 
 #define BENCH_KERNEL_FASTPATH(CALL_FAST, CALL_FULL)                            \
   do {                                                                         \
@@ -520,9 +525,11 @@ inline BenchmarkStats run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
 }
 
 template <typename T>
-inline BenchmarkStats run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
-                          const PackedRowMajor<T> &A, const PackedColMajor<T> &B,
-                          PackedRowMajor<T> &C) {
+inline BenchmarkStats run(const BenchConfig &cfg,
+                          [[maybe_unused]] const GemmUKernel<T> &gemm,
+                          [[maybe_unused]] const PackedRowMajor<T> &A,
+                          [[maybe_unused]] const PackedColMajor<T> &B,
+                          [[maybe_unused]] PackedRowMajor<T> &C) {
   switch (cfg.kernel) {
 #ifdef GEMMBENCH_ENABLE_EXPLO
   case UKernelType::IJK_RC:
@@ -640,9 +647,11 @@ inline BenchmarkStats run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
 }
 
 template <typename T>
-inline BenchmarkStats run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
-                          const PackedColMajor<T> &A, const PackedRowMajor<T> &B,
-                          PackedColMajor<T> &C) {
+inline BenchmarkStats run(const BenchConfig &cfg,
+                          [[maybe_unused]] const GemmUKernel<T> &gemm,
+                          [[maybe_unused]] const PackedColMajor<T> &A,
+                          [[maybe_unused]] const PackedRowMajor<T> &B,
+                          [[maybe_unused]] PackedColMajor<T> &C) {
   switch (cfg.kernel) {
 #ifdef GEMMBENCH_HAS_BLIS
   case UKernelType::blis_native:
