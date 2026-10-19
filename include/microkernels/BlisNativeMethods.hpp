@@ -23,6 +23,8 @@ inline void gemm_blis_native(const PackedColMajor<T> &A,
         const inc_t rs_c = static_cast<inc_t>(C.ld);
         const inc_t cs_c = 1;
         auxinfo_t aux{};
+        aux.next_a = const_cast<double *>(A.data);
+        aux.next_b = const_cast<double *>(B.data);
         cntx_t cntx{};
         BLIS_DGEMM_NATIVE_UKR(m, n, k,
                               &alpha, A.data, B.data, &beta,
@@ -35,6 +37,8 @@ inline void gemm_blis_native(const PackedColMajor<T> &A,
         const inc_t rs_c = static_cast<inc_t>(C.ld);
         const inc_t cs_c = 1;
         auxinfo_t aux{};
+        aux.next_a = const_cast<float *>(A.data);
+        aux.next_b = const_cast<float *>(B.data);
         cntx_t cntx{};
         BLIS_SGEMM_NATIVE_UKR(m, n, k,
                               &alpha, A.data, B.data, &beta,
@@ -57,6 +61,8 @@ inline void gemm_blis_native(const PackedColMajor<T> &A,
         const inc_t rs_c = 1;
         const inc_t cs_c = static_cast<inc_t>(C.ld);
         auxinfo_t aux{};
+        aux.next_a = const_cast<double *>(A.data);
+        aux.next_b = const_cast<double *>(B.data);
         cntx_t cntx{};
         BLIS_DGEMM_NATIVE_UKR(m, n, k,
                               &alpha, A.data, B.data, &beta,
@@ -69,6 +75,8 @@ inline void gemm_blis_native(const PackedColMajor<T> &A,
         const inc_t rs_c = 1;
         const inc_t cs_c = static_cast<inc_t>(C.ld);
         auxinfo_t aux{};
+        aux.next_a = const_cast<float *>(A.data);
+        aux.next_b = const_cast<float *>(B.data);
         cntx_t cntx{};
         BLIS_SGEMM_NATIVE_UKR(m, n, k,
                               &alpha, A.data, B.data, &beta,

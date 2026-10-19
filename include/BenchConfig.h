@@ -40,6 +40,7 @@ struct BenchConfig
     bool legacy_mode = false;
     bool validate = false;
     bool fp32 = false;
+    bool use_fastpath = true;
 };
 
 inline BenchConfig& config()
@@ -85,13 +86,14 @@ inline void parseArgs(int argc,
                       << "  --legacy            Run in legacy square-matrix mode with 64-element padding\n"
                       << "  --alpha, -a <val>   Alpha parameter (default: 1.0)\n"
                       << "  --beta, -b <val>    Beta parameter (default: 0.0)\n"
+                      << "  --no-fastpath       Disable compile-time FastPath (force runtime alpha/beta epilogue)\n"
                       << "  --kernel <name>     Kernel name (default: ijk)\n"
                       << "  --iterations <N>    Benchmark iterations (default: 100)\n"
                       << "  --repetitions, -r <N> Benchmark repetitions (default: 15)\n"
                       << "  --warmup <N>        Warmup iterations (default: 10)\n"
-                      << "  --packet-size <N>   SIMD packet size (default: 4)\n"
+                      << "  --packet-size <N>   SIMD packet size (default: native SIMD width)\n"
                       << "  --lmul <N>          RVV/MIPP LMUL factor (default: 1)\n"
-                      << "  --alignment <N>     Memory alignment in bytes (default: 32)\n"
+                      << "  --alignment <N>     Memory alignment in bytes (default: 64)\n"
                       << "  --seed <N>          Random seed (default: 12)\n"
                       << "  --fp32, --float     Run single-precision (float / FP32) microkernel\n"
                       << "  --csv               Output in CSV format\n"
@@ -110,6 +112,8 @@ inline void parseArgs(int argc,
             cfg.alpha = next_double();
         else if(arg == "--beta" || arg == "-b")
             cfg.beta = next_double();
+        else if(arg == "--no-fastpath")
+            cfg.use_fastpath = false;
         else if(arg == "--iterations")
             cfg.iterations = next_ulong();
         else if(arg == "--repetitions" || arg == "-r")

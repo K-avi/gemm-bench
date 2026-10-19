@@ -315,7 +315,7 @@ inline BenchmarkStats compute_stats(const std::vector<double> &times,
 
 #define BENCH_KERNEL_FASTPATH(CALL_FAST, CALL_FULL)                            \
   do {                                                                         \
-    if (cfg.alpha == 1.0 && cfg.beta == 0.0) {                                 \
+    if (cfg.use_fastpath && cfg.alpha == 1.0 && cfg.beta == 0.0) {             \
       BENCH_KERNEL(CALL_FAST);                                                 \
     } else {                                                                   \
       BENCH_KERNEL(CALL_FULL);                                                 \
