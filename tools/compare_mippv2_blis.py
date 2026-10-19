@@ -61,13 +61,15 @@ def load_dataset(input_dir: Path) -> pd.DataFrame:
     for f in csv_files:
         try:
             df = pd.read_csv(f)
-            if df.empty:
+            if df.empty or "Kernel" not in df.columns or "K" not in df.columns:
                 continue
             platform, layout, compiler = parse_filename(f)
-            df["Platform"] = platform
-            df["Layout"] = layout
-            df["Compiler"] = compiler
-            df["SourceFile"] = f.name
+            df = df.assign(
+                Platform=platform,
+                Layout=layout,
+                Compiler=compiler,
+                SourceFile=f.name,
+            )
             dfs.append(df)
         except Exception as e:
             print(f"Warning: Failed to load {f}: {e}", file=sys.stderr)
@@ -453,7 +455,13 @@ def plot_k_scaling_grid(details: Dict, out_dir: Path, enable_png: bool = True, i
 # Markdown Report Generation
 # ==============================================================================
 
-def format_markdown_report(summary_df: pd.DataFrame, details: Dict, plot_dir: Optional[Path] = None, is_fp32: bool = False) -> str:
+def format_markdown_report(
+    summary_df: pd.DataFrame,
+    details: Dict,
+    plot_dir: Optional[Path] = None,
+    is_fp32: bool = False,
+    out_md_path: Optional[Path] = None,
+) -> str:
     """Generates a GitHub-flavored Markdown comparative analysis document."""
     lines = []
     prec_str = "Single-Precision (FP32 / SGEMM)" if is_fp32 else "Double-Precision (FP64 / DGEMM)"
@@ -484,11 +492,13 @@ def format_markdown_report(summary_df: pd.DataFrame, details: Dict, plot_dir: Op
     lines.append("> [!NOTE]")
     lines.append("> **Methodological Scope:**")
     prec_gemm = "SGEMM" if is_fp32 else "DGEMM"
+    elem_bytes = 4 if is_fp32 else 8
+    nr_avx512 = 64 if is_fp32 else 32
     lines.append(f"> - **In-Register Scope:** This benchmark strictly measures in-register compute saturation ($M_R \\times N_R \\times K$) on hot L1 cache panels, isolating FMA pipeline throughput without end-to-end {prec_gemm} cache blocking (GotoBLAS $J_C, P_C, I_C$), dynamic packing overheads, or fringe tiles.")
     lines.append("> - **Architectural Symmetry:** Evaluates targets where BLIS provides a native, ISA-matched microkernel (AVX-512, AVX2, NEON, RVV 256b).")
     lines.append("> - **Native Epilogue Layout Alignment:** Each microkernel is evaluated against its optimal hardware storage layout: MIPPv2 writes $C$ in row-major (`CRR`), while BLIS writes $C$ in native column-major (`CRC` on SKX, X60, and ARMv8A) to ensure both frameworks leverage contiguous vector stores and avoid scalar scatter/gather epilogue distortion.")
     lines.append("> - **Small-$K$ Epilogue & Prologue Specialization ($K=32, 64$):** By default, MIPPv2 microkernels use compile-time `FastPath` specialization ($\\alpha=1, \\beta=0$) that emits direct vector stores without $\\alpha$ scaling or $\\beta$ branch checks, whereas BLIS assembly microkernels execute runtime $\\alpha/\\beta$ epilogue scaling and unconditional prologue $C$-tile prefetches (e.g., 24 `prfm pldl1keep` instructions in `armv8a`). At $K=32$, this fixed prologue/epilogue instruction overhead accounts for the 25–35% throughput gap on ARMv8-A and AVX-512 (use `--no-fastpath` to evaluate MIPPv2 with runtime $\\alpha/\\beta$ epilogue).")
-    lines.append("> - **L1d/L2 Working Set Boundary:** While $K \\in [32, 128]$ fits entirely within L1d cache, $K \\ge 256$ spills the packed panel $B$ ($W_B = K \\times N_R \\times 4\\text{ bytes}$) into L2 cache (e.g. 64–256 KiB on AVX-512 with $N_R=64$), testing sustained L2 streaming throughput rather than pure in-register FMA saturation.\n")
+    lines.append(f"> - **L1d/L2 Working Set Boundary:** While $K \\in [32, 128]$ fits entirely within L1d cache, $K \\ge 256$ spills the packed panel $B$ ($W_B = K \\times N_R \\times {elem_bytes}\\text{{ bytes}}$) into L2 cache (e.g. 64–256 KiB on AVX-512 with $N_R={nr_avx512}$), testing sustained L2 streaming throughput rather than pure in-register FMA saturation.\n")
     lines.append("| Microarchitecture | Compiler | Layout | MIPPv2 Champion | MIPPv2 (GFLOP/s) | BLIS (GFLOP/s) | **% of BLIS Peak** | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | Status |")
     lines.append("| :--- | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |")
 
@@ -535,11 +545,18 @@ def format_markdown_report(summary_df: pd.DataFrame, details: Dict, plot_dir: Op
             )
 
     if plot_dir and plot_dir.exists():
+        fig_prefix = "plots/"
+        if out_md_path is not None:
+            try:
+                rel_dir = os.path.relpath(plot_dir.resolve(), Path(out_md_path).resolve().parent)
+                fig_prefix = "" if rel_dir == "." else f"{rel_dir}/"
+            except ValueError:
+                pass
         lines.append("\n---\n")
         lines.append("## 3. Visual Comparative Figures\n")
-        lines.append("- **Peak Performance Ratio:** [plots/blis_vs_mippv2_ratio_comparison.svg](plots/blis_vs_mippv2_ratio_comparison.svg)")
-        lines.append("- **FLOP / Cycle Compute Density:** [plots/blis_vs_mippv2_flop_per_cycle_comparison.svg](plots/blis_vs_mippv2_flop_per_cycle_comparison.svg)")
-        lines.append("- **Scaling Grid Across K ∈ [32..1024]:** [plots/blis_vs_mippv2_k_scaling_grid.svg](plots/blis_vs_mippv2_k_scaling_grid.svg)\n")
+        lines.append(f"- **Peak Performance Ratio:** [{fig_prefix}blis_vs_mippv2_ratio_comparison.svg]({fig_prefix}blis_vs_mippv2_ratio_comparison.svg)")
+        lines.append(f"- **FLOP / Cycle Compute Density:** [{fig_prefix}blis_vs_mippv2_flop_per_cycle_comparison.svg]({fig_prefix}blis_vs_mippv2_flop_per_cycle_comparison.svg)")
+        lines.append(f"- **Scaling Grid Across K ∈ [32..1024]:** [{fig_prefix}blis_vs_mippv2_k_scaling_grid.svg]({fig_prefix}blis_vs_mippv2_k_scaling_grid.svg)\n")
 
     lines.append("\n---\n")
     lines.append("## 4. Per-Size Scaling & Efficiency Analysis ($K \\in [32, 1024]$)\n")
@@ -659,14 +676,20 @@ def main():
         plot_flop_per_cycle_comparison(summary_df, plot_dir_path, enable_png=enable_png, is_fp32=args.fp32)
         plot_k_scaling_grid(details, plot_dir_path, enable_png=enable_png, is_fp32=args.fp32)
 
-    md_report = format_markdown_report(summary_df, details, plot_dir=plot_dir_path, is_fp32=args.fp32)
+    out_md_path = Path(args.output_md) if args.output_md else None
+    if not out_md_path and args.plot:
+        out_md_path = (plot_dir_path / "blis_fp32_summary_table.md") if args.fp32 else (input_path / "blis_vs_mippv2_report.md")
+
+    md_report = format_markdown_report(
+        summary_df,
+        details,
+        plot_dir=plot_dir_path,
+        is_fp32=args.fp32,
+        out_md_path=out_md_path,
+    )
 
     # Print to console
     print("\n" + md_report)
-
-    out_md_path = args.output_md
-    if not out_md_path and args.plot:
-        out_md_path = plot_dir_path / ("blis_fp32_summary_table.md" if args.fp32 else "blis_summary_table.md")
 
     if out_md_path:
         out_p = Path(out_md_path)
@@ -674,8 +697,12 @@ def main():
         out_p.write_text(md_report, encoding="utf-8")
         print(f"\n✓ Markdown report written to {out_p}")
 
-    if args.output_csv and not summary_df.empty:
-        out_c = Path(args.output_csv)
+    out_csv_path = args.output_csv
+    if not out_csv_path and args.plot and not args.fp32:
+        out_csv_path = str(input_path / "summary_metrics.csv")
+
+    if out_csv_path and not summary_df.empty:
+        out_c = Path(out_csv_path)
         out_c.parent.mkdir(parents=True, exist_ok=True)
         summary_df.to_csv(out_c, index=False)
         print(f"✓ Summary CSV metrics written to {out_c}")

@@ -210,12 +210,15 @@ def load_crr_dataset_for_uarch(input_dir: Path, spec: UArchSpecCRR, is_fp32: boo
             if df.empty or "Kernel" not in df.columns:
                 continue
 
+            col_map = {}
             if "GFLOPS_median" in df.columns:
-                df["GFLOPS"] = df["GFLOPS_median"]
+                col_map["GFLOPS"] = df["GFLOPS_median"]
             if "FLOP_per_cycle_median" in df.columns:
-                df["FLOP_per_cycle"] = df["FLOP_per_cycle_median"]
+                col_map["FLOP_per_cycle"] = df["FLOP_per_cycle_median"]
             if "Time_median_s" in df.columns:
-                df["Time_s"] = df["Time_median_s"]
+                col_map["Time_s"] = df["Time_median_s"]
+            if col_map:
+                df = df.assign(**col_map)
 
             if "GFLOPS" not in df.columns:
                 continue
@@ -286,12 +289,15 @@ def load_rrr_dataset_for_uarch(rrr_dir: Path, spec: UArchSpecCRR) -> pd.DataFram
             if df.empty or "Kernel" not in df.columns:
                 continue
 
+            col_map = {}
             if "GFLOPS_median" in df.columns:
-                df["GFLOPS"] = df["GFLOPS_median"]
+                col_map["GFLOPS"] = df["GFLOPS_median"]
             if "FLOP_per_cycle_median" in df.columns:
-                df["FLOP_per_cycle"] = df["FLOP_per_cycle_median"]
+                col_map["FLOP_per_cycle"] = df["FLOP_per_cycle_median"]
             if "Time_median_s" in df.columns:
-                df["Time_s"] = df["Time_median_s"]
+                col_map["Time_s"] = df["Time_median_s"]
+            if col_map:
+                df = df.assign(**col_map)
 
             if "GFLOPS" not in df.columns:
                 continue

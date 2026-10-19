@@ -51,9 +51,9 @@ and hand-tuned BLIS assembly micro-kernels across target microarchitectures in S
 
 ## 3. Visual Comparative Figures
 
-- **Peak Performance Ratio:** [plots/blis_vs_mippv2_ratio_comparison.svg](plots/blis_vs_mippv2_ratio_comparison.svg)
-- **FLOP / Cycle Compute Density:** [plots/blis_vs_mippv2_flop_per_cycle_comparison.svg](plots/blis_vs_mippv2_flop_per_cycle_comparison.svg)
-- **Scaling Grid Across K ∈ [32..1024]:** [plots/blis_vs_mippv2_k_scaling_grid.svg](plots/blis_vs_mippv2_k_scaling_grid.svg)
+- **Peak Performance Ratio:** [blis_vs_mippv2_ratio_comparison.svg](blis_vs_mippv2_ratio_comparison.svg)
+- **FLOP / Cycle Compute Density:** [blis_vs_mippv2_flop_per_cycle_comparison.svg](blis_vs_mippv2_flop_per_cycle_comparison.svg)
+- **Scaling Grid Across K ∈ [32..1024]:** [blis_vs_mippv2_k_scaling_grid.svg](blis_vs_mippv2_k_scaling_grid.svg)
 
 
 ---
