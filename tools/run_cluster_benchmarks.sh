@@ -462,6 +462,9 @@ run_target() {
 echo -e "${BLUE}[2/3] Exécution des jobs sur les nœuds Dalek...${NC}\n"
 
 LOG_DIR="logs/cluster_runs"
+if [[ -n "$FP32_FLAG" ]]; then
+    LOG_DIR="logs/cluster_runs_fp32"
+fi
 mkdir -p "$LOG_DIR"
 
 if [[ "$SEQUENTIAL" == "true" || ${#SELECTED_TARGETS[@]} -eq 1 ]]; then
