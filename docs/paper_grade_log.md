@@ -239,3 +239,66 @@ native,blis_native,6,8,128,1,0,3.823231144e-07,3.722569152e-07,6.706005552e-07,1
 Build,Kernel,M,N,K,Alpha,Beta,Time_median_s,Time_min_s,Time_max_s,Time_stddev_s,Time_cv_pct,GFLOPS_median,GFLOPS_peak,Cycles_median,Cycles_min,Cycles_max,Cycles_stddev,Cycles_cv_pct,Eff_GHz,IPC,FLOP_per_cycle_median,FLOP_per_cycle_peak,Repetitions,InterRun_CV_pct,Commit,Selection,NumRuns,Fastpath,CCold
 ```
 
+---
+
+## P5 — Analyse statistique : K égal, IC bootstrap, champion pré-enregistré
+
+### P5.a / P5.b — Module `tools/paper_stats.py` et suite de tests Python
+- **Fichiers modifiés / créés** :
+  - `tools/paper_stats.py` : module statistique pur (numpy / pandas uniquement) implémentant :
+    - `working_set_bytes(M, N, K, elem_bytes)` : empreinte mémoire des panneaux $A$ et $B$ ($K \times (M + N) \times \text{elem\_bytes}$).
+    - `geomean(x)` : moyenne géométrique.
+    - `bootstrap_ratio_of_medians(a, b, n_boot=10000, seed=12345, ci=0.95)` : bootstrap hiérarchique à deux niveaux vectorisé pour échantillons équilibrés, retournant l'estimation ponctuelle et l'intervalle de confiance à 95% par percentiles.
+    - `flop_per_cycle_samples(df_raw, kernel, K)` : extraction des échantillons bruts FLOP/cycle par répétition et par run indépendant.
+    - `load_raw(raw_csv)` : chargement des fichiers `.raw.csv` avec dérivation automatique des métadonnées Platform/Layout/Compiler/Variant/Precision depuis le nom de fichier.
+    - `parse_cache_size_bytes` et `get_l1d_bytes(meta_json, uarch_spec)` : résolution de la capacité L1 Data via `meta.json` puis `uarch_config.json`.
+  - `tests/python/test_paper_stats.py` : suite de tests unitaires `unittest` validant le déterminisme, le centrage d'identité, la sensibilité aux décalages de 10%, la couverture de 95% sur 100 simulations synthétiques, l'arithmétique du working-set, le parsing de caches et l'analyse de dataset synthétique.
+- **Commandes de vérification** :
+  - `python3 -m unittest discover -s tests/python` : 10/10 tests passés avec succès.
+- **Commit** : `96c7d52` (`feat(analysis): add paper_stats (hierarchical bootstrap, working-set) with unittest suite`).
+- **Écarts** : Aucun.
+
+### P5.c — Réécriture de `tools/compare_mippv2_blis.py`
+- **Fichiers modifiés** :
+  - `tools/compare_mippv2_blis.py` :
+    - Champion pré-enregistré résolu depuis `uarch_config.json` (`expected_best_kernel_crr_fp32` en FP32, `expected_best_kernel_crr` en FP64) via le mapping microarchitectural. Erreur explicite levée si absent du jeu de données (repli sur l'ancien comportement via `--legacy-argmax-champion`).
+    - Comparaison rigoureuse à $K$ apparié (`Matched-K`) sur chaque point de fonctionnement commun entre MIPPv2 et BLIS native.
+    - Calcul des ratios ponctuels de FLOP/cycle et des intervalles de confiance à 95% par bootstrap hiérarchique lorsque `.raw.csv` est disponible (repli ponctuel avec marquage `ci_available=False` sinon).
+    - Suivi de l'empreinte mémoire $W_A + W_B$ et détection des franchissements de capacité L1d (marquage `†`).
+    - Classification de parité sur la fenêtre d'analyse $K \in [128, 384]$ (`parity`, `mipp_faster`, `blis_faster`, `mixed`, avec suffixe `_noci` en l'absence de raw).
+    - Découpage par variante (`--variant {default,nofp,coldc,strict,all}`).
+    - Séparation stricte des compilateurs (lignes distinctes pour GCC et Clang) et relégation de l'enveloppe max-compilateur dans une section annexe (« Best-compiler envelope (post-hoc) »).
+    - Préservation de `Legacy_PeakOverPeak_pct` pour rétro-compatibilité sans affichage dans les tableaux directeurs.
+    - Figures réécrites avec barres d'erreur bootstrap / bande d'incertitude et repère vertical de spill L1d.
+- **Commandes de vérification** :
+  - `python3 -m unittest discover -s tests/python` : test de `analyze_dataset` sur dataset synthétique validant le choix du champion pré-enregistré et le calcul apparié à $K$ constant.
+- **Commit** : `24442d0` (`refactor(analysis): matched-K ratios with CIs, pre-registered champions, per-compiler reporting`).
+- **Écarts** : Aucun.
+
+### P5.a (suite) — Suppression du fallback silencieux FP32
+- **Fichiers modifiés** :
+  - `plot_results_crr.py` : dans `load_uarch_config_crr`, suppression de l'inférence `measured_fc = measured_peak_flop_per_cycle * 2.0` (retourne `None` si absent) et validation stricte de la présence explicite de `peak_flop_per_cycle_fp32` (lève `KeyError` si absent).
+- **Commandes de vérification** :
+  - Test Python confirmant que `load_uarch_config_crr(..., is_fp32=True)` renvoie `measured_peak_flop_per_cycle = None` pour les cibles sans mesure FP32 explicite.
+  - `ctest --test-dir build` : 34/34 tests Catch2 passés.
+- **Commit** : `9a8f8a7` (`fix(analysis): drop implicit FP32=2xFP64 measured-peak fallback`).
+- **Écarts** : Aucun.
+
+---
+
+## 🔍 Revue R3 — Checkpoint Analyse statistique (P5)
+
+### 1. Diff global P5
+```
+ plot_results_crr.py              |   6 +-
+ tests/python/test_paper_stats.py | 204 +++++++++++++++++++
+ tools/compare_mippv2_blis.py     | 623 +++++++++++++++++++++++++++++++++----------------------
+ tools/paper_stats.py             | 279 +++++++++++++++++++++++++
+ 4 files changed, 860 insertions(+), 252 deletions(-)
+```
+
+### 2. Validation de la suite de tests
+- Tests unitaires Python : 10/10 passés (`python3 -m unittest discover -s tests/python`).
+- Tests C++ Catch2 : 34/34 passés (`ctest --test-dir build`).
+
+
