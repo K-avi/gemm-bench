@@ -2,57 +2,114 @@
 """
 tools/compare_mippv2_blis.py
 
-Calculates, analyzes, and visualizes the percentage of BLIS reference micro-kernel
-peak performance achieved by MIPPv2 champion micro-kernels across target microarchitectures.
-
-Features:
-- Reads CSVs from gemm-bench-results/blis_comparison/ (or specified --input-dir)
-- Computes Peak & Median GFLOPS, Peak & Median FLOP/cycle, and MIPPv2/BLIS ratio
-- Generates per-architecture markdown comparison tables and per-K scaling breakdowns
-- Produces publication-grade SVG & PNG comparative plots (--plot):
-  * Executive Peak Performance Ratio Bar Chart (% of BLIS Peak)
-  * Peak Compute Density Comparison (DP FLOP/cycle vs theoretical limits)
-  * Multi-panel Panel-Depth K ∈ [32..1024] Scaling Grid across all 8 microarchitectures
+Calculates, analyzes, and visualizes MIPPv2 champion micro-kernels vs BLIS reference
+micro-kernels with paper-grade metrology:
+- Pre-registered champions from uarch_config.json (no post-hoc argmax by default)
+- Matched-K ratios (FLOP/cycle at identical panel depth K)
+- Hierarchical two-level bootstrap 95% confidence intervals
+- Working-set memory footprint tracking and L1d cache boundary indicators
+- Explicit per-compiler reporting (gcc vs clang) with dedicated best-compiler appendix
+- Support for ablation variants: default, nofp, coldc, strict
 """
 
 from __future__ import annotations
 
 import argparse
-import glob
+import json
 import os
 import re
 import sys
 from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Union
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 
-# Matplotlib configuration (Headless Agg)
+# Headless Agg backend for Matplotlib
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Patch
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(REPO_ROOT / "tools"))
 
-# ==============================================================================
-# Styling and Palette Configuration (Imported from tools/gemmbench_common.py)
-# ==============================================================================
-
-sys.path.insert(0, str(Path(__file__).resolve().parent))
 from gemmbench_common import (
     LIGHT_BG, CARD_BG, BORDER_COLOR, TEXT_PRIMARY, TEXT_SECONDARY, TEXT_MUTED, GRID_COLOR,
     SIMD_FAMILY_COLORS, PLATFORM_META, L1_CACHE_BOUNDARY_K, get_platform_peak_fc,
-    setup_matplotlib_theme, parse_benchmark_filename as parse_filename
+    setup_matplotlib_theme, parse_benchmark_filename as parse_filename,
+)
+from paper_stats import (
+    bootstrap_ratio_of_medians,
+    flop_per_cycle_samples,
+    geomean,
+    get_l1d_bytes,
+    load_raw,
+    parse_filename_meta,
+    working_set_bytes,
 )
 
 setup_matplotlib_theme()
 
 
+def load_uarch_config(config_path: Optional[Path] = None) -> dict:
+    """Loads uarch_config.json from repository root if available."""
+    target = config_path or (REPO_ROOT / "uarch_config.json")
+    if target.is_file():
+        try:
+            with open(target, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            print(f"Warning: Failed to load uarch_config.json from {target}: {e}", file=sys.stderr)
+    return {}
+
+
+def get_expected_champion(
+    platform: str,
+    precision: str = "fp64",
+    uarch_config: Optional[dict] = None,
+) -> Optional[str]:
+    """Resolves the pre-registered champion microkernel for a given platform and precision."""
+    meta = PLATFORM_META.get(platform, {})
+    uarch_id = meta.get("uarch_id")
+    simd = meta.get("simd")
+
+    if not uarch_config:
+        uarch_config = load_uarch_config()
+
+    if uarch_config and simd in uarch_config and uarch_id in uarch_config[simd]:
+        spec = uarch_config[simd][uarch_id]
+        if precision == "fp32" and spec.get("expected_best_kernel_crr_fp32"):
+            return spec.get("expected_best_kernel_crr_fp32")
+        if spec.get("expected_best_kernel_crr"):
+            return spec.get("expected_best_kernel_crr")
+        base = spec.get("expected_best_kernel", "")
+        if base:
+            return f"{base}_crr" if not base.endswith("_crr") else base
+
+    # Fallback to general platform meta naming if uarch_config not resolved
+    if platform.startswith("zen4") or platform.startswith("zen5"):
+        return "mippv2_firestorm_mr4_nr4_fmaddi_crr"
+    if platform.startswith("meteorlake") or platform.startswith("skylake"):
+        return "mippv2_meteorlake_mr4_nr3_crr"
+    if platform.startswith("m1"):
+        return "mippv2_x60_mr6_nr4_fmaddi_crr"
+    if platform.startswith("rpi5"):
+        return "mippv2_a76_mr6_nr4_fmaddi_crr"
+    if platform.startswith("x100"):
+        return "mippv2_x100_register_blocked_apack4_crr"
+    if platform.startswith("x60"):
+        return "mippv2_x60_mr6_nr4_fmaddi_crr" if precision == "fp32" else "mippv2_a100_mr7_nr4_pipe_crr"
+    if platform.startswith("a100"):
+        return "mippv2_a100_mr7_nr2_lmul2_pipe_crr"
+
+    return None
+
+
 def load_dataset(input_dir: Path) -> pd.DataFrame:
-    """Loads all CSV files in input_dir and annotates platform/compiler metadata."""
-    csv_files = sorted(input_dir.glob("*.csv"))
+    """Loads all benchmark CSV files in input_dir and annotates metadata."""
+    csv_files = sorted([f for f in input_dir.glob("*.csv") if not f.name.endswith(".raw.csv")])
     if not csv_files:
         print(f"Warning: No CSV files found in {input_dir}", file=sys.stderr)
         return pd.DataFrame()
@@ -63,12 +120,15 @@ def load_dataset(input_dir: Path) -> pd.DataFrame:
             df = pd.read_csv(f)
             if df.empty or "Kernel" not in df.columns or "K" not in df.columns:
                 continue
-            platform, layout, compiler = parse_filename(f)
+            meta = parse_filename_meta(f)
             df = df.assign(
-                Platform=platform,
-                Layout=layout,
-                Compiler=compiler,
+                Platform=meta["Platform"],
+                Layout=meta["Layout"],
+                Compiler=meta["Compiler"],
+                Variant=meta["Variant"],
+                Precision=meta["Precision"],
                 SourceFile=f.name,
+                SourceDir=str(input_dir.resolve()),
             )
             dfs.append(df)
         except Exception as e:
@@ -79,114 +139,282 @@ def load_dataset(input_dir: Path) -> pd.DataFrame:
     return pd.concat(dfs, ignore_index=True)
 
 
-def analyze_dataset(df: pd.DataFrame) -> Tuple[pd.DataFrame, Dict]:
+def determine_parity_label(
+    ratios: List[float],
+    ci_lows: List[float],
+    ci_highs: List[float],
+    ci_available: bool,
+) -> str:
+    """Computes parity status label over a window of K."""
+    if not ratios:
+        return "no_data"
+
+    if ci_available and all(not np.isnan(l) and not np.isnan(h) for l, h in zip(ci_lows, ci_highs)):
+        # Parity: for all K, 95% CI overlaps [0.98, 1.02] -> low <= 1.02 and high >= 0.98
+        if all(l <= 1.02 and h >= 0.98 for l, h in zip(ci_lows, ci_highs)):
+            return "parity"
+        if all(l > 1.02 for l in ci_lows):
+            return "mipp_faster"
+        if all(h < 0.98 for h in ci_highs):
+            return "blis_faster"
+        return "mixed"
+    else:
+        # Fallback without CI: suffix _noci
+        if all(0.98 <= r <= 1.02 for r in ratios):
+            return "parity_noci"
+        if all(r > 1.02 for r in ratios):
+            return "mipp_faster_noci"
+        if all(r < 0.98 for r in ratios):
+            return "blis_faster_noci"
+        return "mixed_noci"
+
+
+def analyze_dataset(
+    df: pd.DataFrame,
+    uarch_config: Optional[dict] = None,
+    k_window: Tuple[int, int] = (128, 384),
+    raw_dir: Optional[Path] = None,
+    legacy_argmax: bool = False,
+    variant_filter: str = "default",
+) -> Tuple[pd.DataFrame, pd.DataFrame, Dict]:
     """
-    Processes the benchmark dataframe, identifying for each (Platform, Compiler, Layout):
-    - MIPPv2 Champion performance
-    - BLIS Native performance
-    - Ratio MIPPv2 / BLIS (%)
+    Processes the benchmark dataframe with matched-K analysis and bootstrap CIs:
+    Returns: (summary_df, detailed_df, details_dict)
     """
+    if uarch_config is None:
+        uarch_config = load_uarch_config()
+
+    # Ensure required columns exist
+    for col, dflt in [
+        ("Variant", "default"),
+        ("Precision", "fp64"),
+        ("Layout", "crr"),
+        ("Platform", "unknown"),
+        ("Compiler", "unknown"),
+    ]:
+        if col not in df.columns:
+            df[col] = dflt
+
+    if variant_filter != "all":
+        df = df[df["Variant"] == variant_filter]
+        if df.empty:
+            return pd.DataFrame(), pd.DataFrame(), {}
+
     summary_rows = []
-    detailed_comparisons = defaultdict(dict)
+    detailed_rows = []
+    details_dict = defaultdict(dict)
 
-    groups = df.groupby(["Platform", "Compiler", "Layout"])
+    # Group strictly by (Platform, Compiler, Precision, Variant)
+    groups = df.groupby(["Platform", "Compiler", "Precision", "Variant", "Layout"])
 
-    for (platform, compiler, layout), group in groups:
+    for (platform, compiler, precision, variant, layout), group in groups:
         blis_data = group[group["Kernel"] == "blis_native"]
         mipp_data = group[group["Kernel"] != "blis_native"]
 
-        if blis_data.empty:
-            continue
-        if mipp_data.empty:
+        if blis_data.empty or mipp_data.empty:
             continue
 
-        # Find champion MIPPv2 kernel by median GFLOPS (consistent with Section 4 and plot_results_crr.py)
-        mipp_best_idx = mipp_data["GFLOPS_median"].idxmax()
-        mipp_best_kernel = mipp_data.loc[mipp_best_idx, "Kernel"]
-        mipp_champ_data = mipp_data[mipp_data["Kernel"] == mipp_best_kernel]
+        if legacy_argmax:
+            mipp_best_idx = mipp_data["GFLOPS_median"].idxmax()
+            mipp_champ_kernel = str(mipp_data.loc[mipp_best_idx, "Kernel"])
+        else:
+            expected = get_expected_champion(platform, precision, uarch_config)
+            if not expected or expected not in mipp_data["Kernel"].values:
+                avail = sorted(mipp_data["Kernel"].unique())
+                raise ValueError(
+                    f"Pre-registered champion '{expected}' for platform '{platform}' ({precision}) "
+                    f"not found in dataset. Available kernels: {avail}. "
+                    f"Use --legacy-argmax-champion to override."
+                )
+            mipp_champ_kernel = expected
 
-        # Extract summary metrics (best K over median repetitions)
-        mipp_peak_gflops = mipp_champ_data["GFLOPS_median"].max()
-        mipp_median_gflops = mipp_champ_data["GFLOPS_median"].max()
+        mipp_champ_data = mipp_data[mipp_data["Kernel"] == mipp_champ_kernel]
+
+        # Resolve raw samples if .raw.csv exists
+        raw_df = None
+        source_dir_val = group["SourceDir"].iloc[0] if "SourceDir" in group.columns else None
+        source_file_val = group["SourceFile"].iloc[0] if "SourceFile" in group.columns else None
+        meta_json_path = None
+
+        if source_dir_val and source_file_val:
+            s_dir = Path(source_dir_val)
+            s_stem = Path(source_file_val).stem
+            raw_path = s_dir / f"{s_stem}.raw.csv"
+            if raw_path.is_file():
+                try:
+                    raw_df = load_raw(raw_path)
+                except Exception:
+                    raw_df = None
+            cand_meta = s_dir / f"{s_stem}.meta.json"
+            if cand_meta.is_file():
+                meta_json_path = cand_meta
+
+        elem_bytes = 4 if precision == "fp32" else 8
+        uarch_id = PLATFORM_META.get(platform, {}).get("uarch_id")
+        simd = PLATFORM_META.get(platform, {}).get("simd")
+        uarch_spec = uarch_config.get(simd, {}).get(uarch_id, {}) if uarch_config and simd else {}
+        l1d_bytes = get_l1d_bytes(meta_json_path, uarch_spec)
+
+        common_ks = sorted(set(mipp_champ_data["K"]).intersection(set(blis_data["K"])))
+
+        k_entries_for_group = []
+
+        for k in common_ks:
+            m_sub = mipp_champ_data[mipp_champ_data["K"] == k]
+            b_sub = blis_data[blis_data["K"] == k]
+            if m_sub.empty or b_sub.empty:
+                continue
+
+            m_row = m_sub.iloc[0]
+            b_row = b_sub.iloc[0]
+
+            m_fc = float(m_row["FLOP_per_cycle_median"]) if "FLOP_per_cycle_median" in m_row else 0.0
+            b_fc = float(b_row["FLOP_per_cycle_median"]) if "FLOP_per_cycle_median" in b_row else 0.0
+
+            if m_fc <= 0.0 and "GFLOPS_median" in m_row and "Eff_GHz" in m_row and float(m_row["Eff_GHz"]) > 0:
+                ops_m = 2.0 * float(m_row["M"]) * float(m_row["N"]) * float(k)
+                m_fc = float(m_row["GFLOPS_median"]) / float(m_row["Eff_GHz"])
+
+            if b_fc <= 0.0 and "GFLOPS_median" in b_row and "Eff_GHz" in b_row and float(b_row["Eff_GHz"]) > 0:
+                b_fc = float(b_row["GFLOPS_median"]) / float(b_row["Eff_GHz"])
+
+            ratio = (m_fc / b_fc) if b_fc > 0 else float("nan")
+
+            ci_low, ci_high = float("nan"), float("nan")
+            ci_avail = False
+
+            if raw_df is not None:
+                samples_m = flop_per_cycle_samples(raw_df, mipp_champ_kernel, k)
+                samples_b = flop_per_cycle_samples(raw_df, "blis_native", k)
+                if samples_m and samples_b:
+                    _, ci_low, ci_high = bootstrap_ratio_of_medians(samples_m, samples_b)
+                    ci_avail = True
+
+            ws_m = working_set_bytes(int(m_row["M"]), int(m_row["N"]), k, elem_bytes)
+            ws_b = working_set_bytes(int(b_row["M"]), int(b_row["N"]), k, elem_bytes)
+
+            m_exceeds = (ws_m > l1d_bytes) if l1d_bytes else False
+            b_exceeds = (ws_b > l1d_bytes) if l1d_bytes else False
+
+            det_entry = {
+                "Platform": platform,
+                "Compiler": compiler,
+                "Precision": precision,
+                "Variant": variant,
+                "Layout": layout,
+                "K": int(k),
+                "MIPP_kernel": mipp_champ_kernel,
+                "MIPP_FC_med": m_fc,
+                "BLIS_FC_med": b_fc,
+                "Ratio": ratio,
+                "CI_low": ci_low,
+                "CI_high": ci_high,
+                "WS_MIPP_bytes": ws_m,
+                "WS_BLIS_bytes": ws_b,
+                "L1d_bytes": l1d_bytes if l1d_bytes is not None else np.nan,
+                "MIPP_exceeds_L1d": m_exceeds,
+                "BLIS_exceeds_L1d": b_exceeds,
+                "ci_available": ci_avail,
+            }
+            detailed_rows.append(det_entry)
+            k_entries_for_group.append(det_entry)
+
+            details_dict[(platform, compiler, precision, variant, layout)][int(k)] = {
+                "MIPPv2_GFLOPS": float(m_row["GFLOPS_median"]) if "GFLOPS_median" in m_row else 0.0,
+                "BLIS_GFLOPS": float(b_row["GFLOPS_median"]) if "GFLOPS_median" in b_row else 0.0,
+                "Ratio_pct": ratio * 100.0 if not np.isnan(ratio) else 0.0,
+                "MIPPv2_FC": m_fc,
+                "BLIS_FC": b_fc,
+                "CI_low": ci_low,
+                "CI_high": ci_high,
+                "CI_available": ci_avail,
+                "WS_MIPP_bytes": ws_m,
+                "WS_BLIS_bytes": ws_b,
+                "MIPP_exceeds_L1d": m_exceeds,
+                "BLIS_exceeds_L1d": b_exceeds,
+                "L1d_bytes": l1d_bytes,
+            }
+
+        # Windowed summary calculation (k_window[0] <= K <= k_window[1])
+        k_min, k_max = k_window
+        window_entries = [e for e in k_entries_for_group if k_min <= e["K"] <= k_max and not np.isnan(e["Ratio"])]
+
+        if window_entries:
+            w_ratios = [e["Ratio"] for e in window_entries]
+            w_ci_low = [e["CI_low"] for e in window_entries]
+            w_ci_high = [e["CI_high"] for e in window_entries]
+            w_ci_avail = all(e["ci_available"] for e in window_entries)
+
+            r_geomean = geomean(w_ratios)
+            r_min = float(np.min(w_ratios))
+            r_max = float(np.max(w_ratios))
+            n_k = len(window_entries)
+            parity_label = determine_parity_label(w_ratios, w_ci_low, w_ci_high, w_ci_avail)
+        else:
+            r_geomean = float("nan")
+            r_min = float("nan")
+            r_max = float("nan")
+            n_k = 0
+            parity_label = "no_data"
+
+        # Legacy peak-over-peak metric preserved under Legacy_PeakOverPeak_pct
+        mipp_peak_gflops = mipp_champ_data["GFLOPS_median"].max() if "GFLOPS_median" in mipp_champ_data else 0.0
+        blis_peak_gflops = blis_data["GFLOPS_median"].max() if "GFLOPS_median" in blis_data else 0.0
+        legacy_pop_pct = (mipp_peak_gflops / blis_peak_gflops * 100.0) if blis_peak_gflops > 0 else 0.0
+
+        best_row_idx = mipp_champ_data["GFLOPS_median"].idxmax() if "GFLOPS_median" in mipp_champ_data else 0
+        best_k = int(mipp_champ_data.loc[best_row_idx, "K"]) if "GFLOPS_median" in mipp_champ_data else 0
         mipp_peak_fc = mipp_champ_data["FLOP_per_cycle_median"].max() if "FLOP_per_cycle_median" in mipp_champ_data else 0.0
-        mipp_med_fc = mipp_peak_fc
-
-        blis_peak_gflops = blis_data["GFLOPS_median"].max()
-        blis_median_gflops = blis_data["GFLOPS_median"].max()
         blis_peak_fc = blis_data["FLOP_per_cycle_median"].max() if "FLOP_per_cycle_median" in blis_data else 0.0
-        blis_med_fc = blis_peak_fc
-
-        ratio_peak_gflops = (mipp_peak_gflops / blis_peak_gflops * 100.0) if blis_peak_gflops > 0 else 0.0
-        ratio_peak_fc = (mipp_peak_fc / blis_peak_fc * 100.0) if blis_peak_fc > 0 else 0.0
-        ratio_med_fc = ratio_peak_fc
-
-        # Best dimensions
-        best_row = mipp_champ_data.loc[mipp_best_idx]
-        best_k = int(best_row["K"])
 
         summary_rows.append({
             "Platform": platform,
             "Compiler": compiler,
+            "Precision": precision,
+            "Variant": variant,
             "Layout": layout,
-            "MIPPv2_Champion": mipp_best_kernel,
+            "MIPP_Champion": mipp_champ_kernel,
+            "Ratio_geomean": r_geomean,
+            "Ratio_min": r_min,
+            "Ratio_max": r_max,
+            "N_K": n_k,
+            "Parity_label": parity_label,
+            "Legacy_PeakOverPeak_pct": legacy_pop_pct,
+            # Backwards compatibility aliases
+            "MIPPv2_Champion": mipp_champ_kernel,
             "MIPPv2_Peak_GFLOPS": mipp_peak_gflops,
             "BLIS_Peak_GFLOPS": blis_peak_gflops,
-            "Ratio_Peak_GFLOPS_pct": ratio_peak_gflops,
+            "Ratio_Peak_GFLOPS_pct": legacy_pop_pct,
             "MIPPv2_Peak_FC": mipp_peak_fc,
             "BLIS_Peak_FC": blis_peak_fc,
-            "Ratio_Peak_FC_pct": ratio_peak_fc,
-            "MIPPv2_Med_FC": mipp_med_fc,
-            "BLIS_Med_FC": blis_med_fc,
-            "Ratio_Med_FC_pct": ratio_med_fc,
             "Best_K": best_k,
         })
 
-        # Record per-K breakdown
-        common_ks = sorted(set(mipp_champ_data["K"]).intersection(set(blis_data["K"])))
-        for k in common_ks:
-            m_sub = mipp_champ_data[mipp_champ_data["K"] == k]
-            b_sub = blis_data[blis_data["K"] == k]
-            if not m_sub.empty and not b_sub.empty:
-                m_gflops = m_sub["GFLOPS_median"].values[0]
-                b_gflops = b_sub["GFLOPS_median"].values[0]
-                m_fc = m_sub["FLOP_per_cycle_median"].values[0] if "FLOP_per_cycle_median" in m_sub else 0.0
-                b_fc = b_sub["FLOP_per_cycle_median"].values[0] if "FLOP_per_cycle_median" in b_sub else 0.0
-                r_gflops = (m_gflops / b_gflops * 100.0) if b_gflops > 0 else 0.0
-                detailed_comparisons[(platform, compiler, layout)][k] = {
-                    "MIPPv2_GFLOPS": m_gflops,
-                    "BLIS_GFLOPS": b_gflops,
-                    "Ratio_pct": r_gflops,
-                    "MIPPv2_FC": m_fc,
-                    "BLIS_FC": b_fc,
-                }
-
     summary_df = pd.DataFrame(summary_rows)
-    return summary_df, detailed_comparisons
+    detailed_df = pd.DataFrame(detailed_rows)
+    return summary_df, detailed_df, details_dict
 
 
 # ==============================================================================
 # Visualization Functions (Publication-Grade SVG & PNG)
 # ==============================================================================
 
-def _get_platform_rows(summary_df: pd.DataFrame, target_plats: List[str]) -> List[Tuple[str, str, pd.Series]]:
-    """Helper to extract ordered (platform, compiler, row) tuples."""
-    rows = []
-    for p in target_plats:
-        sub = summary_df[summary_df["Platform"] == p]
-        for comp in ["gcc", "clang"]:
-            c_sub = sub[sub["Compiler"] == comp]
-            if not c_sub.empty:
-                rows.append((p, comp, c_sub.iloc[0]))
-    return rows
-
-
-def plot_blis_ratio_comparison(summary_df: pd.DataFrame, out_dir: Path, enable_png: bool = True, is_fp32: bool = False) -> None:
+def plot_blis_ratio_comparison(
+    summary_df: pd.DataFrame,
+    out_dir: Path,
+    enable_png: bool = True,
+    is_fp32: bool = False,
+    variant_name: str = "default",
+) -> None:
     """
-    Generates an executive horizontal bar chart of the % of BLIS Peak Reached.
-    Uses a 2-panel layout to clearly display standard architectures without squishing them
-    due to SpacemiT A100's 365% outlier.
+    Generates an executive horizontal bar chart of Ratio_geomean (% of BLIS)
+    with [min CI_low, max CI_high] error bars over the K-window.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
+    if summary_df.empty:
+        return
+
+    sub_df = summary_df.copy()
     fig = plt.figure(figsize=(13.5, 9.0))
     gs = fig.add_gridspec(2, 1, height_ratios=[6.5, 2.2], hspace=0.35)
 
@@ -194,54 +422,84 @@ def plot_blis_ratio_comparison(summary_df: pd.DataFrame, out_dir: Path, enable_p
     ax_a100 = fig.add_subplot(gs[1])
 
     main_plats = ["zen4_avx512", "zen5_avx512", "meteorlake_avx2", "m1_neon", "rpi5_neon", "x100_rvv", "x60_rvv"]
-    main_rows = _get_platform_rows(summary_df, main_plats)
+
+    def extract_rows(plats: List[str]):
+        res = []
+        for p in plats:
+            p_sub = sub_df[sub_df["Platform"] == p]
+            for comp in ["gcc", "clang"]:
+                c_sub = p_sub[p_sub["Compiler"] == comp]
+                if not c_sub.empty:
+                    res.append((p, comp, c_sub.iloc[0]))
+        return res
+
+    main_rows = extract_rows(main_plats)
     y_pos = np.arange(len(main_rows))
 
     bar_colors = []
+    ratios = []
+    err_low = []
+    err_high = []
+
     for p, comp, r in main_rows:
         simd = PLATFORM_META.get(p, {}).get("simd", "avx2")
         base_col = SIMD_FAMILY_COLORS.get(simd, "#0284c7")
         bar_colors.append(base_col if comp == "gcc" else matplotlib.colors.to_rgba(base_col, 0.72))
 
-    ratios = [r["Ratio_Peak_GFLOPS_pct"] for _, _, r in main_rows]
-    bars = ax_main.barh(y_pos, ratios, height=0.62, color=bar_colors, edgecolor=BORDER_COLOR, linewidth=0.8, zorder=3)
+        val = (r["Ratio_geomean"] * 100.0) if not np.isnan(r["Ratio_geomean"]) else 0.0
+        ratios.append(val)
 
-    # 100% parity line
+        r_min = (r["Ratio_min"] * 100.0) if not np.isnan(r["Ratio_min"]) else val
+        r_max = (r["Ratio_max"] * 100.0) if not np.isnan(r["Ratio_max"]) else val
+        err_low.append(max(0.0, val - r_min))
+        err_high.append(max(0.0, r_max - val))
+
+    xerr = [err_low, err_high] if len(main_rows) > 0 else None
+
+    bars = ax_main.barh(
+        y_pos,
+        ratios,
+        xerr=xerr,
+        capsize=3.5,
+        height=0.62,
+        color=bar_colors,
+        edgecolor=BORDER_COLOR,
+        linewidth=0.8,
+        zorder=3,
+        error_kw={"elinewidth": 1.2, "ecolor": "#475569"},
+    )
+
     ax_main.axvline(100.0, color="#475569", linestyle="--", linewidth=1.5, zorder=4)
     ax_main.text(100.5, len(main_rows) - 0.5, "100% BLIS Parity", color="#475569", fontsize=9.5, fontweight="bold", va="bottom", ha="left")
 
     for idx, ((p, comp, r), bar) in enumerate(zip(main_rows, bars)):
-        val = r["Ratio_Peak_GFLOPS_pct"]
-        m_gf = r["MIPPv2_Peak_GFLOPS"]
-        b_gf = r["BLIS_Peak_GFLOPS"]
-        lbl = f"{val:.1f}% ({m_gf:.1f} vs {b_gf:.1f} GFLOP/s)"
-        ax_main.text(val + 1.2, idx, lbl, va="center", ha="left", color=TEXT_PRIMARY, fontweight="bold", fontsize=9.0)
+        val = ratios[idx]
+        lbl = f"{val:.1f}% [{r['Ratio_min']*100:.1f}–{r['Ratio_max']*100:.1f}%] ({r['Parity_label']})"
+        ax_main.text(val + 1.5, idx, lbl, va="center", ha="left", color=TEXT_PRIMARY, fontweight="bold", fontsize=9.0)
 
     labels = [f"{PLATFORM_META.get(p, {}).get('name', p)} ({comp.upper()})" for p, comp, _ in main_rows]
     ax_main.set_yticks(y_pos)
     ax_main.set_yticklabels(labels, fontsize=9.5)
     ax_main.invert_yaxis()
-    ax_main.set_xlim(0, 125)
+    ax_main.set_xlim(0, 130)
     prec_label = "SGEMM" if is_fp32 else "DGEMM"
-    ax_main.set_xlabel(f"Sustained {prec_label} Performance (% of BLIS Peak Reached)", fontsize=10.5, fontweight="bold")
-    ax_main.set_title("Standard Architectural Targets (Direct BLIS Equivalent / Hand-Tuned Micro-Kernel)", fontsize=11.5, pad=8)
+    ax_main.set_xlabel(f"Matched-K Window Geometric Mean Ratio (% of BLIS)", fontsize=10.5, fontweight="bold")
+    ax_main.set_title(f"Standard Architectural Targets — Matched-K Ratio ({variant_name})", fontsize=11.5, pad=8)
 
     # Panel 2: A100 Outlier
-    a100_rows = _get_platform_rows(summary_df, ["a100_rvv"])
+    a100_rows = extract_rows(["a100_rvv"])
     y_a100 = np.arange(len(a100_rows))
     a100_colors = [SIMD_FAMILY_COLORS["rvv"] if comp == "gcc" else matplotlib.colors.to_rgba(SIMD_FAMILY_COLORS["rvv"], 0.72) for _, comp, _ in a100_rows]
-    a100_ratios = [r["Ratio_Peak_GFLOPS_pct"] for _, _, r in a100_rows]
+    a100_ratios = [(r["Ratio_geomean"] * 100.0) if not np.isnan(r["Ratio_geomean"]) else 0.0 for _, _, r in a100_rows]
 
     bars_a100 = ax_a100.barh(y_a100, a100_ratios, height=0.55, color=a100_colors, edgecolor=BORDER_COLOR, linewidth=0.8, zorder=3)
     ax_a100.axvline(100.0, color="#475569", linestyle="--", linewidth=1.5, zorder=4)
     ax_a100.text(101.5, 0.5, "100% BLIS (Fallback X60)", color="#475569", fontsize=9.0, fontweight="bold", va="center")
 
     for idx, ((p, comp, r), bar) in enumerate(zip(a100_rows, bars_a100)):
-        val = r["Ratio_Peak_GFLOPS_pct"]
-        m_gf = r["MIPPv2_Peak_GFLOPS"]
-        b_gf = r["BLIS_Peak_GFLOPS"]
-        speedup = (m_gf / b_gf) if b_gf > 0 else 1.0
-        lbl = f"{val:.1f}% ({m_gf:.2f} vs {b_gf:.2f} GFLOP/s) — {speedup:.2f}× Speedup"
+        val = a100_ratios[idx]
+        speedup = val / 100.0
+        lbl = f"{val:.1f}% ({speedup:.2f}× speedup)"
         ax_a100.text(val + 3.0, idx, lbl, va="center", ha="left", color=TEXT_PRIMARY, fontweight="bold", fontsize=9.0)
 
     labels_a100 = [f"{PLATFORM_META.get(p, {}).get('name', p)} ({comp.upper()})" for p, comp, _ in a100_rows]
@@ -249,12 +507,12 @@ def plot_blis_ratio_comparison(summary_df: pd.DataFrame, out_dir: Path, enable_p
     ax_a100.set_yticklabels(labels_a100, fontsize=9.5)
     ax_a100.invert_yaxis()
     ax_a100.set_xlim(0, 420)
-    ax_a100.set_xlabel(f"Sustained {prec_label} Performance (% of BLIS Peak Reached)", fontsize=10.5, fontweight="bold")
-    ax_a100.set_title("SpacemiT A100 VLEN=1024b Portability Study (MIPPv2 VLEN auto-scaling vs BLIS 256b X60 fallback)", fontsize=11.5, pad=8)
+    ax_a100.set_xlabel(f"Matched-K Window Geometric Mean Ratio (% of BLIS)", fontsize=10.5, fontweight="bold")
+    ax_a100.set_title("SpacemiT A100 VLEN=1024b Portability Study", fontsize=11.5, pad=8)
 
-    fig.suptitle(f"GEMMBench — MIPPv2 vs BLIS Reference Micro-Kernels Peak {prec_label} Ratio", fontsize=14, fontweight="bold", y=0.985)
-    fig.text(0.5, 0.005, "Reference microkernels: flame/blis (x86/ARM) & stepannassyr/blis (RVV X60)", ha="center", fontsize=8.5, color="#64748b", fontstyle="italic")
-    
+    fig.suptitle(f"GEMMBench — MIPPv2 vs BLIS Matched-K Geometric Mean Ratio ({prec_label}, {variant_name})", fontsize=14, fontweight="bold", y=0.985)
+    fig.text(0.5, 0.005, "Bar represents Ratio_geomean; error whiskers show [Ratio_min, Ratio_max] over K window", ha="center", fontsize=8.5, color="#64748b", fontstyle="italic")
+
     svg_path = out_dir / "blis_vs_mippv2_ratio_comparison.svg"
     fig.savefig(svg_path, bbox_inches="tight")
     print(f"✓ Generated SVG: {svg_path}")
@@ -267,101 +525,16 @@ def plot_blis_ratio_comparison(summary_df: pd.DataFrame, out_dir: Path, enable_p
     plt.close(fig)
 
 
-def plot_flop_per_cycle_comparison(summary_df: pd.DataFrame, out_dir: Path, enable_png: bool = True, is_fp32: bool = False) -> None:
+def plot_k_scaling_grid(
+    details: Dict,
+    out_dir: Path,
+    enable_png: bool = True,
+    is_fp32: bool = False,
+    variant_name: str = "default",
+) -> None:
     """
-    Generates a grouped horizontal bar chart comparing raw Peak FLOP/cycle
-    between MIPPv2 and BLIS Native across all targets.
-    """
-    out_dir.mkdir(parents=True, exist_ok=True)
-    fig, ax = plt.subplots(figsize=(14.0, 8.5))
-
-    if is_fp32:
-        # Group targets by theoretical peak: 32.0 FLOP/cycle tier, then 16.0 FLOP/cycle tier
-        ordered_plats = [
-            "zen4_avx512", "zen5_avx512", "meteorlake_avx2", "m1_neon", "a100_rvv",
-            "rpi5_neon", "x100_rvv", "x60_rvv"
-        ]
-    else:
-        ordered_plats = ["zen4_avx512", "zen5_avx512", "meteorlake_avx2", "m1_neon", "rpi5_neon", "x100_rvv", "x60_rvv", "a100_rvv"]
-
-    all_rows = _get_platform_rows(summary_df, ordered_plats)
-    y_pos = np.arange(len(all_rows))
-    bar_h = 0.35
-
-    m_fc = [r["MIPPv2_Peak_FC"] for _, _, r in all_rows]
-    b_fc = [r["BLIS_Peak_FC"] for _, _, r in all_rows]
-
-    col_mipp = [SIMD_FAMILY_COLORS.get(PLATFORM_META.get(p, {}).get("simd", "avx2"), "#0284c7") for p, _, _ in all_rows]
-    col_blis = "#64748b"  # Slate
-
-    bars1 = ax.barh(y_pos - bar_h/2, m_fc, height=bar_h, color=col_mipp, edgecolor=BORDER_COLOR, label="MIPPv2 Champion", zorder=3)
-    bars2 = ax.barh(y_pos + bar_h/2, b_fc, height=bar_h, color=col_blis, edgecolor=BORDER_COLOR, label="BLIS Native Reference", zorder=3, alpha=0.85, hatch="//")
-
-    # Value annotations
-    for idx, (m_val, b_val) in enumerate(zip(m_fc, b_fc)):
-        ax.text(m_val + 0.3, idx - bar_h/2, f"{m_val:.2f}", va="center", ha="left", color=TEXT_PRIMARY, fontweight="bold", fontsize=8.5)
-        ax.text(b_val + 0.3, idx + bar_h/2, f"{b_val:.2f}", va="center", ha="left", color="#475569", fontsize=8.5)
-
-    # Ceiling lines and Tier annotations
-    if is_fp32:
-        ax.axvline(16.0, color="#94a3b8", linestyle=":", linewidth=1.2, zorder=2)
-        ax.axvline(32.0, color="#94a3b8", linestyle=":", linewidth=1.2, zorder=2)
-        ax.text(16.0, -0.6, "16.0 FLOP/cyc Ceiling", color="#64748b", fontsize=9.0, fontweight="bold", ha="center")
-        ax.text(32.0, -0.6, "32.0 FLOP/cyc Ceiling", color="#64748b", fontsize=9.0, fontweight="bold", ha="center")
-
-        sep_y = None
-        for idx in range(len(all_rows) - 1):
-            p1 = all_rows[idx][0]
-            p2 = all_rows[idx + 1][0]
-            if get_platform_peak_fc(p1, "fp32") == 32.0 and get_platform_peak_fc(p2, "fp32") == 16.0:
-                sep_y = idx + 0.5
-                break
-        if sep_y is not None:
-            ax.axhline(sep_y, color="#94a3b8", linestyle="--", linewidth=1.0, alpha=0.7, zorder=2)
-            ax.text(36.0, sep_y - 0.35, "▲ Theoretical Peak: 32.0 FLOP/cycle", color="#64748b", fontsize=8.5, fontweight="bold", fontstyle="italic", ha="right", va="bottom")
-            ax.text(36.0, sep_y + 0.35, "▼ Theoretical Peak: 16.0 FLOP/cycle", color="#64748b", fontsize=8.5, fontweight="bold", fontstyle="italic", ha="right", va="top")
-
-        ax.set_xlim(0, 36.5)
-        prec_desc = "SP FLOP / cycle"
-    else:
-        ax.axvline(8.0, color="#94a3b8", linestyle=":", linewidth=1.2, zorder=2)
-        ax.axvline(16.0, color="#94a3b8", linestyle=":", linewidth=1.2, zorder=2)
-        ax.text(8.0, -0.6, "8.0 FLOP/cyc Ceiling", color="#64748b", fontsize=9.0, fontweight="bold", ha="center")
-        ax.text(16.0, -0.6, "16.0 FLOP/cyc Ceiling", color="#64748b", fontsize=9.0, fontweight="bold", ha="center")
-        ax.set_xlim(0, 18.5)
-        prec_desc = "DP FLOP / cycle"
-
-    labels_all = [f"{PLATFORM_META.get(p, {}).get('name', p)} ({comp.upper()})" for p, comp, _ in all_rows]
-    ax.set_yticks(y_pos)
-    ax.set_yticklabels(labels_all, fontsize=9.5)
-    ax.invert_yaxis()
-    ax.set_ylim(len(all_rows) - 0.2, -1.2)
-    ax.set_xlabel(f"Peak Sustained Compute Density ({prec_desc})", fontsize=11, fontweight="bold")
-    ax.set_title(f"Cross-Microarchitecture Sustained Compute Density ({'FP32' if is_fp32 else 'FP64'}) — MIPPv2 vs BLIS Reference Micro-Kernels", fontsize=13, fontweight="bold", pad=12)
-
-    legend_patches = [
-        Patch(facecolor="#10b981", edgecolor=BORDER_COLOR, label="MIPPv2 Champion"),
-        Patch(facecolor="#64748b", edgecolor=BORDER_COLOR, hatch="//", label="BLIS Native Reference"),
-    ]
-    ax.legend(handles=legend_patches, loc="lower right", framealpha=0.95)
-    fig.text(0.5, 0.005, "Reference microkernels: flame/blis (x86/ARM) & stepannassyr/blis (RVV X60)", ha="center", fontsize=8.5, color="#64748b", fontstyle="italic")
-
-    svg_path = out_dir / "blis_vs_mippv2_flop_per_cycle_comparison.svg"
-    fig.savefig(svg_path, bbox_inches="tight")
-    print(f"✓ Generated SVG: {svg_path}")
-
-    if enable_png:
-        png_path = out_dir / "blis_vs_mippv2_flop_per_cycle_comparison.png"
-        fig.savefig(png_path, dpi=160, bbox_inches="tight")
-        print(f"✓ Generated PNG: {png_path}")
-
-    plt.close(fig)
-
-
-def plot_k_scaling_grid(details: Dict, out_dir: Path, enable_png: bool = True, is_fp32: bool = False) -> None:
-    """
-    Generates a 2x4 multipanel grid showing FLOP/cycle scaling over K ∈ [32..1024]
-    for both MIPPv2 and BLIS across all 8 microarchitectures.
+    Generates a 2x4 multipanel grid showing ratio MIPPv2 / BLIS (%) scaling over K ∈ [32..1024]
+    with 95% bootstrap confidence bands and vertical L1d cache boundary indicator.
     """
     out_dir.mkdir(parents=True, exist_ok=True)
     fig, axes = plt.subplots(2, 4, figsize=(16.5, 8.5), sharex=True)
@@ -372,72 +545,80 @@ def plot_k_scaling_grid(details: Dict, out_dir: Path, enable_png: bool = True, i
     for idx, p in enumerate(grid_plats):
         ax = axes[idx]
         meta = PLATFORM_META.get(p, {"name": p, "simd": "avx2", "peak_fc": 16.0})
-        peak_fc = get_platform_peak_fc(p, "fp32" if is_fp32 else "fp64")
 
-        # Pick gcc or clang (prefer gcc, fallback to clang)
+        # Try gcc first, fallback to clang
         comp = "gcc"
-        if (p, "gcc", "crr") not in details:
-            comp = "clang"
+        prec = "fp32" if is_fp32 else "fp64"
+        key = (p, comp, prec, variant_name, "crr")
 
-        k_data = details.get((p, comp, "crr"), {})
+        if key not in details:
+            comp = "clang"
+            key = (p, comp, prec, variant_name, "crr")
+
+        k_data = details.get(key, {})
         if not k_data:
-            comp = "clang" if comp == "gcc" else "gcc"
-            k_data = details.get((p, comp, "crr"), {})
+            comp = "gcc" if comp == "clang" else "clang"
+            key = (p, comp, prec, variant_name, "crr")
+            k_data = details.get(key, {})
 
         ks = sorted(k_data.keys())
-        m_fc_vals = [k_data[k]["MIPPv2_FC"] for k in ks]
-        b_fc_vals = [k_data[k]["BLIS_FC"] for k in ks]
+        ratios = [k_data[k]["Ratio_pct"] for k in ks]
+        ci_lows = [(k_data[k]["CI_low"] * 100.0) if not np.isnan(k_data[k]["CI_low"]) else k_data[k]["Ratio_pct"] for k in ks]
+        ci_highs = [(k_data[k]["CI_high"] * 100.0) if not np.isnan(k_data[k]["CI_high"]) else k_data[k]["Ratio_pct"] for k in ks]
 
         color = SIMD_FAMILY_COLORS.get(meta["simd"], "#0284c7")
 
-        ax.plot(ks, m_fc_vals, marker="o", markersize=5.5, linewidth=2.0, color=color, label="MIPPv2 Champion", zorder=4)
-        ax.plot(ks, b_fc_vals, marker="s", markersize=5.0, linewidth=1.8, linestyle="--", color="#64748b", label="BLIS Native", zorder=3)
+        ax.axhline(100.0, color="#64748b", linestyle="--", linewidth=1.2, zorder=2)
 
-        # Theoretical peak line
-        ax.axhline(peak_fc, color="#cbd5e1", linestyle=":", linewidth=1.2, zorder=2)
+        if ks:
+            ax.plot(ks, ratios, marker="o", markersize=5.0, linewidth=2.0, color=color, label="MIPP / BLIS Ratio (%)", zorder=4)
 
-        if is_fp32:
-            ylim_max = 35.0 if peak_fc >= 32.0 else 18.0
-        else:
-            ylim_max = 17.5 if peak_fc >= 16.0 else 9.0
-        ax.set_ylim(0, ylim_max)
+            # Fill bootstrap CI band if available
+            has_ci = any(k_data[k]["CI_available"] for k in ks)
+            if has_ci:
+                ax.fill_between(ks, ci_lows, ci_highs, color=color, alpha=0.22, zorder=3, label="95% Bootstrap CI")
 
-        # Cache residency threshold (K <= 128 L1d resident compute bound vs K >= 256 L2 spill)
-        ax.axvline(L1_CACHE_BOUNDARY_K, color="#cbd5e1", linestyle="--", linewidth=1.0, alpha=0.85, zorder=2)
-        if idx == 0:
-            ax.text(L1_CACHE_BOUNDARY_K * 0.88, ylim_max * 0.06, "L1d", color="#94a3b8", fontsize=8.0, ha="right", va="bottom", fontweight="bold")
-            ax.text(L1_CACHE_BOUNDARY_K * 1.12, ylim_max * 0.06, "L2", color="#94a3b8", fontsize=8.0, ha="left", va="bottom", fontweight="bold")
+            # Mark L1d spill transition
+            l1d_spill_k = None
+            for k in ks:
+                if k_data[k]["MIPP_exceeds_L1d"] or k_data[k]["BLIS_exceeds_L1d"]:
+                    l1d_spill_k = k
+                    break
+
+            if l1d_spill_k is not None:
+                ax.axvline(l1d_spill_k, color="#f59e0b", linestyle=":", linewidth=1.4, alpha=0.9, zorder=2)
+                ax.text(
+                    l1d_spill_k * 1.05,
+                    55.0 if p == "a100_rvv" else 65.0,
+                    "L1d spill †",
+                    color="#d97706",
+                    fontsize=7.5,
+                    fontweight="bold",
+                    rotation=90,
+                    va="bottom",
+                )
 
         ax.set_title(f"{meta['name']} ({comp.upper()})", fontsize=11, fontweight="bold", pad=4)
         ax.set_xscale("log", base=2)
-        ax.set_xticks(ks)
-        ax.set_xticklabels([str(k) for k in ks], fontsize=8.5)
+        if ks:
+            ax.set_xticks(ks)
+            ax.set_xticklabels([str(k) for k in ks], fontsize=8.5)
+
+        if p == "a100_rvv":
+            ax.set_ylim(50, 420)
+        else:
+            ax.set_ylim(60, 140)
 
         if idx % 4 == 0:
-            ax.set_ylabel("FLOP / cycle", fontsize=10, fontweight="bold")
+            ax.set_ylabel("% of BLIS", fontsize=10, fontweight="bold")
         if idx >= 4:
             ax.set_xlabel("Panel Depth K", fontsize=10, fontweight="bold")
 
-        # Small K annotation
-        if ks:
-            k0 = ks[0]
-            r0 = k_data[k0]["Ratio_pct"]
-            if r0 > 102.0:
-                ax.annotate(
-                    f"+{r0-100:.1f}%",
-                    xy=(k0, m_fc_vals[0]),
-                    xytext=(k0 * 1.25, m_fc_vals[0] + (0.5 if meta['peak_fc'] == 8.0 else 1.0)),
-                    fontsize=8.0,
-                    fontweight="bold",
-                    color=color,
-                    arrowprops=dict(arrowstyle="->", color=color, lw=1.0)
-                )
+    axes[0].legend(loc="lower right", fontsize=8.0, framealpha=0.92)
 
-    axes[0].legend(loc="lower right", fontsize=8.5, framealpha=0.92)
-
-    fig.suptitle("Scaling Across Panel Depth K ∈ [32, 1024] — MIPPv2 vs BLIS Reference Micro-Kernels", fontsize=14, fontweight="bold", y=0.98)
+    fig.suptitle(f"Matched-K Ratio Across Panel Depth K ∈ [32, 1024] — MIPPv2 vs BLIS ({variant_name})", fontsize=14, fontweight="bold", y=0.98)
     plt.subplots_adjust(top=0.91, bottom=0.09, left=0.06, right=0.98, hspace=0.28, wspace=0.22)
-    fig.text(0.5, 0.015, "Reference microkernels: flame/blis (x86/ARM) & stepannassyr/blis (RVV X60)", ha="center", fontsize=8.5, color="#64748b", fontstyle="italic")
+    fig.text(0.5, 0.015, "Shaded band: 95% hierarchical bootstrap CI; vertical line: first K exceeding L1d capacity", ha="center", fontsize=8.5, color="#64748b", fontstyle="italic")
 
     svg_path = out_dir / "blis_vs_mippv2_k_scaling_grid.svg"
     fig.savefig(svg_path, bbox_inches="tight")
@@ -457,93 +638,61 @@ def plot_k_scaling_grid(details: Dict, out_dir: Path, enable_png: bool = True, i
 
 def format_markdown_report(
     summary_df: pd.DataFrame,
+    detailed_df: pd.DataFrame,
     details: Dict,
     plot_dir: Optional[Path] = None,
     is_fp32: bool = False,
     out_md_path: Optional[Path] = None,
+    k_window: Tuple[int, int] = (128, 384),
+    variant_name: str = "default",
 ) -> str:
-    """Generates a GitHub-flavored Markdown comparative analysis document."""
+    """Generates a publication-grade GitHub-flavored Markdown comparative analysis document."""
     lines = []
     prec_str = "Single-Precision (FP32 / SGEMM)" if is_fp32 else "Double-Precision (FP64 / DGEMM)"
+    k_min, k_max = k_window
+
     lines.append(f"# GEMMBench — Comparative Analysis: MIPPv2 vs BLIS Reference Micro-Kernels ({prec_str})\n")
-    lines.append(f"Empirical comparison of sustained in-register compute density and throughput between MIPPv2 champions")
+    lines.append(f"**Ablation Variant:** `{variant_name}` | **Analysis Window:** $K \\in [{k_min}, {k_max}]$ (inclusive)\n")
+    lines.append("Empirical comparison of sustained in-register compute density and throughput between MIPPv2 champions")
     lines.append(f"and hand-tuned BLIS assembly micro-kernels across target microarchitectures in {prec_str}.\n")
 
-    if summary_df.empty:
-        lines.append("> [!WARNING]\n> No paired MIPPv2 vs BLIS benchmark datasets were found.\n")
-        return "\n".join(lines)
-
-    def get_status_str(ratio: float) -> str:
-        if 98.0 <= ratio <= 102.0:
-            return "🟢 Parity (98–102%)"
-        elif ratio > 102.0:
-            return f"🔵 MIPPv2 (+{ratio - 100.0:.1f}%)"
-        elif ratio >= 95.0:
-            return "🟢 Near-Parity (≥95%)"
-        elif ratio >= 90.0:
-            return "🟡 Competitive (≥90%)"
-        else:
-            return "🔴 Delta (<90%)"
-
-    symmetric_df = summary_df[summary_df["Platform"] != "a100_rvv"]
-    a100_df = summary_df[summary_df["Platform"] == "a100_rvv"]
-
-    lines.append("## 1. Symmetric Microarchitectural Comparison (Direct Micro-Kernel Equivalents)\n")
+    lines.append("## 1. Summary: Matched-$K$ Window Ratio ($K \\in [{k_min}, {k_max}]$)\n")
     lines.append("> [!NOTE]")
-    lines.append("> **Methodological Scope:**")
-    prec_gemm = "SGEMM" if is_fp32 else "DGEMM"
-    elem_bytes = 4 if is_fp32 else 8
-    nr_avx512 = 64 if is_fp32 else 32
-    lines.append(f"> - **In-Register Scope:** This benchmark strictly measures in-register compute saturation ($M_R \\times N_R \\times K$) on hot L1 cache panels, isolating FMA pipeline throughput without end-to-end {prec_gemm} cache blocking (GotoBLAS $J_C, P_C, I_C$), dynamic packing overheads, or fringe tiles.")
-    lines.append("> - **Architectural Symmetry:** Evaluates targets where BLIS provides a native, ISA-matched microkernel (AVX-512, AVX2, NEON, RVV 256b).")
-    lines.append("> - **Native Epilogue Layout Alignment:** Each microkernel is evaluated against its optimal hardware storage layout: MIPPv2 writes $C$ in row-major (`CRR`), while BLIS writes $C$ in native column-major (`CRC` on SKX, X60, and ARMv8A) to ensure both frameworks leverage contiguous vector stores and avoid scalar scatter/gather epilogue distortion.")
-    lines.append("> - **Small-$K$ Epilogue & Prologue Specialization ($K=32, 64$):** By default, MIPPv2 microkernels use compile-time `FastPath` specialization ($\\alpha=1, \\beta=0$) that emits direct vector stores without $\\alpha$ scaling or $\\beta$ branch checks, whereas BLIS assembly microkernels execute runtime $\\alpha/\\beta$ epilogue scaling and unconditional prologue $C$-tile prefetches (e.g., 24 `prfm pldl1keep` instructions in `armv8a`). At $K=32$, this fixed prologue/epilogue instruction overhead accounts for the 25–35% throughput gap on ARMv8-A and AVX-512 (use `--no-fastpath` to evaluate MIPPv2 with runtime $\\alpha/\\beta$ epilogue).")
-    lines.append(f"> - **L1d/L2 Working Set Boundary:** While $K \\in [32, 128]$ fits entirely within L1d cache, $K \\ge 256$ spills the packed panel $B$ ($W_B = K \\times N_R \\times {elem_bytes}\\text{{ bytes}}$) into L2 cache (e.g. 64–256 KiB on AVX-512 with $N_R={nr_avx512}$), testing sustained L2 streaming throughput rather than pure in-register FMA saturation.\n")
-    lines.append("| Microarchitecture | Compiler | Layout | MIPPv2 Champion | MIPPv2 (GFLOP/s) | BLIS (GFLOP/s) | **% of BLIS Peak** | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | Status |")
-    lines.append("| :--- | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |")
+    lines.append("> **Statistical Methodology & Reporting Rules:**")
+    lines.append(f"> - **Pre-registered Champions:** MIPPv2 champions are locked prior to measurement in `uarch_config.json`; no post-hoc argmax across kernels.")
+    lines.append(f"> - **Matched-K Ratios:** Ratios are strictly evaluated at identical panel depth $K$ ($R_K = \\text{{FLOP/cyc}}_{{\\text{{MIPP}}, K}} / \\text{{FLOP/cyc}}_{{\\text{{BLIS}}, K}}$).")
+    lines.append(f"> - **Geometric Mean over Cache-Resident Window:** Summary ratio is $\\text{{geomean}}(R_K)$ for $K \\in [{k_min}, {k_max}]$.")
+    lines.append(f"> - **Separate Compiler Rows:** GCC and Clang are reported on distinct rows. Post-hoc best-compiler envelope is provided in the Appendix.\n")
 
-    for _, row in symmetric_df.iterrows():
-        ratio = row["Ratio_Peak_GFLOPS_pct"]
-        status = get_status_str(ratio)
-        m_name = row["MIPPv2_Champion"].replace("mippv2_", "")
-        blis_label = f"**{row['BLIS_Peak_GFLOPS']:.2f}**"
-        if row['Platform'] == 'x100_rvv':
-            blis_label += "*"
+    lines.append("| Microarchitecture | Compiler | Variant | Precision | MIPPv2 Champion | $N_K$ | **Ratio Geomean** | [Min, Max] | Parity Classification |")
+    lines.append("| :--- | :--- | :---: | :---: | :--- | :---: | :---: | :---: | :--- |")
+
+    # Sort platforms for presentation
+    for _, row in summary_df.iterrows():
+        rg = f"**{row['Ratio_geomean']*100:.1f}%**" if not np.isnan(row["Ratio_geomean"]) else "N/A"
+        rmin_max = f"[{row['Ratio_min']*100:.1f}%, {row['Ratio_max']*100:.1f}%]" if not np.isnan(row["Ratio_min"]) else "N/A"
+        champ = str(row["MIPP_Champion"]).replace("mippv2_", "")
+
+        label = row["Parity_label"]
+        status_str = {
+            "parity": "Parity (±2% CI)",
+            "mipp_faster": "MIPPv2 Faster",
+            "blis_faster": "BLIS Faster",
+            "mixed": "Mixed Advantage",
+            "parity_noci": "Parity (±2%, no CI)",
+            "mipp_faster_noci": "MIPPv2 Faster (no CI)",
+            "blis_faster_noci": "BLIS Faster (no CI)",
+            "mixed_noci": "Mixed (no CI)",
+            "no_data": "No Data",
+        }.get(label, label)
 
         lines.append(
-            f"| `{row['Platform']}` | `{row['Compiler']}` | `{row['Layout'].upper()}` | `{m_name}` | "
-            f"**{row['MIPPv2_Peak_GFLOPS']:.2f}** | {blis_label} | "
-            f"**{ratio:.1f}%** | {row['MIPPv2_Peak_FC']:.2f} | {row['BLIS_Peak_FC']:.2f} | {status} |"
+            f"| `{row['Platform']}` | `{row['Compiler']}` | `{row['Variant']}` | `{row['Precision']}` | "
+            f"`{champ}` | {row['N_K']} | {rg} | {rmin_max} | {status_str} |"
         )
 
-    if not symmetric_df.empty and (symmetric_df["Platform"] == "x100_rvv").any():
-        ukr_fn = "sgemm_x60_2vx14.c" if is_fp32 else "dgemm_x60_2vx14.c"
-        lines.append(f"\n*\\*Note: On SpacemiT X100 (RVV 256b, OOO dual-issue), BLIS runs the in-order X60 microkernel (`{ukr_fn}`).*")
-
-    if not a100_df.empty:
-        lines.append("\n---\n")
-        lines.append("## 2. VLEN Agility & Cross-Vector Portability Study (SpacemiT A100 VLEN=1024b)\n")
-        lines.append("> [!IMPORTANT]")
-        lines.append("> **Asymmetry Disclosure & Portability Framing:**")
-        ref_ukr = "sgemm_x60_2vx14.c, 16×14" if is_fp32 else "dgemm_x60_2vx14.c, 8×14"
-        lines.append(f"> - Upstream BLIS provides no native 1024-bit vector microkernel; executing BLIS on A100 defaults to the 256-bit in-order X60 assembly kernel (`{ref_ukr}`), utilizing only 25% of vector capacity per iteration.")
-        lines.append(f"> - MIPPv2's parameterized template vectorization automatically adapts to the 1024-bit VLEN across precision targets.")
-        lines.append("> - This comparison is presented not as a peer algorithmic match, but as an empirical demonstration of C++ template agility across variable vector lengths versus static assembly fragility.\n")
-        lines.append("| Microarchitecture | Compiler | MIPPv2 Champion | MIPPv2 Peak (GFLOP/s) | MIPPv2 (FLOP/cyc) | Hardware Peak (FLOP/cyc) | % Machine Peak | BLIS Fallback (X60 asm GFLOP/s) | Relative Speedup |")
-        lines.append("| :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |")
-
-        for _, row in a100_df.iterrows():
-            m_name = row["MIPPv2_Champion"].replace("mippv2_", "")
-            peak_fc = get_platform_peak_fc(row["Platform"], "fp32" if is_fp32 else "fp64")
-            pct_machine = (row["MIPPv2_Peak_FC"] / peak_fc * 100.0) if peak_fc > 0 else 0.0
-            ratio = row["Ratio_Peak_GFLOPS_pct"]
-            speedup = ratio / 100.0
-            lines.append(
-                f"| `{row['Platform']}` | `{row['Compiler']}` | `{m_name}` | "
-                f"**{row['MIPPv2_Peak_GFLOPS']:.2f}** | {row['MIPPv2_Peak_FC']:.2f} | {peak_fc:.1f} | "
-                f"**{pct_machine:.1f}%** | {row['BLIS_Peak_GFLOPS']:.2f} (X60) | **{speedup:.2f}×** |"
-            )
-
+    lines.append("\n---\n")
+    lines.append("## 2. Visual Comparative Figures\n")
     if plot_dir and plot_dir.exists():
         fig_prefix = "plots/"
         if out_md_path is not None:
@@ -552,34 +701,57 @@ def format_markdown_report(
                 fig_prefix = "" if rel_dir == "." else f"{rel_dir}/"
             except ValueError:
                 pass
-        lines.append("\n---\n")
-        lines.append("## 3. Visual Comparative Figures\n")
-        lines.append(f"- **Peak Performance Ratio:** [{fig_prefix}blis_vs_mippv2_ratio_comparison.svg]({fig_prefix}blis_vs_mippv2_ratio_comparison.svg)")
-        lines.append(f"- **FLOP / Cycle Compute Density:** [{fig_prefix}blis_vs_mippv2_flop_per_cycle_comparison.svg]({fig_prefix}blis_vs_mippv2_flop_per_cycle_comparison.svg)")
-        lines.append(f"- **Scaling Grid Across K ∈ [32..1024]:** [{fig_prefix}blis_vs_mippv2_k_scaling_grid.svg]({fig_prefix}blis_vs_mippv2_k_scaling_grid.svg)\n")
+        lines.append(f"- **Matched-K Ratio Comparison:** [{fig_prefix}blis_vs_mippv2_ratio_comparison.svg]({fig_prefix}blis_vs_mippv2_ratio_comparison.svg)")
+        lines.append(f"- **Scaling Grid Across $K \\in [32, 1024]$:** [{fig_prefix}blis_vs_mippv2_k_scaling_grid.svg]({fig_prefix}blis_vs_mippv2_k_scaling_grid.svg)\n")
+    else:
+        lines.append("*Figures can be generated by supplying the `--plot` flag.*\n")
 
     lines.append("\n---\n")
-    lines.append("## 4. Per-Size Scaling & Efficiency Analysis ($K \\in [32, 1024]$)\n")
+    lines.append(f"## 3. Per-Size Matched-$K$ Scaling & Working-Set Analysis (Variant: `{variant_name}`)\n")
+    lines.append("> [!TIP]")
+    lines.append("> **Cache Boundary Semantics:** Rows marked with `†` denote operating points where panel working set $K \\times (M + N) \\times \\text{elem_bytes}$ exceeds L1d cache capacity, testing streaming memory throughput rather than pure in-register compute density.\n")
 
-    for (platform, compiler, layout), k_data in details.items():
-        lines.append(f"### Platform: `{platform}` ({compiler}, {layout.upper()})\n")
-        lines.append("| K Dimension | MIPPv2 (GFLOP/s) | BLIS (GFLOP/s) | **MIPPv2 / BLIS (%)** | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | Advantage |")
-        lines.append("| :---: | :---: | :---: | :---: | :---: | :---: | :--- |")
+    for key, k_data in details.items():
+        platform, compiler, precision, variant, layout = key
+        lines.append(f"### Platform: `{platform}` ({compiler}, {precision}, {variant})\n")
+        lines.append("| Panel Depth $K$ | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | **Ratio MIPP / BLIS** | 95% Bootstrap CI | WS MIPP (KiB) | WS BLIS (KiB) | Advantage |")
+        lines.append("| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |")
+
         for k in sorted(k_data.keys()):
             entry = k_data[k]
             r = entry["Ratio_pct"]
-            adv = "MIPPv2 (+{:.1f}%)".format(r - 100) if r > 100.5 else ("BLIS (+{:.1f}%)".format(100 - r) if r < 99.5 else "Equivalent")
+            adv = f"MIPPv2 (+{r - 100.0:.1f}%)" if r > 102.0 else (f"BLIS (+{100.0 - r:.1f}%)" if r < 98.0 else "Parity (±2%)")
+
+            ci_str = f"[{entry['CI_low']*100:.1f}%, {entry['CI_high']*100:.1f}%]" if entry["CI_available"] else "N/A (no raw)"
+            spill_mark = " †" if (entry["MIPP_exceeds_L1d"] or entry["BLIS_exceeds_L1d"]) else ""
+
+            ws_m_kib = entry["WS_MIPP_bytes"] / 1024.0
+            ws_b_kib = entry["WS_BLIS_bytes"] / 1024.0
+
             lines.append(
-                f"| K={k} | {entry['MIPPv2_GFLOPS']:.2f} | {entry['BLIS_GFLOPS']:.2f} | "
-                f"**{r:.1f}%** | {entry['MIPPv2_FC']:.2f} | {entry['BLIS_FC']:.2f} | {adv} |"
+                f"| $K={k}${spill_mark} | {entry['MIPPv2_FC']:.2f} | {entry['BLIS_FC']:.2f} | "
+                f"**{r:.1f}%** | {ci_str} | {ws_m_kib:.1f} | {ws_b_kib:.1f} | {adv} |"
             )
         lines.append("")
 
     lines.append("\n---\n")
-    lines.append("## 5. Reference Assembly Kernels Provenance & Acknowledgements\n")
-    lines.append("The hand-tuned assembly microkernels used as baseline references in this benchmark originate from:\n")
-    lines.append("- **RISC-V Vector 1.0 (SpacemiT X60):** Authored and tuned by **Stepan Nassyr** via genetic loop exploration (`asmgen-gemm`), available in the [`stepannassyr/blis`](https://github.com/stepannassyr/blis/tree/x60/kernels) repository (`x60` branch, commit [`6ffc1d3`](https://github.com/stepannassyr/blis/commit/6ffc1d35fcafe74788b2aeaf00d5792d2618e0b9)).")
-    lines.append("- **x86-64 (AVX2, AVX-512) & AArch64 (NEON):** Sourced from the official upstream **FLAME BLIS** project ([`flame/blis`](https://github.com/flame/blis)), maintained by The University of Texas at Austin and contributors (commit [`a8037cf`](https://github.com/flame/blis/commit/a8037cfc4330030c726efaec1ffeb1f93d468aa3), based on BLIS 2.1).\n")
+    lines.append("## Appendix: Best-Compiler Envelope (Post-Hoc)\n")
+    lines.append("> [!IMPORTANT]")
+    lines.append("> This appendix selects the post-hoc envelope across compilers (`max(gcc, clang)` at each measurement point). It is presented exclusively for secondary reference.\n")
+
+    lines.append("| Microarchitecture | Precision | Variant | Best Compiler by Ratio | Envelope Ratio Geomean | Envelope [Min, Max] |")
+    lines.append("| :--- | :---: | :---: | :---: | :---: | :---: |")
+
+    # Group by (Platform, Precision, Variant)
+    env_groups = summary_df.groupby(["Platform", "Precision", "Variant"])
+    for (plat, prec, var), grp in env_groups:
+        if grp.empty:
+            continue
+        best_row = grp.loc[grp["Ratio_geomean"].idxmax()]
+        lines.append(
+            f"| `{plat}` | `{prec}` | `{var}` | `{best_row['Compiler']}` | "
+            f"**{best_row['Ratio_geomean']*100:.1f}%** | [{best_row['Ratio_min']*100:.1f}%, {best_row['Ratio_max']*100:.1f}%] |"
+        )
 
     return "\n".join(lines)
 
@@ -608,6 +780,24 @@ def main():
         help="Fallback to gemm-bench-results/crr[_fp32] if blis_comparison is empty",
     )
     parser.add_argument(
+        "--variant",
+        type=str,
+        default="default",
+        choices=["default", "nofp", "coldc", "strict", "all"],
+        help="Filter results by ablation variant (default: default)",
+    )
+    parser.add_argument(
+        "--k-window",
+        type=str,
+        default="128,384",
+        help="Comma-separated K-window min,max for geometric mean summary (default: 128,384)",
+    )
+    parser.add_argument(
+        "--legacy-argmax-champion",
+        action="store_true",
+        help="Select MIPPv2 champion by post-hoc argmax across kernels instead of pre-registered uarch_config.json",
+    )
+    parser.add_argument(
         "--output-md",
         type=str,
         default=None,
@@ -618,6 +808,12 @@ def main():
         type=str,
         default=None,
         help="Path to save summary CSV metrics",
+    )
+    parser.add_argument(
+        "--output-detailed-csv",
+        type=str,
+        default=None,
+        help="Path to save detailed per-K comparison CSV",
     )
     parser.add_argument(
         "--plot",
@@ -644,6 +840,13 @@ def main():
     )
     args = parser.parse_args()
 
+    # Parse k-window
+    try:
+        kw_parts = [int(p.strip()) for p in args.k_window.split(",")]
+        k_window = (kw_parts[0], kw_parts[1])
+    except Exception:
+        k_window = (128, 384)
+
     default_input = "gemm-bench-results/blis_comparison_fp32" if args.fp32 else "gemm-bench-results/blis_comparison"
     input_str = args.input_dir if args.input_dir else default_input
     input_path = Path(input_str)
@@ -658,13 +861,20 @@ def main():
             print(f"Run the cluster benchmarks first: ./tools/run_cluster_benchmarks.sh all --crr-only --with-blis {'--fp32' if args.fp32 else ''}", file=sys.stderr)
             sys.exit(1)
 
-    print(f"Loading benchmark datasets from {input_path} (FP32={args.fp32})...")
+    print(f"Loading benchmark datasets from {input_path} (FP32={args.fp32}, Variant={args.variant})...")
     df = load_dataset(input_path)
     if df.empty:
         print("No valid data loaded.", file=sys.stderr)
         sys.exit(1)
 
-    summary_df, details = analyze_dataset(df)
+    uarch_cfg = load_uarch_config()
+    summary_df, detailed_df, details = analyze_dataset(
+        df,
+        uarch_config=uarch_cfg,
+        k_window=k_window,
+        legacy_argmax=args.legacy_argmax_champion,
+        variant_filter=args.variant,
+    )
 
     plot_dir_path = None
     if args.plot or args.plot_dir:
@@ -672,9 +882,8 @@ def main():
         plot_dir_path = Path(args.plot_dir) if args.plot_dir else default_plot_dir
         print(f"\nGenerating publication-grade comparative figures in {plot_dir_path}...")
         enable_png = not args.no_png
-        plot_blis_ratio_comparison(summary_df, plot_dir_path, enable_png=enable_png, is_fp32=args.fp32)
-        plot_flop_per_cycle_comparison(summary_df, plot_dir_path, enable_png=enable_png, is_fp32=args.fp32)
-        plot_k_scaling_grid(details, plot_dir_path, enable_png=enable_png, is_fp32=args.fp32)
+        plot_blis_ratio_comparison(summary_df, plot_dir_path, enable_png=enable_png, is_fp32=args.fp32, variant_name=args.variant)
+        plot_k_scaling_grid(details, plot_dir_path, enable_png=enable_png, is_fp32=args.fp32, variant_name=args.variant)
 
     out_md_path = Path(args.output_md) if args.output_md else None
     if not out_md_path and args.plot:
@@ -682,13 +891,15 @@ def main():
 
     md_report = format_markdown_report(
         summary_df,
+        detailed_df,
         details,
         plot_dir=plot_dir_path,
         is_fp32=args.fp32,
         out_md_path=out_md_path,
+        k_window=k_window,
+        variant_name=args.variant,
     )
 
-    # Print to console
     print("\n" + md_report)
 
     if out_md_path:
@@ -706,6 +917,12 @@ def main():
         out_c.parent.mkdir(parents=True, exist_ok=True)
         summary_df.to_csv(out_c, index=False)
         print(f"✓ Summary CSV metrics written to {out_c}")
+
+    if args.output_detailed_csv and not detailed_df.empty:
+        out_det = Path(args.output_detailed_csv)
+        out_det.parent.mkdir(parents=True, exist_ok=True)
+        detailed_df.to_csv(out_det, index=False)
+        print(f"✓ Detailed per-K CSV written to {out_det}")
 
 
 if __name__ == "__main__":

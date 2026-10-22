@@ -156,6 +156,49 @@ class TestPaperStats(unittest.TestCase):
         uarch_spec = {"l1d_kib": 48}
         self.assertEqual(get_l1d_bytes(None, uarch_spec), 48 * 1024)
 
+    def test_analyze_dataset_synthetic(self):
+        from compare_mippv2_blis import analyze_dataset
+
+        # Synthetic dataset with 3 kernels at K=128 and K=256:
+        # - blis_native
+        # - mippv2_firestorm_mr4_nr4_fmaddi_crr (official pre-registered champion for zen4_avx512)
+        # - mippv2_faster_explo_kernel (faster than champion, e.g. 15.5 FLOP/cyc vs 14.0 FLOP/cyc)
+        data = [
+            # BLIS native: 10.0 FLOP/cyc at K=128 and 256
+            {"Platform": "zen4_avx512", "Compiler": "gcc", "Precision": "fp64", "Variant": "default", "Layout": "crr",
+             "Kernel": "blis_native", "M": 4, "N": 16, "K": 128, "FLOP_per_cycle_median": 10.0, "GFLOPS_median": 40.0, "Eff_GHz": 4.0},
+            {"Platform": "zen4_avx512", "Compiler": "gcc", "Precision": "fp64", "Variant": "default", "Layout": "crr",
+             "Kernel": "blis_native", "M": 4, "N": 16, "K": 256, "FLOP_per_cycle_median": 10.0, "GFLOPS_median": 40.0, "Eff_GHz": 4.0},
+
+            # Official champion: 14.0 FLOP/cyc at K=128 and 256 (Ratio = 1.40)
+            {"Platform": "zen4_avx512", "Compiler": "gcc", "Precision": "fp64", "Variant": "default", "Layout": "crr",
+             "Kernel": "mippv2_firestorm_mr4_nr4_fmaddi_crr", "M": 4, "N": 16, "K": 128, "FLOP_per_cycle_median": 14.0, "GFLOPS_median": 56.0, "Eff_GHz": 4.0},
+            {"Platform": "zen4_avx512", "Compiler": "gcc", "Precision": "fp64", "Variant": "default", "Layout": "crr",
+             "Kernel": "mippv2_firestorm_mr4_nr4_fmaddi_crr", "M": 4, "N": 16, "K": 256, "FLOP_per_cycle_median": 14.0, "GFLOPS_median": 56.0, "Eff_GHz": 4.0},
+
+            # Faster non-champion: 15.5 FLOP/cyc
+            {"Platform": "zen4_avx512", "Compiler": "gcc", "Precision": "fp64", "Variant": "default", "Layout": "crr",
+             "Kernel": "mippv2_faster_explo_kernel", "M": 4, "N": 16, "K": 128, "FLOP_per_cycle_median": 15.5, "GFLOPS_median": 62.0, "Eff_GHz": 4.0},
+            {"Platform": "zen4_avx512", "Compiler": "gcc", "Precision": "fp64", "Variant": "default", "Layout": "crr",
+             "Kernel": "mippv2_faster_explo_kernel", "M": 4, "N": 16, "K": 256, "FLOP_per_cycle_median": 15.5, "GFLOPS_median": 62.0, "Eff_GHz": 4.0},
+        ]
+        df = pd.DataFrame(data)
+
+        # Pre-registered mode: MUST pick mippv2_firestorm_mr4_nr4_fmaddi_crr (not the faster kernel)
+        summary_df, detailed_df, details = analyze_dataset(df, legacy_argmax=False, k_window=(128, 256))
+        self.assertEqual(len(summary_df), 1)
+        self.assertEqual(summary_df["MIPP_Champion"].iloc[0], "mippv2_firestorm_mr4_nr4_fmaddi_crr")
+        self.assertAlmostEqual(summary_df["Ratio_geomean"].iloc[0], 1.40)
+        self.assertEqual(len(detailed_df), 2)
+        # Check matched-K ratios
+        self.assertAlmostEqual(detailed_df.loc[detailed_df["K"] == 128, "Ratio"].iloc[0], 1.40)
+        self.assertAlmostEqual(detailed_df.loc[detailed_df["K"] == 256, "Ratio"].iloc[0], 1.40)
+
+        # Legacy argmax mode: selects mippv2_faster_explo_kernel
+        summary_leg, _, _ = analyze_dataset(df, legacy_argmax=True, k_window=(128, 256))
+        self.assertEqual(summary_leg["MIPP_Champion"].iloc[0], "mippv2_faster_explo_kernel")
+        self.assertAlmostEqual(summary_leg["Ratio_geomean"].iloc[0], 1.55)
+
 
 if __name__ == "__main__":
     unittest.main()
