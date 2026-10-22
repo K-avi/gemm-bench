@@ -297,26 +297,6 @@ targets_space="${SELECTED_TARGETS[*]}"
 ssh "$FRONT_HOST" "bash -l -c 'cd ${REMOTE_DIR} && mkdir -p ${target_res_dir} && ARCHIVE_DIR=\"${target_res_dir}_archive_\$(date +%Y%m%d_%H%M%S)\" && moved=0 && for t in ${targets_space}; do for f in ${target_res_dir}/gemm_results_\${t}_*.csv; do if [ -f \"\$f\" ]; then mkdir -p \"\$ARCHIVE_DIR\" && mv \"\$f\" \"\$ARCHIVE_DIR/\" 2>/dev/null && moved=1; fi; done; done && if [ \"\$moved\" -eq 1 ]; then echo \"✓ Résultats antérieurs archivés dans \$ARCHIVE_DIR\"; fi'"
 
 # -----------------------------------------------------------------------------
-# 1ter. Pré-compilation croisée X60 (Clang) sur le nœud X100 (mono-sip-k3)
-# -----------------------------------------------------------------------------
-has_x60=false
-for t in "${SELECTED_TARGETS[@]}"; do
-    [[ "$t" == "x60" ]] && has_x60=true
-done
-if [[ "$has_x60" == "true" ]]; then
-    echo -e "${CYAN}→ Pré-compilation du binaire X60 (Clang) sur le nœud X100 (mono-sip-k3)...${NC}"
-    x60_math_cxx="-ffast-math"
-    x60_cmake_math="-DGEMMBENCH_ENABLE_FASTMATH=ON"
-    x60_bdir="build_rvv_x60_clang_rvv"
-    if [[ "$FASTMATH_FLAG" == "--no-fast-math" ]]; then
-        x60_math_cxx="-fno-fast-math -ffp-contract=fast"
-        x60_cmake_math="-DGEMMBENCH_ENABLE_FASTMATH=OFF"
-        x60_bdir="build_rvv_x60_strict_clang_rvv"
-    fi
-    ssh "$FRONT_HOST" "srun -p mono -w mono-sip-k3 bash -l -c 'cd ${REMOTE_DIR} && cmake -B ${x60_bdir} -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_FLAGS=\"-O3 ${x60_math_cxx} -finline-functions -funroll-loops -fno-semantic-interposition -falign-functions=64 -falign-loops=32 -march=rv64gcv_zvl256b_zicbop -mrvv-vector-bits=zvl\" ${x60_cmake_math} -DGEMMBENCH_ENABLE_EXPLO=OFF && cmake --build ${x60_bdir} --target GemmBench --parallel'"
-fi
-
-# -----------------------------------------------------------------------------
 # 2. Définition des fonctions d'exécution par cible
 # -----------------------------------------------------------------------------
 
@@ -440,6 +420,16 @@ run_target() {
 
     local target_bench_flags="$bench_flags"
     if [[ "$target" == "x60" ]]; then
+        echo -e "${CYAN}→ Pré-compilation du binaire X60 (Clang) sur le nœud X100 (mono-sip-k3)...${NC}"
+        local x60_math_cxx="-ffast-math"
+        local x60_cmake_math="-DGEMMBENCH_ENABLE_FASTMATH=ON"
+        local x60_bdir="build_rvv_x60_clang_rvv"
+        if [[ "$FASTMATH_FLAG" == "--no-fast-math" ]]; then
+            x60_math_cxx="-fno-fast-math -ffp-contract=fast"
+            x60_cmake_math="-DGEMMBENCH_ENABLE_FASTMATH=OFF"
+            x60_bdir="build_rvv_x60_strict_clang_rvv"
+        fi
+        ssh "$FRONT_HOST" "srun -p mono -w mono-sip-k3 bash -l -c 'cd ${REMOTE_DIR} && cmake -B ${x60_bdir} -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_FLAGS=\"-O3 ${x60_math_cxx} -finline-functions -funroll-loops -fno-semantic-interposition -falign-functions=64 -falign-loops=32 -march=rv64gcv_zvl256b_zicbop -mrvv-vector-bits=zvl\" ${x60_cmake_math} -DGEMMBENCH_ENABLE_EXPLO=OFF && cmake --build ${x60_bdir} --target GemmBench --parallel'"
         # Le binaire Clang a été compilé sur X100; éviter qu'un rebuild local n'appelle clang++ défaillant sur x60
         target_bench_flags="${target_bench_flags//--rebuild/}"
         target_bench_flags="${target_bench_flags//--tests /}"
