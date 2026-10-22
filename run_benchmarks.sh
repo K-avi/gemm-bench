@@ -534,8 +534,9 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
     mkdir -p "$(dirname "$CSV")"
     TMP_CSV="${CSV}.tmp.$$"
     TMP_META="${CSV%.csv}.meta.json.tmp.$$"
-    trap 'rm -f "${TMP_CSV}" "${TMP_META}" 2>/dev/null || true' EXIT INT TERM
-    echo "Build,Kernel,M,N,K,Alpha,Beta,Time_median_s,Time_min_s,Time_max_s,Time_stddev_s,Time_cv_pct,GFLOPS_median,GFLOPS_peak,Cycles_median,Cycles_min,Cycles_max,Cycles_stddev,Cycles_cv_pct,Eff_GHz,IPC,FLOP_per_cycle_median,FLOP_per_cycle_peak,Repetitions,InterRun_CV_pct,Commit" > "$TMP_CSV"
+    TMP_RAW="${CSV%.csv}.raw.csv.tmp.$$"
+    trap 'rm -f "${TMP_CSV}" "${TMP_META}" "${TMP_RAW}" 2>/dev/null || true' EXIT INT TERM
+    echo "Build,Kernel,M,N,K,Alpha,Beta,Time_median_s,Time_min_s,Time_max_s,Time_stddev_s,Time_cv_pct,GFLOPS_median,GFLOPS_peak,Cycles_median,Cycles_min,Cycles_max,Cycles_stddev,Cycles_cv_pct,Eff_GHz,IPC,FLOP_per_cycle_median,FLOP_per_cycle_peak,Repetitions,InterRun_CV_pct,Commit,Selection,NumRuns" > "$TMP_CSV"
 
     RUN_START_TIME_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)
     THROTTLE_WARNINGS=()
@@ -793,19 +794,35 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
                     DESC_STR="${SIZE}x${SIZE}"
                 fi
 
-                BEST_LINE=""
-                BEST_TIME=""
+                ALL_LINES=()
                 ALL_TIMES=()
                 for (( run_idx=1; run_idx<=NUM_RUNS; run_idx++ )); do
-                    if CUR_LINE=$("${BENCH_CMD[@]}"); then
+                    if CUR_LINE=$("${BENCH_CMD[@]}" --raw-out "${TMP_RAW}" --run-id "${run_idx}"); then
                         CUR_TIME=$(echo "$CUR_LINE" | awk -F',' '{print $7}')
                         ALL_TIMES+=("$CUR_TIME")
-                        if [[ -z "$BEST_TIME" ]] || awk "BEGIN {exit !($CUR_TIME < $BEST_TIME)}"; then
-                            BEST_TIME="$CUR_TIME"
-                            BEST_LINE="$CUR_LINE"
-                        fi
+                        ALL_LINES+=("$CUR_LINE")
                     fi
                 done
+
+                # Select the median run by Time_median_s (column 7)
+                SELECTED_LINE=""
+                if [[ ${#ALL_LINES[@]} -gt 0 ]]; then
+                    SELECTED_LINE=$(printf '%s\n' "${ALL_LINES[@]}" | awk -F',' '{
+                        lines[NR] = $0
+                        t[NR] = $7 + 0.0
+                        idx[NR] = NR
+                    } END {
+                        for (i = 1; i <= NR; i++) {
+                            for (j = i + 1; j <= NR; j++) {
+                                if (t[idx[j]] < t[idx[i]]) {
+                                    tmp = idx[i]; idx[i] = idx[j]; idx[j] = tmp;
+                                }
+                            }
+                        }
+                        med_idx = int(NR / 2) + 1
+                        print lines[idx[med_idx]]
+                    }')
+                fi
 
                 # Compute inter-run CV (sample coefficient of variation across NUM_RUNS medians)
                 INTER_CV=""
@@ -823,8 +840,8 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
                     INTER_CV="0.00"
                 fi
 
-                if [[ -n "$BEST_LINE" ]]; then
-                    echo "${VERSION},${BEST_LINE},${INTER_CV},${BIN_COMMIT_SHORT}" >> "${TMP_CSV}"
+                if [[ -n "$SELECTED_LINE" ]]; then
+                    echo "${VERSION},${SELECTED_LINE},${INTER_CV},${BIN_COMMIT_SHORT},median_of_runs,${NUM_RUNS}" >> "${TMP_CSV}"
                     INTER_CV_MSG=""
                     if awk "BEGIN {exit !(${INTER_CV} > 5.0)}" 2>/dev/null; then
                         INTER_CV_MSG=" ⚠ inter-run CV=${INTER_CV}%"
@@ -908,9 +925,12 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
         if [[ -f "$TMP_META" ]]; then
             mv -f "$TMP_META" "${CSV%.csv}.meta.json"
         fi
+        if [[ -f "$TMP_RAW" ]]; then
+            mv -f "$TMP_RAW" "${CSV%.csv}.raw.csv"
+        fi
     else
         echo "Warning: No valid benchmark rows generated for ${COMPILER_TAG}; existing CSV preserved." >&2
-        rm -f "$TMP_CSV" "$TMP_META"
+        rm -f "$TMP_CSV" "$TMP_META" "$TMP_RAW"
     fi
 done
 

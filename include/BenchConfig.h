@@ -42,6 +42,9 @@ struct BenchConfig
     bool validate = false;
     bool fp32 = false;
     bool use_fastpath = true;
+
+    std::string raw_out;
+    size_t run_id = 0;
 };
 
 inline BenchConfig& config()
@@ -97,6 +100,8 @@ inline void parseArgs(int argc,
                       << "  --alignment <N>     Memory alignment in bytes (default: 64)\n"
                       << "  --seed <N>          Random seed (default: 12)\n"
                       << "  --fp32, --float     Run single-precision (float / FP32) microkernel\n"
+                      << "  --raw-out <path>    Export raw per-repetition timing samples to CSV\n"
+                      << "  --run-id <N>        Run index for raw samples tracking (default: 0)\n"
                       << "  --csv               Output in CSV format\n"
                       << "  --build-info        Print build metadata (git, compiler, flags) and exit\n"
                       << "  --help, -h          Show this help message\n";
@@ -160,6 +165,10 @@ inline void parseArgs(int argc,
         }
         else if(arg == "--csv")
             cfg.csv_mode = true;
+        else if(arg == "--raw-out")
+            cfg.raw_out = next();
+        else if(arg == "--run-id")
+            cfg.run_id = next_ulong();
         else if(arg == "--validate")
             cfg.validate = true;
         else if(!ignore_unknown)

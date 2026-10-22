@@ -7,6 +7,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <numeric>
@@ -162,6 +163,10 @@ struct BenchmarkStats {
   double flop_per_cycle_peak   = 0.0;
 
   size_t repetitions   = 0;
+
+  std::vector<double> samples_s;
+  std::vector<double> samples_cyc;
+  std::vector<double> samples_ins;
 };
 
 inline BenchmarkStats compute_stats(const std::vector<double> &times,
@@ -250,6 +255,10 @@ inline BenchmarkStats compute_stats(const std::vector<double> &times,
       s.ipc_median = s.instructions_median / s.cycles_median;
     }
   }
+
+  s.samples_s = times;
+  s.samples_cyc = cycles;
+  s.samples_ins = instructions;
 
   return s;
 }
@@ -720,6 +729,35 @@ void printResults(const BenchConfig &cfg,
   }
 }
 
+inline void exportRawSamples(const BenchConfig &cfg,
+                             const BenchmarkStats &stats) {
+  if (cfg.raw_out.empty()) {
+    return;
+  }
+  std::ofstream out(cfg.raw_out, std::ios::app);
+  if (!out.is_open()) {
+    std::cerr << "Warning: Could not open raw output file: " << cfg.raw_out << '\n';
+    return;
+  }
+  if (out.tellp() == 0) {
+    out << "Kernel,M,N,K,Alpha,Beta,Fastpath,CCold,Precision,RunId,Rep,Time_s,Cycles,Instructions\n";
+  }
+  const size_t R = stats.samples_s.size();
+  for (size_t r = 0; r < R; ++r) {
+    out << cfg.kernel_name << ","
+        << cfg.M << "," << cfg.N << "," << cfg.K << ","
+        << cfg.alpha << "," << cfg.beta << ","
+        << (cfg.use_fastpath ? 1 : 0) << ","
+        << 0 << ","
+        << (cfg.fp32 ? "fp32" : "fp64") << ","
+        << cfg.run_id << ","
+        << r << ","
+        << std::defaultfloat << std::setprecision(12) << stats.samples_s[r] << ","
+        << std::defaultfloat << std::setprecision(12) << (r < stats.samples_cyc.size() ? stats.samples_cyc[r] : 0.0) << ","
+        << std::defaultfloat << std::setprecision(12) << (r < stats.samples_ins.size() ? stats.samples_ins[r] : 0.0) << "\n";
+  }
+}
+
 template <typename T, typename APacked, typename BPacked, typename CPacked>
 void validateKernel(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
                     const APacked &A, const BPacked &B, CPacked &C,
@@ -832,6 +870,7 @@ void runBenchmark(BenchConfig &cfg) {
     const auto stats = run<T>(cfg, gemm, A, B, C);
 
     printResults<T>(cfg, stats);
+    exportRawSamples(cfg, stats);
   } catch (...) {
     alloc.freePacked(A);
     alloc.freePacked(B);
