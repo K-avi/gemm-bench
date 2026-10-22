@@ -95,7 +95,9 @@ ${BOLD}Options :${NC}
   --no-fastpath     Désactiver l'optimisation FastPath (--no-fastpath)
   --c-cold          Activer le mode C froid (--c-cold)
   --likwid          Activer l'instrumentation LIKWID Marker API (-DGEMMBENCH_ENABLE_LIKWID=ON)
+  --runs <N>        Nombre d'exécutions indépendantes de processus (défaut: 1)
   -r, --repetitions <N> Nombre de répétitions par mesure (défaut: 15)
+  --results-dir <dir> Répertoire de destination sur le NFS (défaut: dérivé)
   --cooldown <sec>  Temps de pause thermique après grandes tailles (défaut: 0.5)
   -k, --kernel <n>  Exécuter un kernel spécifique (répétable, remplace le champion par défaut)
   --run-all         Exécuter tous les kernels (champions + exploration) et la version scalaire
@@ -125,6 +127,8 @@ NO_FASTPATH_FLAG=""
 C_COLD_FLAG=""
 REBUILD_FLAG=""
 CUSTOM_SIZES=""
+CUSTOM_RUNS=""
+CUSTOM_RESULTS_DIR=""
 CUSTOM_REPETITIONS=""
 CUSTOM_COOLDOWN=""
 CUSTOM_KERNELS=()
@@ -194,6 +198,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         -r|--repetitions)
             CUSTOM_REPETITIONS="$2"
+            shift 2
+            ;;
+        --runs)
+            CUSTOM_RUNS="--runs $2"
+            shift 2
+            ;;
+        --results-dir)
+            CUSTOM_RESULTS_DIR="$2"
             shift 2
             ;;
         --cooldown)
@@ -271,7 +283,9 @@ fi
 # 1bis. Archivage des résultats antérieurs sur la frontale (uniquement cibles sélectionnées)
 # -----------------------------------------------------------------------------
 target_res_dir="results"
-if [[ "$WITH_BLIS" == "true" && -n "$FP32_FLAG" ]]; then
+if [[ -n "$CUSTOM_RESULTS_DIR" ]]; then
+    target_res_dir="$CUSTOM_RESULTS_DIR"
+elif [[ "$WITH_BLIS" == "true" && -n "$FP32_FLAG" ]]; then
     target_res_dir="results_blis_fp32"
 elif [[ "$WITH_BLIS" == "true" ]]; then
     target_res_dir="results_blis"
@@ -394,6 +408,7 @@ run_target() {
     [[ -n "$REBUILD_FLAG" ]] && bench_flags+="${REBUILD_FLAG} "
     [[ -n "$CUSTOM_SIZES" ]] && bench_flags+="${CUSTOM_SIZES} "
     [[ -n "$CUSTOM_REPETITIONS" ]] && bench_flags+="-r ${CUSTOM_REPETITIONS} "
+    [[ -n "$CUSTOM_RUNS" ]] && bench_flags+="${CUSTOM_RUNS} "
     [[ -n "$CUSTOM_COOLDOWN" ]] && bench_flags+="--cooldown ${CUSTOM_COOLDOWN} "
     [[ "$CRR_ONLY" == "true" ]] && bench_flags+="--crr-only "
     [[ "$RRR_ONLY" == "true" ]] && bench_flags+="--rrr-only "
@@ -431,7 +446,9 @@ run_target() {
     fi
 
     local results_env=""
-    if [[ "$WITH_BLIS" == "true" && -n "$FP32_FLAG" ]]; then
+    if [[ -n "$CUSTOM_RESULTS_DIR" ]]; then
+        results_env="RESULTS_DIR=${CUSTOM_RESULTS_DIR} "
+    elif [[ "$WITH_BLIS" == "true" && -n "$FP32_FLAG" ]]; then
         results_env="RESULTS_DIR=results_blis_fp32 "
     elif [[ "$WITH_BLIS" == "true" ]]; then
         results_env="RESULTS_DIR=results_blis "
