@@ -31,6 +31,7 @@ Options:
   -r, --repetitions <N>   Number of independent repetitions per measurement (default: 15)
   --cooldown <sec>        Cooldown pause in seconds after large sizes (default: 2.0)
   --fp32, --float         Run single-precision (float / FP32) benchmarks
+  --no-fastpath           Disable compile-time FastPath (force runtime alpha/beta epilogue)
   --validate              Run numerical correctness validation against scalar reference before benchmark
   --likwid                Enable LIKWID Marker API instrumentation (-DGEMMBENCH_ENABLE_LIKWID=ON)
   --allow-dirty           Allow running benchmarks with uncommitted git changes
@@ -127,11 +128,16 @@ FAST_MATH=true
 FP32_FLAG=false
 ALLOW_DIRTY=false
 ALLOW_STALE_BINARY=false
+NO_FASTPATH=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --fp32|--float|--single)
             FP32_FLAG=true
+            shift
+            ;;
+        --no-fastpath)
+            NO_FASTPATH=true
             shift
             ;;
         --no-fast-math|--strict-ieee)
@@ -529,6 +535,9 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
     if [[ "$FAST_MATH" == "false" ]]; then
         file_suffix="${file_suffix}_strict"
     fi
+    if [[ "$NO_FASTPATH" == "true" ]]; then
+        file_suffix="${file_suffix}_nofp"
+    fi
     if [[ "$FP32_FLAG" == "true" ]]; then
         file_suffix="${file_suffix}_fp32"
     fi
@@ -549,7 +558,7 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
     TMP_META="${CSV%.csv}.meta.json.tmp.$$"
     TMP_RAW="${CSV%.csv}.raw.csv.tmp.$$"
     trap 'rm -f "${TMP_CSV}" "${TMP_META}" "${TMP_RAW}" 2>/dev/null || true' EXIT INT TERM
-    echo "Build,Kernel,M,N,K,Alpha,Beta,Time_median_s,Time_min_s,Time_max_s,Time_stddev_s,Time_cv_pct,GFLOPS_median,GFLOPS_peak,Cycles_median,Cycles_min,Cycles_max,Cycles_stddev,Cycles_cv_pct,Eff_GHz,IPC,FLOP_per_cycle_median,FLOP_per_cycle_peak,Repetitions,InterRun_CV_pct,Commit,Selection,NumRuns" > "$TMP_CSV"
+    echo "Build,Kernel,M,N,K,Alpha,Beta,Time_median_s,Time_min_s,Time_max_s,Time_stddev_s,Time_cv_pct,GFLOPS_median,GFLOPS_peak,Cycles_median,Cycles_min,Cycles_max,Cycles_stddev,Cycles_cv_pct,Eff_GHz,IPC,FLOP_per_cycle_median,FLOP_per_cycle_peak,Repetitions,InterRun_CV_pct,Commit,Selection,NumRuns,Fastpath" > "$TMP_CSV"
 
     RUN_START_TIME_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)
     THROTTLE_WARNINGS=()
@@ -775,6 +784,9 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
                 if [[ "$FP32_FLAG" == "true" ]]; then
                     EXTRA_BENCH_ARGS+=(--fp32)
                 fi
+                if [[ "$NO_FASTPATH" == "true" ]]; then
+                    EXTRA_BENCH_ARGS+=(--no-fastpath)
+                fi
 
                 if [[ "$KERNEL" == *_crr* || "$KERNEL" == "blis_native" ]]; then
                     # In micro-tile (CRR / BLIS) mode: size is K, while M and N are auto-detected native MR x NR
@@ -854,7 +866,8 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
                 fi
 
                 if [[ -n "$SELECTED_LINE" ]]; then
-                    echo "${VERSION},${SELECTED_LINE},${INTER_CV},${BIN_COMMIT_SHORT},median_of_runs,${NUM_RUNS}" >> "${TMP_CSV}"
+                    FASTPATH_VAL=$([[ "$NO_FASTPATH" == "true" ]] && echo "0" || echo "1")
+                    echo "${VERSION},${SELECTED_LINE},${INTER_CV},${BIN_COMMIT_SHORT},median_of_runs,${NUM_RUNS},${FASTPATH_VAL}" >> "${TMP_CSV}"
                     INTER_CV_MSG=""
                     if awk "BEGIN {exit !(${INTER_CV} > 5.0)}" 2>/dev/null; then
                         INTER_CV_MSG=" ⚠ inter-run CV=${INTER_CV}%"
@@ -923,7 +936,7 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
         --crr-only "${CRR_ONLY}" \
         --alpha "${ALPHA}" \
         --beta "${BETA}" \
-        --fastpath "${USE_FASTPATH:-true}" \
+        --fastpath "$([[ "$NO_FASTPATH" == "true" ]] && echo "false" || echo "true")" \
         --c-cold "${C_COLD:-false}" \
         --num-runs "${NUM_RUNS}" \
         --repetitions "${REPETITIONS}" \

@@ -92,6 +92,7 @@ ${BOLD}Options :${NC}
   --fp32, --float   Exécuter les benchmarks en simple précision (FP32 float)
   --blis, --with-blis Inclure également le micro-kernel de référence BLIS (blis_native)
   --no-fast-math, --strict-ieee Désactiver -ffast-math (-fno-fast-math -ffp-contract=fast)
+  --no-fastpath     Désactiver l'optimisation FastPath (--no-fastpath)
   --likwid          Activer l'instrumentation LIKWID Marker API (-DGEMMBENCH_ENABLE_LIKWID=ON)
   -r, --repetitions <N> Nombre de répétitions par mesure (défaut: 15)
   --cooldown <sec>  Temps de pause thermique après grandes tailles (défaut: 0.5)
@@ -119,6 +120,7 @@ RRR_ONLY=false
 FASTMATH_FLAG=""
 FP32_FLAG=""
 LIKWID_FLAG=""
+NO_FASTPATH_FLAG=""
 REBUILD_FLAG=""
 CUSTOM_SIZES=""
 CUSTOM_REPETITIONS=""
@@ -174,6 +176,10 @@ while [[ $# -gt 0 ]]; do
             ;;
         --no-fast-math|--strict-ieee)
             FASTMATH_FLAG="--no-fast-math"
+            shift
+            ;;
+        --no-fastpath)
+            NO_FASTPATH_FLAG="--no-fastpath"
             shift
             ;;
         --likwid)
@@ -388,6 +394,7 @@ run_target() {
     [[ -n "$FP32_FLAG" ]] && bench_flags+="${FP32_FLAG} "
     [[ -n "$LIKWID_FLAG" ]] && bench_flags+="${LIKWID_FLAG} "
     [[ -n "$FASTMATH_FLAG" ]] && bench_flags+="${FASTMATH_FLAG} "
+    [[ -n "$NO_FASTPATH_FLAG" ]] && bench_flags+="${NO_FASTPATH_FLAG} "
 
     if [[ "$BENCH_ONLY" == "true" ]]; then
         :
