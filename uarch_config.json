@@ -12,7 +12,8 @@
       "csv_pattern": "*gemm_results_*skylake*_{compiler}.csv",
       "crr_csv_pattern": "*gemm_results_*skylake*crr*_{compiler}.csv",
       "crr_csv_pattern_fp32": "*gemm_results_*skylake*crr*fp32*_{compiler}.csv",
-      "notes": "Core i5-6200U (2.3 GHz nominal, sustained 256b AVX2 throttles to ~2.25 GHz under powersave governor)"
+      "notes": "Core i5-6200U (2.3 GHz nominal, sustained 256b AVX2 throttles to ~2.25 GHz under powersave governor)",
+      "measured_peak_flop_per_cycle_fp32": 30.38
     },
     "meteorlake": {
       "name": "Intel Meteor Lake",
@@ -27,7 +28,8 @@
       "csv_pattern": "*gemm_results_*meteorlake*_{compiler}.csv",
       "crr_csv_pattern": "*gemm_results_*meteorlake*crr*_{compiler}.csv",
       "crr_csv_pattern_fp32": "*gemm_results_*meteorlake*crr*fp32*_{compiler}.csv",
-      "notes": "Redwood Cove P-core has a 5.10 GHz light-load burst ceiling; sustained 256-bit AVX2 FMA execution operates at 4.78 GHz effective due to thermal/power limits."
+      "notes": "Redwood Cove P-core has a 5.10 GHz light-load burst ceiling; sustained 256-bit AVX2 FMA execution operates at 4.78 GHz effective due to thermal/power limits.",
+      "measured_peak_flop_per_cycle_fp32": 31.68
     }
   },
   "avx512": {
@@ -42,7 +44,8 @@
       "expected_best_kernel_crr": "mippv2_firestorm_mr4_nr4_fmaddi_crr",
       "csv_pattern": "*gemm_results_*zen4*_{compiler}.csv",
       "crr_csv_pattern": "*gemm_results_*zen4*crr*_{compiler}.csv",
-      "crr_csv_pattern_fp32": "*gemm_results_*zen4*crr*fp32*_{compiler}.csv"
+      "crr_csv_pattern_fp32": "*gemm_results_*zen4*crr*fp32*_{compiler}.csv",
+      "measured_peak_flop_per_cycle_fp32": 31.76
     },
     "zen5": {
       "name": "AMD Zen 5 Strix Point",
@@ -56,7 +59,8 @@
       "csv_pattern": "*gemm_results_*zen5*_{compiler}.csv",
       "crr_csv_pattern": "*gemm_results_*zen5*crr*_{compiler}.csv",
       "crr_csv_pattern_fp32": "*gemm_results_*zen5*crr*fp32*_{compiler}.csv",
-      "notes": "Strix Point implements dual 256-bit FPU pipelines (double-pumped 512-bit FMA, 16 DP FLOP/cyc max; 5.158 GHz hardware boost)"
+      "notes": "Strix Point implements dual 256-bit FPU pipelines (double-pumped 512-bit FMA, 16 DP FLOP/cyc max; 5.158 GHz hardware boost)",
+      "measured_peak_flop_per_cycle_fp32": 31.95
     }
   },
   "neon": {
@@ -72,7 +76,8 @@
       "expected_best_kernel_crr": "mippv2_x60_mr6_nr4_fmaddi_crr",
       "csv_pattern": "*gemm_results_*m1*_{compiler}.csv",
       "crr_csv_pattern": "*gemm_results_*m1*crr*_{compiler}.csv",
-      "crr_csv_pattern_fp32": "*gemm_results_*m1*crr*fp32*_{compiler}.csv"
+      "crr_csv_pattern_fp32": "*gemm_results_*m1*crr*fp32*_{compiler}.csv",
+      "measured_peak_flop_per_cycle_fp32": 31.94
     },
     "rpi5": {
       "name": "Raspberry Pi 5",

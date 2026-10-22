@@ -44,16 +44,33 @@ show_help() {
     echo "  all             Toutes les cibles ci-dessus"
     echo
     echo -e "${BOLD}Options :${NC}"
+    echo "  --fp32          Mesurer et analyser le pic simple précision (FP32, défaut: FP64)"
+    echo "  --fp64          Mesurer et analyser le pic double précision (FP64)"
+    echo "  --analyze-only  Générer uniquement le rapport à partir des logs existants sans exécuter cpufp"
     echo "  --rebuild       Forcer la recompilation complète de cpufp"
     echo "  --output-dir    Répertoire de destination des résultats (défaut: results/cpufp)"
     echo "  -h, --help      Afficher cette aide"
 }
 
 FORCE_REBUILD=false
+ANALYZE_ONLY=false
+PRECISION="fp64"
 SELECTED_TARGETS=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --analyze-only)
+            ANALYZE_ONLY=true
+            shift
+            ;;
+        --fp32)
+            PRECISION="fp32"
+            shift
+            ;;
+        --fp64)
+            PRECISION="fp64"
+            shift
+            ;;
         --rebuild)
             FORCE_REBUILD=true
             shift
@@ -87,9 +104,13 @@ if [[ ${#SELECTED_TARGETS[@]} -eq 0 ]]; then
     SELECTED_TARGETS=(skylake zen4 zen5 meteorlake m1)
 fi
 
+PREC_LABEL="Double-Precision (FP64)"
+[[ "$PRECISION" == "fp32" ]] && PREC_LABEL="Single-Precision (FP32)"
+
 echo -e "${BOLD}${CYAN}================================================================================${NC}"
-echo -e "${BOLD}${CYAN}   CPUFP — Empirical Peak Double-Precision (FP64) Benchmark Runner             ${NC}"
+echo -e "${BOLD}${CYAN}   CPUFP — Empirical Peak ${PREC_LABEL} Benchmark Runner${NC}"
 echo -e "${BOLD}${CYAN}================================================================================${NC}"
+echo -e "Précision cible      : ${BOLD}${PRECISION}${NC}"
 echo -e "Cibles sélectionnées : ${BOLD}${SELECTED_TARGETS[*]}${NC}"
 echo -e "Dossier de sortie    : ${BOLD}${OUTPUT_DIR}${NC}\n"
 
@@ -217,27 +238,40 @@ ${wrapper}./cpufp --thread_pool=[${core}]
     fi
 }
 
-for target in "${SELECTED_TARGETS[@]}"; do
-    if [[ "$target" == "skylake" || "$target" == "local" ]]; then
-        run_local_skylake || true
-    else
-        run_cluster_target "$target" || true
-    fi
-done
+if [[ "$ANALYZE_ONLY" == "false" ]]; then
+    for target in "${SELECTED_TARGETS[@]}"; do
+        if [[ "$target" == "skylake" || "$target" == "local" ]]; then
+            run_local_skylake || true
+        else
+            run_cluster_target "$target" || true
+        fi
+    done
+fi
 
 # -----------------------------------------------------------------------------
 # Analyse des sorties & Génération du rapport comparatif
 # -----------------------------------------------------------------------------
 
 echo
-echo -e "${CYAN}→ Analyse et extraction des débits FP64 crête...${NC}"
+echo -e "${CYAN}→ Analyse et extraction des débits ${PREC_LABEL} crête...${NC}"
 
-python3 - << 'EOF'
+python3 - "$PRECISION" "$OUTPUT_DIR" << 'EOF'
+import sys
 import json
 import re
 from pathlib import Path
 
-results_dir = Path("gemm-bench-results/cpufp") if Path("gemm-bench-results/cpufp").is_dir() else Path("results/cpufp")
+precision = sys.argv[1].lower() if len(sys.argv) > 1 else "fp64"
+is_fp32 = (precision == "fp32")
+out_dir_arg = Path(sys.argv[2]) if len(sys.argv) > 2 else None
+
+if out_dir_arg and out_dir_arg.is_dir():
+    results_dir = out_dir_arg
+elif Path("gemm-bench-results/cpufp").is_dir():
+    results_dir = Path("gemm-bench-results/cpufp")
+else:
+    results_dir = Path("results/cpufp")
+
 config_path = Path("uarch_config.json")
 
 with open(config_path, "r", encoding="utf-8") as f:
@@ -275,7 +309,7 @@ for log_path in sorted(results_dir.glob("*_cpufp.txt")):
     content = log_path.read_text(encoding="utf-8", errors="ignore")
     lines = content.splitlines()
 
-    best_dp_gflops = 0.0
+    best_gflops = 0.0
     best_row_info = None
 
     for line in lines:
@@ -283,19 +317,22 @@ for log_path in sorted(results_dir.glob("*_cpufp.txt")):
             continue
         parts = [p.strip() for p in line.split("|") if p.strip()]
         if len(parts) >= 3:
-            # Check if this row is FP64 / f64
-            # Formats:
-            # 4 parts: [ISA, Vector Length, Computation, Performance]
-            # 3 parts: [ISA, Computation, Performance]
             comp_str = parts[-2]
             perf_str = parts[-1]
-            if "f64" in comp_str.lower() or "fp64" in comp_str.lower():
+            comp_l = comp_str.lower()
+            if is_fp32:
+                # IEEE 754 single-precision (exclude BF16 / integer DP)
+                match_prec = ("f32" in comp_l or "fp32" in comp_l) and "bf16" not in comp_l and "s32" not in comp_l and "u32" not in comp_l
+            else:
+                match_prec = ("f64" in comp_l or "fp64" in comp_l)
+
+            if match_prec:
                 # Extract GFLOPS number
                 m = re.search(r"([\d\.]+)\s*GFLOPS", perf_str, re.IGNORECASE)
                 if m:
                     gflops = float(m.group(1))
-                    if gflops > best_dp_gflops:
-                        best_dp_gflops = gflops
+                    if gflops > best_gflops:
+                        best_gflops = gflops
                         isa = parts[0]
                         vlen = parts[1] if len(parts) == 4 else ""
                         best_row_info = {
@@ -307,10 +344,13 @@ for log_path in sorted(results_dir.glob("*_cpufp.txt")):
 
     if best_row_info:
         freq = float(spec.get("frequency_ghz", 1.0))
-        theo_flop_cyc = float(spec.get("peak_flop_per_cycle", 16.0))
+        if is_fp32:
+            theo_flop_cyc = float(spec.get("peak_flop_per_cycle_fp32", 32.0))
+        else:
+            theo_flop_cyc = float(spec.get("peak_flop_per_cycle", 16.0))
         theo_peak_gflops = freq * theo_flop_cyc
-        measured_flop_cyc = best_dp_gflops / freq if freq > 0 else 0.0
-        eff_pct = (best_dp_gflops / theo_peak_gflops) * 100.0 if theo_peak_gflops > 0 else 0.0
+        measured_flop_cyc = best_gflops / freq if freq > 0 else 0.0
+        eff_pct = (best_gflops / theo_peak_gflops) * 100.0 if theo_peak_gflops > 0 else 0.0
 
         records.append({
             "target": target,
@@ -320,7 +360,7 @@ for log_path in sorted(results_dir.glob("*_cpufp.txt")):
             "isa": best_row_info["isa"],
             "vlen": best_row_info["vlen"],
             "computation": best_row_info["computation"],
-            "peak_dp_gflops": best_dp_gflops,
+            "peak_gflops": best_gflops,
             "measured_flop_per_cycle": measured_flop_cyc,
             "theo_flop_per_cycle": theo_flop_cyc,
             "efficiency_pct": eff_pct
@@ -328,16 +368,19 @@ for log_path in sorted(results_dir.glob("*_cpufp.txt")):
 
 if records:
     # Save CSV
-    csv_path = results_dir / "cpufp_peak_dp_summary.csv"
+    csv_filename = "cpufp_peak_sp_summary.csv" if is_fp32 else "cpufp_peak_dp_summary.csv"
+    peak_col_name = "Peak_SP_GFLOPS" if is_fp32 else "Peak_DP_GFLOPS"
+    csv_path = results_dir / csv_filename
     with open(csv_path, "w", encoding="utf-8") as f:
-        f.write("Target,UArchName,CpuModel,FreqGHz,ISA,VectorLength,Computation,Peak_DP_GFLOPS,Measured_FLOP_per_cycle,Theo_FLOP_per_cycle,Efficiency_pct\n")
+        f.write(f"Target,UArchName,CpuModel,FreqGHz,ISA,VectorLength,Computation,{peak_col_name},Measured_FLOP_per_cycle,Theo_FLOP_per_cycle,Efficiency_pct\n")
         for r in records:
-            f.write(f"{r['target']},{r['uarch_name']},{r['cpu_model']},{r['freq_ghz']},{r['isa']},{r['vlen']},\"{r['computation']}\",{r['peak_dp_gflops']:.3f},{r['measured_flop_per_cycle']:.2f},{r['theo_flop_per_cycle']:.1f},{r['efficiency_pct']:.1f}\n")
+            f.write(f"{r['target']},{r['uarch_name']},{r['cpu_model']},{r['freq_ghz']},{r['isa']},{r['vlen']},\"{r['computation']}\",{r['peak_gflops']:.3f},{r['measured_flop_per_cycle']:.2f},{r['theo_flop_per_cycle']:.1f},{r['efficiency_pct']:.1f}\n")
     print(f"✓ Synthèse CSV générée dans : {csv_path}\n")
 
     # Print summary table
+    prec_title = "Single-Precision (FP32)" if is_fp32 else "Double-Precision (FP64)"
     print("=" * 135)
-    print("  CPUFP — Empirical Peak Double-Precision (FP64) Floating-Point Measurements")
+    print(f"  CPUFP — Empirical Peak {prec_title} Floating-Point Measurements")
     print("=" * 135)
     header = f"{'Target':<12} | {'Microarchitecture':<24} | {'ISA / Vector':<18} | {'Core Computation':<23} | {'Peak GFLOP/s':<13} | {'FLOP/cyc':<9} | {'% Theo Peak':<10}"
     print(header)
@@ -349,12 +392,12 @@ if records:
             f"{r['uarch_name']:<24} | "
             f"{isa_str:<18} | "
             f"{r['computation']:<23} | "
-            f"{r['peak_dp_gflops']:<13.2f} | "
+            f"{r['peak_gflops']:<13.2f} | "
             f"{r['measured_flop_per_cycle']:<9.2f} | "
             f"{r['efficiency_pct']:<9.1f}%"
         )
         print(row)
     print("=" * 135 + "\n")
 else:
-    print("Aucune mesure DP valide trouvée dans les logs.")
+    print(f"Aucune mesure {'SP' if is_fp32 else 'DP'} valide trouvée dans les logs.")
 EOF
