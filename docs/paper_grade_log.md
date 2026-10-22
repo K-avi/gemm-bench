@@ -190,3 +190,52 @@ blis_native,6,8,128,1,0,1,0,fp64,3,1,3.803424624e-07,863.567724,2841.0005576
 Build,Kernel,M,N,K,Alpha,Beta,Time_median_s,Time_min_s,Time_max_s,Time_stddev_s,Time_cv_pct,GFLOPS_median,GFLOPS_peak,Cycles_median,Cycles_min,Cycles_max,Cycles_stddev,Cycles_cv_pct,Eff_GHz,IPC,FLOP_per_cycle_median,FLOP_per_cycle_peak,Repetitions,InterRun_CV_pct,Commit,Selection,NumRuns
 native,blis_native,6,8,128,1,0,3.823231144e-07,3.722569152e-07,6.706005552e-07,1.27169877784e-07,28.40,32.1404,33.0095,867.4,845.4,1522.8,288.9,28.42,2.2687,3.28,14.1669,14.5349,5,11.50,c76925c,median_of_runs,3
 ```
+
+---
+
+## P4 — Ablations : `--no-fastpath` et mode « C froid »
+
+### P4.a — Câblage `--no-fastpath` dans les scripts
+- **Fichiers modifiés** :
+  - [run_benchmarks.sh](file:///home/ivan/Files/projets/gemm_bench/run_benchmarks.sh) : option `--no-fastpath` relayée à `EXTRA_BENCH_ARGS` ; insertion du suffixe `_nofp` dans `file_suffix` ; métadonnée `--fastpath` dans l'appel `write_run_manifest.py` ; colonne `Fastpath` (0 ou 1) ajoutée au CSV après `NumRuns`.
+  - [tools/run_cluster_benchmarks.sh](file:///home/ivan/Files/projets/gemm_bench/tools/run_cluster_benchmarks.sh) : option `--no-fastpath` relayée dans `bench_flags`.
+- **Commandes de vérification** :
+  - `./run_benchmarks.sh avx2 --crr -k blis_native --sizes "128" -r 3 --runs 2 --no-fastpath -o test_nofp --allow-dirty gcc`
+  - Fichier produit : `results/gemm_results_test_nofp_crr_nofp_gcc.csv`, avec `Fastpath=0`.
+- **Commit** : `37c385a` (`feat(bench): expose --no-fastpath in run scripts (suffix _nofp, Fastpath column)`).
+- **Écarts** : Aucun.
+
+### P4.b — Mode C froid (`--c-cold`)
+- **Fichiers modifiés / créés** :
+  - [include/ColdCPool.h](file:///home/ivan/Files/projets/gemm_bench/include/ColdCPool.h) : classe RAII `ColdCPool<T>` allouant un buffer aligné 64 B de $P \times \text{stride\_bytes}$, avec $P = 2^{\lceil \log_2(\dots) \rceil} \ge 2$, stride avec décalage de 64 B pour casser les conflits d'associativité de cache, initialisation conditionnelle (zéros si $\beta=0$ ou recopie de tuile).
+  - [include/BenchConfig.h](file:///home/ivan/Files/projets/gemm_bench/include/BenchConfig.h) : options `--c-cold` et `--c-pool-mib <N>` (défaut 256 MiB).
+  - [src/main.cpp](file:///home/ivan/Files/projets/gemm_bench/src/main.cpp) :
+    - `measureKernel` : paramètre `const std::vector<T*> *c_pool = nullptr`. Boucle de mesure dédoublée via `if (c_pool)` pour garantir que le chemin chaud (`!c_pool`) conserve une génération de code strictement inchangée sans instruction superflue ni branche dans la boucle critique.
+    - Export `CCold` (1 ou 0) dans `exportRawSamples`.
+    - Contrôle NaN/Inf post-mesure sur la dernière tuile active du pool avec restauration RAII du pointeur d'origine `C.data`.
+  - [tests/GemmUKernelTest.cpp](file:///home/ivan/Files/projets/gemm_bench/tests/GemmUKernelTest.cpp) : test unitaire `Cold-C pool produces identical results` validant bit-à-bit l'identité du résultat entre tuile chaude et tuile du pool froid pour `mippv2_x60_mr6_nr4_fmaddi_crr` et `blis_native`.
+  - [run_benchmarks.sh](file:///home/ivan/Files/projets/gemm_bench/run_benchmarks.sh) : option `--c-cold`, suffixe `_coldc` (ordre : `_crr[_strict][_nofp][_coldc][_fp32]`), colonne `CCold` (0/1) après `Fastpath`.
+  - [tools/run_cluster_benchmarks.sh](file:///home/ivan/Files/projets/gemm_bench/tools/run_cluster_benchmarks.sh) : option `--c-cold` relayée dans `bench_flags`.
+- **Commandes de vérification** :
+  - `ctest --test-dir build` : 34/34 tests passés avec succès.
+  - Test comparatif chaud vs froid :
+    - `./build_avx2_gcc_native/GemmBench --kernel blis_native --k 256 --fp32 --iterations 200000` → FLOP/cyc = 24.6750
+    - `./build_avx2_gcc_native/GemmBench --kernel blis_native --k 256 --fp32 --iterations 200000 --c-cold` → FLOP/cyc = 24.1434 (mode froid $\le$ mode chaud, baisse de ~2.1% liée aux écritures hors cache).
+  - Vérification `objdump` : isolation de la boucle chaude via branchement extérieur `cmpq $0x0, 0x68(%rsp); je 393b3` ; aucune écriture de pointeur dans le corps de boucle chaude.
+- **Commit** : `216c7af` (`feat(bench): add cold-C mode rotating output tiles over a >LLC pool (--c-cold)`).
+- **Écarts** : Aucun.
+
+---
+
+## 🔍 Revue R2 — Checkpoint Ablations (P4)
+
+### 1. Diff global P4
+- Modifications concentrées sur `include/ColdCPool.h`, `include/BenchConfig.h`, `src/main.cpp`, `tests/GemmUKernelTest.cpp`, `run_benchmarks.sh`, `tools/run_cluster_benchmarks.sh`.
+- Intégrité stricte des noyaux MIPPv2 préservée (`GemmUKernel_opti_crr.hpp` et `GemmUKernel_opti_rrr.hpp` intacts).
+- Suite de tests unitaires 100% passante (34/34).
+
+### 2. Extrait d'en-tête CSV complet post-P4
+```csv
+Build,Kernel,M,N,K,Alpha,Beta,Time_median_s,Time_min_s,Time_max_s,Time_stddev_s,Time_cv_pct,GFLOPS_median,GFLOPS_peak,Cycles_median,Cycles_min,Cycles_max,Cycles_stddev,Cycles_cv_pct,Eff_GHz,IPC,FLOP_per_cycle_median,FLOP_per_cycle_peak,Repetitions,InterRun_CV_pct,Commit,Selection,NumRuns,Fastpath,CCold
+```
+
