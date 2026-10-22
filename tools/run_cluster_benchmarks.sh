@@ -294,7 +294,8 @@ elif [[ -n "$FP32_FLAG" ]]; then
 fi
 echo -e "${BLUE}[+] Nettoyage / Archivage (${target_res_dir}) sur ${FRONT_HOST} pour: ${SELECTED_TARGETS[*]}...${NC}"
 targets_space="${SELECTED_TARGETS[*]}"
-ssh "$FRONT_HOST" "bash -l -c 'cd ${REMOTE_DIR} && mkdir -p ${target_res_dir} && ARCHIVE_DIR=\"${target_res_dir}_archive_\$(date +%Y%m%d_%H%M%S)\" && moved=0 && for t in ${targets_space}; do for f in ${target_res_dir}/gemm_results_\${t}_*.csv; do if [ -f \"\$f\" ]; then mkdir -p \"\$ARCHIVE_DIR\" && mv \"\$f\" \"\$ARCHIVE_DIR/\" 2>/dev/null && moved=1; fi; done; done && if [ \"\$moved\" -eq 1 ]; then echo \"✓ Résultats antérieurs archivés dans \$ARCHIVE_DIR\"; fi'"
+is_fp32_val="${FP32_FLAG:-}"
+ssh "$FRONT_HOST" "bash -l -c 'cd ${REMOTE_DIR} && mkdir -p ${target_res_dir} && ARCHIVE_DIR=\"${target_res_dir}_archive_\$(date +%Y%m%d_%H%M%S)\" && moved=0 && for t in ${targets_space}; do if [ -n \"${is_fp32_val}\" ]; then for f in ${target_res_dir}/gemm_results_\${t}_*_fp32*; do if [ -f \"\$f\" ]; then mkdir -p \"\$ARCHIVE_DIR\" && mv \"\$f\" \"\$ARCHIVE_DIR/\" 2>/dev/null && moved=1; fi; done; else for f in ${target_res_dir}/gemm_results_\${t}_*; do if [ -f \"\$f\" ] && [[ \"\$f\" != *\"_fp32\"* ]]; then mkdir -p \"\$ARCHIVE_DIR\" && mv \"\$f\" \"\$ARCHIVE_DIR/\" 2>/dev/null && moved=1; fi; done; fi; done && if [ \"\$moved\" -eq 1 ]; then echo \"✓ Résultats antérieurs archivés dans \$ARCHIVE_DIR\"; fi'"
 
 # -----------------------------------------------------------------------------
 # 2. Définition des fonctions d'exécution par cible
