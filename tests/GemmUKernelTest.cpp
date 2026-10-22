@@ -2,9 +2,11 @@
 
 #include "Alloc.h"
 #include "BenchConfig.h"
+#include "ColdCPool.h"
 #include "GemmUKernel.h"
 
 #include <cmath>
+#include <cstring>
 
 using namespace GEMMBench;
 
@@ -1261,3 +1263,89 @@ TEST_CASE("BLIS Native SGEMM Microkernel Validation", "[gemm][blis][float]") {
   alloc.freePacked(C_ref);
 }
 #endif
+
+TEST_CASE("Cold-C pool produces identical results", "[crr][coldc]") {
+  using T = double;
+  GemmUKernel<T> gemm;
+  const size_t simd_width = mipp::N<T>();
+  SimdAlloc<T> alloc(sizeof(T), 1, 64, 42);
+
+  const size_t M = 6;
+  const size_t N = 4 * simd_width;
+  const size_t K = 32;
+
+  auto A = alloc.template allocatePackedTile<PackedColMajor<T>>(M, K, InitMode::Random);
+  auto B = alloc.template allocatePackedTile<PackedRowMajor<T>>(K, N, InitMode::Random);
+  auto C_warm = alloc.template allocatePackedTile<PackedRowMajor<T>>(M, N, InitMode::Zero);
+  auto C_cold_wrapper = alloc.template allocatePackedTile<PackedRowMajor<T>>(M, N, InitMode::Zero);
+
+  const size_t tile_bytes = C_warm.padded_rows * C_warm.padded_cols * sizeof(T);
+  ColdCPool<T> pool(tile_bytes, 1, C_warm.data, 0.0);
+  REQUIRE(pool.P() >= 2);
+
+  SECTION("mippv2_x60_mr6_nr4_fmaddi_crr") {
+    gemm.gemm_mippv2_x60_mr6_nr4_fmaddi_crr(A, B, C_warm);
+
+    T *const orig_cold_ptr = C_cold_wrapper.data;
+    C_cold_wrapper.data = pool.pool()[1];
+    gemm.gemm_mippv2_x60_mr6_nr4_fmaddi_crr(A, B, C_cold_wrapper);
+    C_cold_wrapper.data = orig_cold_ptr;
+
+    REQUIRE(std::memcmp(C_warm.data, pool.pool()[1], tile_bytes) == 0);
+  }
+
+#ifdef GEMMBENCH_HAS_BLIS
+  SECTION("blis_native") {
+    const auto &desc = getKernelDescriptor(UKernelType::blis_native);
+    const size_t blis_M = (desc.MR > 0) ? desc.MR : M;
+    const size_t blis_N = (desc.NR > 0) ? desc.NR : (desc.NR_vec * simd_width);
+
+    auto A_blis = alloc.template allocatePackedTile<PackedColMajor<T>>(blis_M, K, InitMode::Random);
+    auto B_blis = alloc.template allocatePackedTile<PackedRowMajor<T>>(K, blis_N, InitMode::Random);
+
+    if (desc.isCRC()) {
+      auto C_blis_warm = alloc.template allocatePackedTile<PackedColMajor<T>>(blis_M, blis_N, InitMode::Zero);
+      auto C_blis_cold = alloc.template allocatePackedTile<PackedColMajor<T>>(blis_M, blis_N, InitMode::Zero);
+      const size_t blis_tile_bytes = C_blis_warm.padded_rows * C_blis_warm.padded_cols * sizeof(T);
+      ColdCPool<T> blis_pool(blis_tile_bytes, 1, C_blis_warm.data, 0.0);
+
+      gemm.gemm_blis_native(A_blis, B_blis, C_blis_warm);
+
+      T *const orig_blis_cold_ptr = C_blis_cold.data;
+      C_blis_cold.data = blis_pool.pool()[1];
+      gemm.gemm_blis_native(A_blis, B_blis, C_blis_cold);
+      C_blis_cold.data = orig_blis_cold_ptr;
+
+      REQUIRE(std::memcmp(C_blis_warm.data, blis_pool.pool()[1], blis_tile_bytes) == 0);
+
+      alloc.freePacked(C_blis_warm);
+      alloc.freePacked(C_blis_cold);
+    } else {
+      auto C_blis_warm = alloc.template allocatePackedTile<PackedRowMajor<T>>(blis_M, blis_N, InitMode::Zero);
+      auto C_blis_cold = alloc.template allocatePackedTile<PackedRowMajor<T>>(blis_M, blis_N, InitMode::Zero);
+      const size_t blis_tile_bytes = C_blis_warm.padded_rows * C_blis_warm.padded_cols * sizeof(T);
+      ColdCPool<T> blis_pool(blis_tile_bytes, 1, C_blis_warm.data, 0.0);
+
+      gemm.gemm_blis_native(A_blis, B_blis, C_blis_warm);
+
+      T *const orig_blis_cold_ptr = C_blis_cold.data;
+      C_blis_cold.data = blis_pool.pool()[1];
+      gemm.gemm_blis_native(A_blis, B_blis, C_blis_cold);
+      C_blis_cold.data = orig_blis_cold_ptr;
+
+      REQUIRE(std::memcmp(C_blis_warm.data, blis_pool.pool()[1], blis_tile_bytes) == 0);
+
+      alloc.freePacked(C_blis_warm);
+      alloc.freePacked(C_blis_cold);
+    }
+
+    alloc.freePacked(A_blis);
+    alloc.freePacked(B_blis);
+  }
+#endif
+
+  alloc.freePacked(A);
+  alloc.freePacked(B);
+  alloc.freePacked(C_warm);
+  alloc.freePacked(C_cold_wrapper);
+}

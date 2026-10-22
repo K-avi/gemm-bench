@@ -23,7 +23,10 @@
 #endif
 
 #include "BenchConfig.h"
+#include "ColdCPool.h"
 #include "HardwareFence.h"
+
+#include <optional>
 
 #ifdef GEMMBENCH_USE_LIKWID
 #include <likwid-marker.h>
@@ -269,7 +272,8 @@ inline BenchmarkStats compute_stats(const std::vector<double> &times,
 // Inner computation timing is strictly isolated inside [cyc0, cyc1], excluding sys_read() latency.
 template <typename T, typename CPacked, typename KernelFn>
 inline BenchmarkStats measureKernel(const BenchConfig &cfg, CPacked &C,
-                                    KernelFn &&kernel_step) {
+                                    KernelFn &&kernel_step,
+                                    const std::vector<T *> *c_pool = nullptr) {
   CycleCounter cyc_counter;
   for (size_t w = 0; w < cfg.warmup; ++w) {
     kernel_step();
@@ -280,15 +284,19 @@ inline BenchmarkStats measureKernel(const BenchConfig &cfg, CPacked &C,
   std::vector<double> samples_cyc(reps, 0.0);
   std::vector<double> samples_ins(reps, 0.0);
 
+  // In warm mode, beta != 0 restores C before each repetition.
+  // In cold-C mode, C rotates over a pool > LLC initialized once; restoration per repetition is omitted.
   std::vector<T> c_backup;
-  if (cfg.beta != 0.0 && C.data) {
+  if (!c_pool && cfg.beta != 0.0 && C.data) {
     const size_t c_span = std::max(C.padded_rows * C.padded_cols,
                                    std::max(C.rows * C.ld, C.cols * C.ld));
     c_backup.assign(C.data, C.data + c_span);
   }
 
+  T * const c_orig = C.data;
+
   for (size_t r = 0; r < reps; ++r) {
-    if (cfg.beta != 0.0 && !c_backup.empty()) {
+    if (!c_pool && cfg.beta != 0.0 && !c_backup.empty()) {
       std::memcpy(C.data, c_backup.data(), c_backup.size() * sizeof(T));
     }
 
@@ -302,9 +310,19 @@ inline BenchmarkStats measureKernel(const BenchConfig &cfg, CPacked &C,
     compiler_fence();
 
     LIKWID_MARKER_START(cfg.kernel_name.c_str());
-    for (size_t i = 0; i < cfg.iterations; ++i) {
-      kernel_step();
-      asm volatile("" :: "r"(C.data) : "memory");
+    if (c_pool) {
+      const size_t P_mask = c_pool->size() - 1;
+      const auto &pool_ptrs = *c_pool;
+      for (size_t i = 0; i < cfg.iterations; ++i) {
+        C.data = pool_ptrs[i & P_mask];
+        kernel_step();
+        asm volatile("" :: "r"(C.data) : "memory");
+      }
+    } else {
+      for (size_t i = 0; i < cfg.iterations; ++i) {
+        kernel_step();
+        asm volatile("" :: "r"(C.data) : "memory");
+      }
     }
     LIKWID_MARKER_STOP(cfg.kernel_name.c_str());
 
@@ -326,21 +344,33 @@ inline BenchmarkStats measureKernel(const BenchConfig &cfg, CPacked &C,
       samples_ins[r] = static_cast<double>(ins1 - ins0) / cfg.iterations;
   }
 
-  for (size_t r_i = 0; r_i < C.rows; ++r_i) {
-    for (size_t c_j = 0; c_j < C.cols; ++c_j) {
-      if (is_nan_or_inf_ieee754(C(r_i, c_j))) {
-        throw std::runtime_error(
-            "Numerical corruption: NaN/Inf detected in output tile C");
+  // Check NaN/Inf on the last tile used, then restore original C.data
+  if (c_pool && cfg.iterations > 0) {
+    const size_t P_mask = c_pool->size() - 1;
+    C.data = (*c_pool)[(cfg.iterations - 1) & P_mask];
+  }
+
+  try {
+    for (size_t r_i = 0; r_i < C.rows; ++r_i) {
+      for (size_t c_j = 0; c_j < C.cols; ++c_j) {
+        if (is_nan_or_inf_ieee754(C(r_i, c_j))) {
+          throw std::runtime_error(
+              "Numerical corruption: NaN/Inf detected in output tile C");
+        }
       }
     }
+  } catch (...) {
+    C.data = c_orig;
+    throw;
   }
+  C.data = c_orig;
 
   const double ops = 2.0 * cfg.M * cfg.N * cfg.K;
   return compute_stats(samples_s, samples_cyc, samples_ins, ops);
 }
 
 #define BENCH_KERNEL(CALL)                                                     \
-  return measureKernel<T>(cfg, C, [&]() __attribute__((always_inline)) { CALL; })
+  return measureKernel<T>(cfg, C, [&]() __attribute__((always_inline)) { CALL; }, c_pool)
 
 #define BENCH_KERNEL_FASTPATH(CALL_FAST, CALL_FULL)                            \
   do {                                                                         \
@@ -354,7 +384,8 @@ inline BenchmarkStats measureKernel(const BenchConfig &cfg, CPacked &C,
 template <typename T>
 inline BenchmarkStats run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
                           const PackedRowMajor<T> &A, const PackedRowMajor<T> &B,
-                          PackedRowMajor<T> &C) {
+                          PackedRowMajor<T> &C,
+                          const std::vector<T *> *c_pool = nullptr) {
   switch (cfg.kernel) {
   // Production / Champion kernels
   case UKernelType::IJK:
@@ -538,7 +569,8 @@ inline BenchmarkStats run(const BenchConfig &cfg,
                           [[maybe_unused]] const GemmUKernel<T> &gemm,
                           [[maybe_unused]] const PackedRowMajor<T> &A,
                           [[maybe_unused]] const PackedColMajor<T> &B,
-                          [[maybe_unused]] PackedRowMajor<T> &C) {
+                          [[maybe_unused]] PackedRowMajor<T> &C,
+                          const std::vector<T *> *c_pool = nullptr) {
   switch (cfg.kernel) {
 #ifdef GEMMBENCH_ENABLE_EXPLO
   case UKernelType::IJK_RC:
@@ -559,7 +591,8 @@ inline BenchmarkStats run(const BenchConfig &cfg,
 template <typename T>
 inline BenchmarkStats run(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
                           const PackedColMajor<T> &A, const PackedRowMajor<T> &B,
-                          PackedRowMajor<T> &C) {
+                          PackedRowMajor<T> &C,
+                          const std::vector<T *> *c_pool = nullptr) {
   switch (cfg.kernel) {
   case UKernelType::mippv2_meteorlake_mr4_nr3_crr:
     BENCH_KERNEL_FASTPATH(
@@ -660,7 +693,8 @@ inline BenchmarkStats run(const BenchConfig &cfg,
                           [[maybe_unused]] const GemmUKernel<T> &gemm,
                           [[maybe_unused]] const PackedColMajor<T> &A,
                           [[maybe_unused]] const PackedRowMajor<T> &B,
-                          [[maybe_unused]] PackedColMajor<T> &C) {
+                          [[maybe_unused]] PackedColMajor<T> &C,
+                          const std::vector<T *> *c_pool = nullptr) {
   switch (cfg.kernel) {
 #ifdef GEMMBENCH_HAS_BLIS
   case UKernelType::blis_native:
@@ -748,7 +782,7 @@ inline void exportRawSamples(const BenchConfig &cfg,
         << cfg.M << "," << cfg.N << "," << cfg.K << ","
         << cfg.alpha << "," << cfg.beta << ","
         << (cfg.use_fastpath ? 1 : 0) << ","
-        << 0 << ","
+        << (cfg.c_cold ? 1 : 0) << ","
         << (cfg.fp32 ? "fp32" : "fp64") << ","
         << cfg.run_id << ","
         << r << ","
@@ -865,9 +899,19 @@ void runBenchmark(BenchConfig &cfg) {
       std::cout << "A.ld = " << A.ld << "\n";
       std::cout << "B.ld = " << B.ld << "\n";
       std::cout << "C.ld = " << C.ld << "\n";
+      if (cfg.c_cold) {
+        std::cout << "Cold-C Mode: enabled (pool " << cfg.c_pool_mib << " MiB)\n";
+      }
     }
 
-    const auto stats = run<T>(cfg, gemm, A, B, C);
+    std::optional<ColdCPool<T>> cold_pool;
+    if (cfg.c_cold) {
+      const size_t tile_bytes = C.padded_rows * C.padded_cols * sizeof(T);
+      cold_pool.emplace(tile_bytes, cfg.c_pool_mib, C.data, cfg.beta);
+    }
+    const std::vector<T *> *c_pool_ptr = cold_pool ? &cold_pool->pool() : nullptr;
+
+    const auto stats = run<T>(cfg, gemm, A, B, C, c_pool_ptr);
 
     printResults<T>(cfg, stats);
     exportRawSamples(cfg, stats);

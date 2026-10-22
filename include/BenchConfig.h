@@ -45,6 +45,9 @@ struct BenchConfig
 
     std::string raw_out;
     size_t run_id = 0;
+
+    bool c_cold = false;
+    size_t c_pool_mib = 256;
 };
 
 inline BenchConfig& config()
@@ -100,6 +103,8 @@ inline void parseArgs(int argc,
                       << "  --alignment <N>     Memory alignment in bytes (default: 64)\n"
                       << "  --seed <N>          Random seed (default: 12)\n"
                       << "  --fp32, --float     Run single-precision (float / FP32) microkernel\n"
+                      << "  --c-cold            Rotate output tile C over a pool larger than LLC to avoid cache hits\n"
+                      << "  --c-pool-mib <N>    Pool size in MiB for --c-cold mode (default: 256)\n"
                       << "  --raw-out <path>    Export raw per-repetition timing samples to CSV\n"
                       << "  --run-id <N>        Run index for raw samples tracking (default: 0)\n"
                       << "  --csv               Output in CSV format\n"
@@ -169,6 +174,10 @@ inline void parseArgs(int argc,
             cfg.raw_out = next();
         else if(arg == "--run-id")
             cfg.run_id = next_ulong();
+        else if(arg == "--c-cold")
+            cfg.c_cold = true;
+        else if(arg == "--c-pool-mib")
+            cfg.c_pool_mib = next_ulong();
         else if(arg == "--validate")
             cfg.validate = true;
         else if(!ignore_unknown)
