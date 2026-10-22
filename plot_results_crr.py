@@ -135,11 +135,11 @@ def load_uarch_config_crr(config_path: Path, is_fp32: bool = False) -> Dict[str,
 
             if is_fp32:
                 csv_pattern = spec.get("crr_csv_pattern_fp32", f"*gemm_results_*{uarch_id}*crr*fp32*_{{compiler}}.csv")
-                peak_fc = float(spec.get("peak_flop_per_cycle_fp32", float(spec.get("peak_flop_per_cycle", 1.0)) * 2.0))
+                if "peak_flop_per_cycle_fp32" not in spec:
+                    raise KeyError(f"Explicit 'peak_flop_per_cycle_fp32' is required in uarch config for '{uarch_id}' in FP32 mode")
+                peak_fc = float(spec["peak_flop_per_cycle_fp32"])
                 if "measured_peak_flop_per_cycle_fp32" in spec:
                     measured_fc = float(spec["measured_peak_flop_per_cycle_fp32"])
-                elif "measured_peak_flop_per_cycle" in spec:
-                    measured_fc = float(spec["measured_peak_flop_per_cycle"]) * 2.0
                 else:
                     measured_fc = None
             else:
