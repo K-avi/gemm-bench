@@ -21,6 +21,10 @@ add_executable(GemmBenchTests
     AllocTest.cpp
 )
 
+if(TARGET gemmbench_build_info)
+    add_dependencies(GemmBenchTests gemmbench_build_info)
+endif()
+
 target_compile_options(GemmBenchTests
     PRIVATE
         -O2

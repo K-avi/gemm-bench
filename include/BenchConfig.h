@@ -8,6 +8,7 @@
 
 #include "GemmUKernel.h"
 #include "StorageType.h"
+#include "build_info.h"
 
 
 namespace GEMMBench
@@ -97,7 +98,26 @@ inline void parseArgs(int argc,
                       << "  --seed <N>          Random seed (default: 12)\n"
                       << "  --fp32, --float     Run single-precision (float / FP32) microkernel\n"
                       << "  --csv               Output in CSV format\n"
+                      << "  --build-info        Print build metadata (git, compiler, flags) and exit\n"
                       << "  --help, -h          Show this help message\n";
+            std::exit(EXIT_SUCCESS);
+        }
+        else if(arg == "--build-info")
+        {
+            std::cout << "git_commit=" << build_info::git_commit << '\n'
+                      << "git_dirty=" << build_info::git_dirty << '\n'
+                      << "cxx_compiler_id=" << build_info::cxx_compiler_id << '\n'
+                      << "cxx_compiler_version=" << build_info::cxx_compiler_version << '\n'
+                      << "cxx_flags=" << build_info::cxx_flags << '\n'
+                      << "build_type=" << build_info::build_type << '\n'
+                      << "fastmath=" << build_info::fastmath << '\n'
+                      << "blis_target=" << build_info::blis_target << '\n'
+                      << "explo=" << build_info::explo << '\n';
+#ifdef __VERSION__
+            std::cout << "compiler_macro_version=" << __VERSION__ << '\n';
+#else
+            std::cout << "compiler_macro_version=unknown\n";
+#endif
             std::exit(EXIT_SUCCESS);
         }
         else if(arg == "--m")

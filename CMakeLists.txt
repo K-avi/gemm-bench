@@ -53,6 +53,7 @@ target_include_directories(gemmbench
     INTERFACE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/include/microkernels
+        ${CMAKE_BINARY_DIR}/generated
 )
 target_include_directories(gemmbench
     SYSTEM INTERFACE
@@ -136,6 +137,12 @@ if(GEMMBENCH_ENABLE_BLIS)
     endif()
 endif()
 
+if(GEMMBENCH_ENABLE_BLIS AND BLIS_ARCH_TAG)
+    string(REPLACE "GEMMBENCH_BLIS_" "" GEMMBENCH_RESOLVED_BLIS_TARGET "${BLIS_ARCH_TAG}")
+else()
+    set(GEMMBENCH_RESOLVED_BLIS_TARGET "none")
+endif()
+
 # -----------------------------------------------------------------------------
 # LIKWID Marker API (Optional, x86_64 validation)
 # -----------------------------------------------------------------------------
@@ -167,11 +174,48 @@ if(GEMMBENCH_ENABLE_LIKWID)
 endif()
 
 # -----------------------------------------------------------------------------
+# Embedded Build Information
+# -----------------------------------------------------------------------------
+execute_process(
+    COMMAND ${CMAKE_COMMAND}
+        -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+        -DBINARY_DIR=${CMAKE_BINARY_DIR}
+        -DCMAKE_CXX_COMPILER_ID=${CMAKE_CXX_COMPILER_ID}
+        -DCMAKE_CXX_COMPILER_VERSION=${CMAKE_CXX_COMPILER_VERSION}
+        -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}
+        -DCMAKE_CXX_FLAGS_RELEASE=${CMAKE_CXX_FLAGS_RELEASE}
+        -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+        -DGEMMBENCH_ENABLE_FASTMATH=${GEMMBENCH_ENABLE_FASTMATH}
+        -DGEMMBENCH_RESOLVED_BLIS_TARGET=${GEMMBENCH_RESOLVED_BLIS_TARGET}
+        -DGEMMBENCH_ENABLE_EXPLO=${GEMMBENCH_ENABLE_EXPLO}
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/gen_build_info.cmake
+)
+
+add_custom_target(gemmbench_build_info ALL
+    COMMAND ${CMAKE_COMMAND}
+        -DSOURCE_DIR=${CMAKE_CURRENT_SOURCE_DIR}
+        -DBINARY_DIR=${CMAKE_BINARY_DIR}
+        -DCMAKE_CXX_COMPILER_ID=${CMAKE_CXX_COMPILER_ID}
+        -DCMAKE_CXX_COMPILER_VERSION=${CMAKE_CXX_COMPILER_VERSION}
+        -DCMAKE_CXX_FLAGS=${CMAKE_CXX_FLAGS}
+        -DCMAKE_CXX_FLAGS_RELEASE=${CMAKE_CXX_FLAGS_RELEASE}
+        -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
+        -DGEMMBENCH_ENABLE_FASTMATH=${GEMMBENCH_ENABLE_FASTMATH}
+        -DGEMMBENCH_RESOLVED_BLIS_TARGET=${GEMMBENCH_RESOLVED_BLIS_TARGET}
+        -DGEMMBENCH_ENABLE_EXPLO=${GEMMBENCH_ENABLE_EXPLO}
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/gen_build_info.cmake
+    BYPRODUCTS "${CMAKE_BINARY_DIR}/generated/build_info.h"
+    COMMENT "Updating build_info.h"
+)
+
+# -----------------------------------------------------------------------------
 # Benchmarks
 # -----------------------------------------------------------------------------
 add_executable(GemmBench
     src/main.cpp
 )
+
+add_dependencies(GemmBench gemmbench_build_info)
 
 target_link_libraries(GemmBench
     PRIVATE

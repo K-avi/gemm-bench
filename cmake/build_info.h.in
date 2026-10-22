@@ -1,0 +1,13 @@
+#pragma once
+
+namespace GEMMBench::build_info {
+    inline constexpr const char* git_commit = "@GEMMBENCH_GIT_COMMIT@";
+    inline constexpr const char* git_dirty = "@GEMMBENCH_GIT_DIRTY@";
+    inline constexpr const char* cxx_compiler_id = "@CMAKE_CXX_COMPILER_ID@";
+    inline constexpr const char* cxx_compiler_version = "@CMAKE_CXX_COMPILER_VERSION@";
+    inline constexpr const char* cxx_flags = "@GEMMBENCH_CXX_FLAGS_COMBINED@";
+    inline constexpr const char* build_type = "@CMAKE_BUILD_TYPE@";
+    inline constexpr const char* fastmath = "@GEMMBENCH_FASTMATH_STR@";
+    inline constexpr const char* blis_target = "@GEMMBENCH_RESOLVED_BLIS_TARGET@";
+    inline constexpr const char* explo = "@GEMMBENCH_EXPLO_STR@";
+} // namespace GEMMBench::build_info
