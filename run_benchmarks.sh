@@ -434,16 +434,29 @@ MIPP_EXPLO_KERNELS=(
 # Matrix Sizes (N, iterations, warmup)
 ################################################################################
 
-if [[ "$CRR_ONLY" == "true" && ${#CUSTOM_SIZES[@]} -eq 0 ]]; then
+crr_iters_for_k() {
+    local k="$1"
+    local iters=$(( 160000000 / k ))
+    if (( iters < 1000 )); then
+        iters=1000
+    fi
+    local warmup=$(( iters / 10 ))
+    echo "${k} ${iters} ${warmup}"
+}
+
+if [[ "$CRR_ONLY" == "true" ]]; then
     # In CRR BLIS mode: sweep K with iterations scaled inverse-proportionally to K (~0.5s per measurement)
-    SIZES=(
-        "32 5000000 500000"
-        "64 2500000 250000"
-        "128 1250000 125000"
-        "256 600000 60000"
-        "512 300000 30000"
-        "1024 150000 15000"
-    )
+    SIZES=()
+    if [[ ${#CUSTOM_SIZES[@]} -gt 0 ]]; then
+        for s in "${CUSTOM_SIZES[@]}"; do
+            SIZES+=("$(crr_iters_for_k "$s")")
+        done
+    else
+        DEFAULT_CRR_SIZES=(32 64 128 256 384 512 1024)
+        for s in "${DEFAULT_CRR_SIZES[@]}"; do
+            SIZES+=("$(crr_iters_for_k "$s")")
+        done
+    fi
 elif [[ ${#CUSTOM_SIZES[@]} -gt 0 ]]; then
     SIZES=()
     for s in "${CUSTOM_SIZES[@]}"; do
