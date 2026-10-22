@@ -301,4 +301,52 @@ Build,Kernel,M,N,K,Alpha,Beta,Time_median_s,Time_min_s,Time_max_s,Time_stddev_s,
 - Tests unitaires Python : 10/10 passés (`python3 -m unittest discover -s tests/python`).
 - Tests C++ Catch2 : 34/34 passés (`ctest --test-dir build`).
 
+---
+
+## P7 — Calibration des pics FP32
+
+### P7.a — Scripts cpufp et mise à jour de la configuration
+- **Fichiers modifiés / créés** :
+  - `tools/measure_peak_cpufp.sh` : ajout des options `--fp32`, `--fp64` et `--analyze-only`. Extraction des débits FMA IEEE 754 simple précision (`f32`/`fp32`) excluant le BF16 et l'entier. Export de `gemm-bench-results/cpufp/cpufp_peak_sp_summary.csv` et affichage du tableau d'efficacité par microarchitecture.
+  - `tools/update_uarch_config_cpufp.py` : ajout de l'option `--fp32` pour mettre à jour automatiquement `measured_peak_flop_per_cycle_fp32` dans `uarch_config.json` depuis le CSV de synthèse SP (jamais à la main).
+  - `tools/submit_queued_cpufp.sh` : mise à jour pour supporter `--fp32` et intégrer l'ensemble des 8 cibles de calcul du cluster Dalek.
+  - `uarch_config.json` : mise à jour de `measured_peak_flop_per_cycle_fp32` pour les plateformes disposant de mesures cpufp :
+    - `skylake` : 30.38 FLOP/cyc (94.9% du pic théorique de 32.0)
+    - `meteorlake` : 31.68 FLOP/cyc (99.0% du pic théorique de 32.0)
+    - `zen4` : 31.76 FLOP/cyc (99.3% du pic théorique de 32.0)
+    - `zen5` : 31.95 FLOP/cyc (99.8% du pic théorique de 32.0)
+    - `m1` : 31.94 FLOP/cyc (99.8% du pic théorique de 32.0)
+- **Commandes de vérification** :
+  - `./tools/measure_peak_cpufp.sh --analyze-only --fp32` : synthèse SP générée sans erreur.
+  - `python3 tools/update_uarch_config_cpufp.py --fp32` : mise à jour sans régression de `uarch_config.json`.
+  - `python3 -m unittest discover -s tests/python` : 10/10 tests unitaires passés.
+  - `ctest --test-dir build` : 34/34 tests Catch2 passés.
+- **Commit** : `aef04d3` (`feat(calibration): cpufp FP32 peak measurement and config update path`).
+- **Écarts** : Aucun.
+
+---
+
+## P8 — Investigation des micro-noyaux BLIS Zen 4
+
+### P8.a — Rapport d'investigation microarchitecturale
+- **Fichier créé** :
+  - `docs/blis_zen4_investigation.md` : rapport technique analysant la disponibilité et la structure des micro-noyaux BLIS sur AMD Zen 4.
+- **Conclusions clés** :
+  1. Le dépôt upstream `flame/blis` au commit `a8037cfc4330030c726efaec1ffeb1f93d468aa3` ne dispose pas de configuration `zen4` ni de répertoire `kernels/zen4/` ; il dispatche Zen 4 sur le noyau AVX2 256 bits de Zen 3 (`zen3`, $MR \times NR = 6 \times 8$).
+  2. Le support AVX-512 natif pour Zen 4 est maintenu par AMD dans son fork vendeur `amd/blis` (AOCL-BLIS), tirant parti du pipeline FPU 256 bits double-pompé.
+  3. L'unique chemin AVX-512 upstream réside dans `kernels/skx/3/` (Intel Skylake-X, géométrie $24 \times 8$ ou $16 \times 12$).
+  4. Conformément aux instructions, aucun code n'a été intégré dans `libs/blis_reference/`.
+- **Commit** : `b8d83f0` (`docs: investigate upstream BLIS zen4 microkernels as AVX-512 baseline`).
+- **Écarts** : Aucun.
+
+---
+
+## 🔍 Revue R5 — Checkpoint Pré-Campagne de Mesures (P9)
+
+### 1. Diff global P7-P8
+- Outils de métrologie cpufp mis à niveau pour FP32 (`measure_peak_cpufp.sh`, `update_uarch_config_cpufp.py`, `submit_queued_cpufp.sh`).
+- Valeurs de pic empirique FP32 injectées dans `uarch_config.json` via le script dédié.
+- Rapport technique `docs/blis_zen4_investigation.md` consigné.
+- Intégrité de la base de code préservée : suite de tests C++ (34/34) et Python (10/10) verte.
+
 
