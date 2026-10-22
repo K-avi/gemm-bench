@@ -33,6 +33,8 @@ Options:
   --fp32, --float         Run single-precision (float / FP32) benchmarks
   --validate              Run numerical correctness validation against scalar reference before benchmark
   --likwid                Enable LIKWID Marker API instrumentation (-DGEMMBENCH_ENABLE_LIKWID=ON)
+  --allow-dirty           Allow running benchmarks with uncommitted git changes
+  --allow-stale-binary    Allow running with binary whose git commit differs from HEAD
   -o, --output <prefix>   Prefix for result CSV filename (e.g. --output zen4 -> zen4_gemm_results_gcc.csv)
   -a, --alpha <val>       Alpha parameter (default: 1.0)
   -b, --beta <val>        Beta parameter (default: 0.0)
@@ -123,6 +125,8 @@ COOLDOWN_SEC=2.0
 ENABLE_LIKWID_FLAG=false
 FAST_MATH=true
 FP32_FLAG=false
+ALLOW_DIRTY=false
+ALLOW_STALE_BINARY=false
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -150,6 +154,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --likwid)
             ENABLE_LIKWID_FLAG=true
+            shift
+            ;;
+        --allow-dirty)
+            ALLOW_DIRTY=true
+            shift
+            ;;
+        --allow-stale-binary)
+            ALLOW_STALE_BINARY=true
             shift
             ;;
         --tests)
@@ -236,6 +248,26 @@ done
 # Default to running both g++ and clang++, or accept specific compiler(s) as args
 if [[ ${#REQUESTED_COMPILERS[@]} -eq 0 ]]; then
     REQUESTED_COMPILERS=("g++" "clang++")
+fi
+
+# Repository status & dirty guard
+if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    REPO_GIT_STATUS=$(git status --porcelain --untracked-files=no 2>/dev/null || true)
+    if [[ -n "$REPO_GIT_STATUS" && "$ALLOW_DIRTY" != "true" ]]; then
+        echo "Error: Working directory has uncommitted tracked changes (git dirty)." >&2
+        echo "Please commit your changes, stash them, or pass --allow-dirty to proceed." >&2
+        exit 1
+    fi
+    REPO_GIT_COMMIT=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
+    if [[ -z "$REPO_GIT_STATUS" ]]; then
+        REPO_GIT_DIRTY=0
+    else
+        REPO_GIT_DIRTY=1
+    fi
+else
+    REPO_GIT_STATUS=""
+    REPO_GIT_COMMIT="unknown"
+    REPO_GIT_DIRTY=-1
 fi
 
 # Configure fast-math vs strict IEEE-754 flags
@@ -501,8 +533,13 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
     fi
     mkdir -p "$(dirname "$CSV")"
     TMP_CSV="${CSV}.tmp.$$"
-    trap 'rm -f "${TMP_CSV}" 2>/dev/null || true' EXIT INT TERM
-    echo "Build,Kernel,M,N,K,Alpha,Beta,Time_median_s,Time_min_s,Time_max_s,Time_stddev_s,Time_cv_pct,GFLOPS_median,GFLOPS_peak,Cycles_median,Cycles_min,Cycles_max,Cycles_stddev,Cycles_cv_pct,Eff_GHz,IPC,FLOP_per_cycle_median,FLOP_per_cycle_peak,Repetitions,InterRun_CV_pct" > "$TMP_CSV"
+    TMP_META="${CSV%.csv}.meta.json.tmp.$$"
+    trap 'rm -f "${TMP_CSV}" "${TMP_META}" 2>/dev/null || true' EXIT INT TERM
+    echo "Build,Kernel,M,N,K,Alpha,Beta,Time_median_s,Time_min_s,Time_max_s,Time_stddev_s,Time_cv_pct,GFLOPS_median,GFLOPS_peak,Cycles_median,Cycles_min,Cycles_max,Cycles_stddev,Cycles_cv_pct,Eff_GHz,IPC,FLOP_per_cycle_median,FLOP_per_cycle_peak,Repetitions,InterRun_CV_pct,Commit" > "$TMP_CSV"
+
+    RUN_START_TIME_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    THROTTLE_WARNINGS=()
+    EXECUTED_KERNELS=()
 
     # Log provenance metadata
     GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown")
@@ -654,6 +691,19 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
             continue
         fi
 
+        # Provenance check: verify binary commit matches repository HEAD
+        BIN_BUILD_INFO=$("${BIN}" --build-info 2>/dev/null || true)
+        BIN_COMMIT=$(echo "$BIN_BUILD_INFO" | awk -F'=' '$1=="git_commit" {print $2}')
+        if [[ -n "$REPO_GIT_COMMIT" && "$REPO_GIT_COMMIT" != "unknown" && -n "$BIN_COMMIT" && "$BIN_COMMIT" != "unknown" && "$BIN_COMMIT" != "$REPO_GIT_COMMIT" && "$ALLOW_STALE_BINARY" != "true" ]]; then
+            echo "Error: Binary ${BIN} commit (${BIN_COMMIT}) does not match repository HEAD (${REPO_GIT_COMMIT})." >&2
+            echo "Please recompile or pass --allow-stale-binary to override." >&2
+            exit 1
+        fi
+        BIN_COMMIT_SHORT="${BIN_COMMIT:0:7}"
+        if [[ -z "$BIN_COMMIT_SHORT" ]]; then
+            BIN_COMMIT_SHORT="unknown"
+        fi
+
         echo
         echo "======================================="
         echo "Running benchmarks: ${VERSION} (${COMPILER_TAG})"
@@ -697,6 +747,9 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
         fi
 
         for KERNEL in "${RUN_KERNELS[@]}"; do
+            if [[ ! " ${EXECUTED_KERNELS[@]} " =~ " ${KERNEL} " ]]; then
+                EXECUTED_KERNELS+=("${KERNEL}")
+            fi
             for SIZE_ENTRY in "${SIZES[@]}"; do
                 read -r SIZE ITERS WARMUP <<< "${SIZE_ENTRY}"
 
@@ -771,7 +824,7 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
                 fi
 
                 if [[ -n "$BEST_LINE" ]]; then
-                    echo "${VERSION},${BEST_LINE},${INTER_CV}" >> "${TMP_CSV}"
+                    echo "${VERSION},${BEST_LINE},${INTER_CV},${BIN_COMMIT_SHORT}" >> "${TMP_CSV}"
                     INTER_CV_MSG=""
                     if awk "BEGIN {exit !(${INTER_CV} > 5.0)}" 2>/dev/null; then
                         INTER_CV_MSG=" ⚠ inter-run CV=${INTER_CV}%"
@@ -787,7 +840,9 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
                     if (( POST_FREQ_KHZ > 0 )); then
                         FREQ_DROP_PCT=$(awk "BEGIN {printf \"%.1f\", (1.0 - ${POST_FREQ_KHZ}/${INITIAL_FREQ_KHZ})*100}")
                         if awk "BEGIN {exit !(${FREQ_DROP_PCT} > 5.0)}" 2>/dev/null; then
-                            echo "  ⚠ CPU freq dropped ${FREQ_DROP_PCT}% ($(( INITIAL_FREQ_KHZ/1000 )) → $(( POST_FREQ_KHZ/1000 )) MHz) — possible thermal throttling" >&2
+                            THROTTLE_MSG="CPU freq dropped ${FREQ_DROP_PCT}% ($(( INITIAL_FREQ_KHZ/1000 )) → $(( POST_FREQ_KHZ/1000 )) MHz) — possible thermal throttling"
+                            echo "  ⚠ ${THROTTLE_MSG}" >&2
+                            THROTTLE_WARNINGS+=("${THROTTLE_MSG}")
                         fi
                     fi
                 fi
@@ -799,12 +854,63 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
         done
     done
 
+    # Prepare metadata manifest
+    RUN_END_TIME_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    FINAL_FREQ_KHZ=$(read_cpu_freq_khz)
+
+    SIZES_LIST_JSON="[]"
+    if [[ ${#SIZES[@]} -gt 0 ]]; then
+        SIZES_LIST_JSON=$(printf '%s\n' "${SIZES[@]}" | awk 'BEGIN {printf "["} NR>1 {printf ","} {printf "[%s,%s,%s]", $1, $2, $3} END {printf "]"}')
+    fi
+
+    KERNELS_LIST_JSON="[]"
+    if [[ ${#EXECUTED_KERNELS[@]} -gt 0 ]]; then
+        KERNELS_LIST_JSON=$(printf '%s\n' "${EXECUTED_KERNELS[@]}" | awk 'BEGIN {printf "["} NR>1 {printf ","} {printf "\"%s\"", $1} END {printf "]"}')
+    fi
+
+    WARNINGS_LIST_JSON="[]"
+    if [[ ${#THROTTLE_WARNINGS[@]} -gt 0 ]]; then
+        WARNINGS_LIST_JSON=$(printf '%s\n' "${THROTTLE_WARNINGS[@]}" | awk 'BEGIN {printf "["} NR>1 {printf ","} {printf "\"%s\"", $0} END {printf "]"}')
+    fi
+
+    python3 "${SCRIPT_DIR}/tools/write_run_manifest.py" \
+        --output "${TMP_META}" \
+        --bin "${BIN}" \
+        --date-start "${RUN_START_TIME_UTC}" \
+        --date-end "${RUN_END_TIME_UTC}" \
+        --git-commit "${REPO_GIT_COMMIT}" \
+        --git-dirty "${REPO_GIT_DIRTY}" \
+        --pin-core "${PIN_CORE:-}" \
+        --freq-start "${INITIAL_FREQ_KHZ:-0}" \
+        --freq-end "${FINAL_FREQ_KHZ:-0}" \
+        --platform "${PLATFORM}" \
+        --platform-tag "${PLATFORM_TAG:-}" \
+        --compiler-cmd "${COMPILER}" \
+        --compiler-version "${COMPILER_VER}" \
+        --cxx-flags "${FORMATTED_FLAGS}" \
+        --fastmath "${FAST_MATH}" \
+        --precision "$([[ "$FP32_FLAG" == "true" ]] && echo "fp32" || echo "fp64")" \
+        --crr-only "${CRR_ONLY}" \
+        --alpha "${ALPHA}" \
+        --beta "${BETA}" \
+        --fastpath "${USE_FASTPATH:-true}" \
+        --c-cold "${C_COLD:-false}" \
+        --num-runs "${NUM_RUNS}" \
+        --repetitions "${REPETITIONS}" \
+        --cooldown-sec "${COOLDOWN_SEC}" \
+        --sizes-json "${SIZES_LIST_JSON}" \
+        --kernels-json "${KERNELS_LIST_JSON}" \
+        --throttle-warnings-json "${WARNINGS_LIST_JSON}"
+
     # Atomic CSV publication: commit temporary file only if at least one benchmark data row was generated
     if [[ -f "$TMP_CSV" ]] && awk 'NR>1 {found=1; exit} END {exit !found}' "$TMP_CSV"; then
         mv -f "$TMP_CSV" "$CSV"
+        if [[ -f "$TMP_META" ]]; then
+            mv -f "$TMP_META" "${CSV%.csv}.meta.json"
+        fi
     else
         echo "Warning: No valid benchmark rows generated for ${COMPILER_TAG}; existing CSV preserved." >&2
-        rm -f "$TMP_CSV"
+        rm -f "$TMP_CSV" "$TMP_META"
     fi
 done
 
