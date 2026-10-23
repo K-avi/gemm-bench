@@ -362,15 +362,29 @@ Build,Kernel,M,N,K,Alpha,Beta,Time_median_s,Time_min_s,Time_max_s,Time_stddev_s,
   - `m1` (Apple M1 Firestorm, NEON) : GCC & Clang
   - `x100` (SpacemiT X100, RVV 256-bit) : GCC & Clang
   - `a100` (SpacemiT A100, RVV 1024-bit) : GCC & Clang
-  - `x60` (SpacemiT X60, RVV 256-bit) : GCC
+  - `x60` (SpacemiT X60, RVV 256-bit) : GCC & Clang
 - **Paramètres de mesure** :
   - Balayage $K \in \{32, 64, 128, 256, 384, 512, 1024\}$
   - 3 runs indépendants $\times$ 15 répétitions par mesure (`--runs 3 -r 15`)
   - Mode CRR strict (`--crr-only`) avec micro-noyau `blis_native` de référence (`--with-blis`)
   - Sélection médiane des runs (`selection=median_of_runs`)
-  - Isolation des processus, traçabilité git (`Commit=652f541`, `Dirty=0`) et métadonnées d'environnement exhaustives (`.meta.json`).
+  - Isolation des processus, traçabilité git et métadonnées d'environnement exhaustives (`.meta.json`).
 - **Résultats rapatriés** :
-  - Répertoire local : `gemm-bench-results/paper_v1/default/` (45 fichiers générés : `.csv`, `.raw.csv`, `.meta.json`).
+  - Répertoire local : `gemm-bench-results/paper_v1/default/` (48 fichiers générés pour FP64 : 16 CSV, 16 raw.csv, 16 meta.json).
+  - Taux de complétion FP64 : **100 % (16 / 16 configurations)**.
+
+#### Synthèse des Ratios de Parité Géométrique MIPPv2 vs BLIS natif (Default FP64)
+| Cible | Ratio MIPP / BLIS (GCC) | Ratio MIPP / BLIS (Clang) | MIPP Max GFLOP/s (Clang) | BLIS Max GFLOP/s (Clang) |
+|---|:---:|:---:|:---:|:---:|
+| **Zen 4** | **1.03×** [1.01–1.08] | **1.03×** [1.01–1.09] | 85.2 | 84.4 |
+| **Zen 5** | **1.01×** [1.00–1.04] | **1.01×** [1.00–1.03] | 80.8 | 80.5 |
+| **Meteor Lake** | **0.92×** [0.82–0.97] | **1.01×** [0.97–1.05] | 78.4 | 78.1 |
+| **Apple M1** | **1.04×** [1.00–1.17] | **1.04×** [1.00–1.15] | 48.3 | 47.9 |
+| **RPi5** | **1.03×** [0.96–1.12] | **1.03×** [0.97–1.11] | 18.9 | 18.8 |
+| **X100** | **0.85×** [0.76–0.92] | **0.95×** [0.86–1.05] | 18.6 | 18.0 |
+| **A100** | **3.67×** [3.63–3.71] | **3.52×** [3.46–3.60] | 24.3 | 6.8 |
+| **X60** | **0.78×** [0.68–0.85] | **0.84×** [0.72–0.90] | 7.4 | 10.3 |
+
 
 ### P9.b — Exécution et ingestion de la campagne Default FP32
 - **Cibles exécutées** : 8 architectures physiques complètes sur le cluster Dalek LIP6 :
