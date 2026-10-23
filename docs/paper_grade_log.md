@@ -372,13 +372,37 @@ Build,Kernel,M,N,K,Alpha,Beta,Time_median_s,Time_min_s,Time_max_s,Time_stddev_s,
 - **Résultats rapatriés** :
   - Répertoire local : `gemm-bench-results/paper_v1/default/` (45 fichiers générés : `.csv`, `.raw.csv`, `.meta.json`).
 
-### P9.b — Lancement de la campagne Default FP32
-- **Cibles déployées** : 8 cibles (`zen4`, `zen5`, `meteorlake`, `rpi5`, `m1`, `x100`, `a100`, `x60`).
-- **Orchestration Slurm** :
-  - Exécution découplée avec isolation des partitions exclusives (`az4-n4090`, `az5-a890m`, `iml-ia770`, `mono`, `special`).
-  - Tolérance aux pannes réseau avec boucle de réessai automatique SSH/srun (`tools/run_cluster_benchmarks.sh`).
-  - Séparation des répertoires de journaux (`logs/cluster_runs_fp32/`) et archivage différentiel par précision.
-- **État courant** : Les tests Catch2 sont validés sur tous les nœuds actifs, et les balayages de mesures FP32 sont en cours d'exécution orchestrés par Slurm.
+### P9.b — Exécution et ingestion de la campagne Default FP32
+- **Cibles exécutées** : 8 architectures physiques complètes sur le cluster Dalek LIP6 :
+  - `zen4` (AMD Zen 4, AVX-512) : GCC & Clang
+  - `zen5` (AMD Zen 5, AVX-512) : GCC & Clang
+  - `meteorlake` (Intel Meteor Lake, AVX2) : GCC & Clang
+  - `rpi5` (Raspberry Pi 5, Cortex-A76 NEON) : GCC & Clang
+  - `m1` (Apple M1 Firestorm, NEON) : GCC & Clang
+  - `x100` (SpacemiT X100, RVV 256-bit) : GCC & Clang
+  - `a100` (SpacemiT A100, RVV 1024-bit) : GCC & Clang
+  - `x60` (SpacemiT X60, RVV 256-bit) : GCC & Clang
+- **Paramètres de mesure** :
+  - Balayage $K \in \{32, 64, 128, 256, 384, 512, 1024\}$
+  - 3 runs indépendants $\times$ 15 répétitions par mesure (`--runs 3 -r 15 --fp32`)
+  - Mode CRR strict (`--crr-only`) avec micro-noyau `blis_native` FP32 de référence (`--with-blis`)
+  - Sélection médiane des runs (`selection=median_of_runs`)
+- **Résultats rapatriés** :
+  - Répertoire local : `gemm-bench-results/paper_v1/default/` (48 fichiers générés pour FP32 : `.csv`, `.raw.csv`, `.meta.json`).
+  - Total cumulé Default (FP64 + FP32) : 93 fichiers de résultats bruts et métadonnées.
+
+#### Synthèse des Ratios de Parité Géométrique MIPPv2 vs BLIS natif (Default FP32)
+| Cible | Ratio MIPP / BLIS (GCC) | Ratio MIPP / BLIS (Clang) | MIPP Max GFLOP/s (Clang) | BLIS Max GFLOP/s (Clang) |
+|---|:---:|:---:|:---:|:---:|
+| **Zen 4** | **1.03×** [1.01–1.10] | **1.02×** [1.00–1.09] | 171.6 | 170.4 |
+| **Zen 5** | **1.01×** [1.00–1.04] | **1.01×** [1.00–1.03] | 162.6 | 162.5 |
+| **Meteor Lake** | **0.94×** [0.85–0.99] | **1.01×** [0.98–1.06] | 158.0 | 158.2 |
+| **Apple M1** | **1.05×** [1.01–1.18] | **1.04×** [1.00–1.16] | 96.5 | 96.1 |
+| **RPi5** | **1.03×** [0.96–1.12] | **1.03×** [0.97–1.12] | 37.9 | 37.8 |
+| **X100** | **0.86×** [0.78–0.91] | **0.96×** [0.87–1.03] | 37.2 | 36.0 |
+| **A100** | **3.46×** [3.24–3.93] | **3.67×** [3.58–3.91] | 48.8 | 13.5 |
+| **X60** | **0.72×** [0.52–0.80] | **0.79×** [0.62–0.87] | 16.4 | 21.3 |
+
 
 
 

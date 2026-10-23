@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "date_utc_start": "2026-10-23T11:21:57Z",
+  "date_utc_end": "2026-10-23T12:26:38Z",
+  "git_commit": "a4935a56ccd638794f8c9667f511229a4f5cddb8",
+  "git_dirty": 0,
+  "binary_build_info": {
+    "git_commit": "a4935a56ccd638794f8c9667f511229a4f5cddb8",
+    "git_dirty": "0",
+    "cxx_compiler_id": "GNU",
+    "cxx_compiler_version": "15.2.0",
+    "cxx_flags": "-O3 -ffast-math -finline-functions -funroll-loops -fno-semantic-interposition -falign-functions=64 -falign-loops=32 -march=rv64gcv_zvl1024b -mrvv-vector-bits=zvl -O3 -DNDEBUG",
+    "build_type": "Release",
+    "fastmath": "ON",
+    "blis_target": "X60",
+    "explo": "OFF",
+    "compiler_macro_version": "15.2.0"
+  },
+  "binary_sha256": "b3bd4362e3f3f218e054a337edd3c2c3019259671e4a005320da58224063035c",
+  "hostname": "mono-sip-k3",
+  "slurm_job_id": "179188",
+  "slurm_nodelist": "mono-sip-k3",
+  "uname_a": "Linux mono-sip-k3 6.18.3-generic #1.0.2.4 SMP PREEMPT_DYNAMIC Wed May 27 19:06:19 CST 2026 riscv64",
+  "cpu_model": "Spacemit(R) A100",
+  "isa_flags_summary": "rv64imafdcv_zicbom_zicbop_zicboz_zicntr_zicond_zicsr_zifencei_zihintntl_zihintpause_zihpm_zimop_zaamo_zalrsc_zawrs_zfa_zfh_zfhmin_zca_zcb_zcd_zcmop_zba_zbb_zbc_zbs_zkt_zvbb_zvbc_zve32f_zve32x_zve64d_zve64f_zve64x_zvfh_zvfhmin_zvkb_zvkg_zvkned_zvknha_zvknhb_zvksed_zvksh_zvkt_smaia_smstateen_ssaia_sscofpmf_sstc_svinval_svnapot_svpbmt_sdtrig",
+  "caches": [
+    {
+      "level": 1,
+      "type": "Instruction",
+      "size": "64K",
+      "ways_of_associativity": 4,
+      "coherency_line_size": 64
+    },
+    {
+      "level": 1,
+      "type": "Data",
+      "size": "64K",
+      "ways_of_associativity": 4,
+      "coherency_line_size": 64
+    },
+    {
+      "level": 2,
+      "type": "Unified",
+      "size": "1024K",
+      "ways_of_associativity": 16,
+      "coherency_line_size": 64
+    }
+  ],
+  "governor": "performance",
+  "freq_khz_start": 2000000,
+  "freq_khz_end": 2000000,
+  "pin_core": 8,
+  "taskset_used": true,
+  "platform": "rvv_a100",
+  "platform_tag": "a100",
+  "compiler_cmd": "g++",
+  "compiler_version_full": "g++ (Bianbu 15.2.0-16ubuntu1bb3) 15.2.0",
+  "cxx_flags_effective": " -O3 -ffast-math -finline-functions -funroll-loops -fno-semantic-interposition -falign-functions=64 -falign-loops=32 -march=rv64gcv_zvl1024b -mrvv-vector-bits=zvl ",
+  "fastmath": true,
+  "precision": "fp32",
+  "crr_only": true,
+  "alpha": 1.0,
+  "beta": 0.0,
+  "fastpath": true,
+  "c_cold": false,
+  "num_runs": 3,
+  "repetitions": 15,
+  "sizes": [
+    [
+      32,
+      5000000,
+      500000
+    ],
+    [
+      64,
+      2500000,
+      250000
+    ],
+    [
+      128,
+      1250000,
+      125000
+    ],
+    [
+      256,
+      625000,
+      62500
+    ],
+    [
+      384,
+      416666,
+      41666
+    ],
+    [
+      512,
+      312500,
+      31250
+    ],
+    [
+      1024,
+      156250,
+      15625
+    ]
+  ],
+  "kernels": [
+    "mippv2_a100_mr7_nr2_lmul2_pipe_crr",
+    "blis_native"
+  ],
+  "cooldown_sec": 2.0,
+  "throttle_warnings": []
+}
