@@ -349,4 +349,36 @@ Build,Kernel,M,N,K,Alpha,Beta,Time_median_s,Time_min_s,Time_max_s,Time_stddev_s,
 - Rapport technique `docs/blis_zen4_investigation.md` consigné.
 - Intégrité de la base de code préservée : suite de tests C++ (34/34) et Python (10/10) verte.
 
+---
+
+## P9 — Campagne de mesures cluster « paper grade » (Default FP64 & FP32)
+
+### P9.a — Exécution et ingestion de la campagne Default FP64
+- **Cibles exécutées** : 8 architectures physiques complètes sur le cluster Dalek LIP6 :
+  - `zen4` (AMD Zen 4, AVX-512) : GCC & Clang
+  - `zen5` (AMD Zen 5, AVX-512) : GCC & Clang
+  - `meteorlake` (Intel Meteor Lake, AVX2) : GCC & Clang
+  - `rpi5` (Raspberry Pi 5, Cortex-A76 NEON) : GCC & Clang
+  - `m1` (Apple M1 Firestorm, NEON) : GCC & Clang
+  - `x100` (SpacemiT X100, RVV 256-bit) : GCC & Clang
+  - `a100` (SpacemiT A100, RVV 1024-bit) : GCC & Clang
+  - `x60` (SpacemiT X60, RVV 256-bit) : GCC
+- **Paramètres de mesure** :
+  - Balayage $K \in \{32, 64, 128, 256, 384, 512, 1024\}$
+  - 3 runs indépendants $\times$ 15 répétitions par mesure (`--runs 3 -r 15`)
+  - Mode CRR strict (`--crr-only`) avec micro-noyau `blis_native` de référence (`--with-blis`)
+  - Sélection médiane des runs (`selection=median_of_runs`)
+  - Isolation des processus, traçabilité git (`Commit=652f541`, `Dirty=0`) et métadonnées d'environnement exhaustives (`.meta.json`).
+- **Résultats rapatriés** :
+  - Répertoire local : `gemm-bench-results/paper_v1/default/` (45 fichiers générés : `.csv`, `.raw.csv`, `.meta.json`).
+
+### P9.b — Lancement de la campagne Default FP32
+- **Cibles déployées** : 8 cibles (`zen4`, `zen5`, `meteorlake`, `rpi5`, `m1`, `x100`, `a100`, `x60`).
+- **Orchestration Slurm** :
+  - Exécution découplée avec isolation des partitions exclusives (`az4-n4090`, `az5-a890m`, `iml-ia770`, `mono`, `special`).
+  - Tolérance aux pannes réseau avec boucle de réessai automatique SSH/srun (`tools/run_cluster_benchmarks.sh`).
+  - Séparation des répertoires de journaux (`logs/cluster_runs_fp32/`) et archivage différentiel par précision.
+- **État courant** : Les tests Catch2 sont validés sur tous les nœuds actifs, et les balayages de mesures FP32 sont en cours d'exécution orchestrés par Slurm.
+
+
 

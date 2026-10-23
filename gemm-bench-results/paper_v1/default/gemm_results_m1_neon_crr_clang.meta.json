@@ -1,0 +1,115 @@
+{
+  "schema_version": 1,
+  "date_utc_start": "2026-10-22T23:07:58Z",
+  "date_utc_end": "2026-10-22T23:12:14Z",
+  "git_commit": "652f5413e3c1d06e3bee9e7285a97b42e160b8d6",
+  "git_dirty": 0,
+  "binary_build_info": {
+    "git_commit": "652f5413e3c1d06e3bee9e7285a97b42e160b8d6",
+    "git_dirty": "0",
+    "cxx_compiler_id": "Clang",
+    "cxx_compiler_version": "22.1.5",
+    "cxx_flags": "-O3 -ffast-math -finline-functions -funroll-loops -fno-semantic-interposition -march=native -mcpu=apple-m1 -O3 -DNDEBUG",
+    "build_type": "Release",
+    "fastmath": "ON",
+    "blis_target": "ARMV8A",
+    "explo": "OFF",
+    "compiler_macro_version": "Clang 22.1.5 (Fedora 22.1.5-1.fc44)"
+  },
+  "binary_sha256": "ab035a9b6a5d76714183e96df8f31687250cbd5a9266f4e5f9519f8b80af047d",
+  "hostname": "m1u",
+  "slurm_job_id": "179171",
+  "slurm_nodelist": "m1u",
+  "uname_a": "Linux m1u 6.19.14-400.asahi.fc44.aarch64+16k #1 SMP PREEMPT_DYNAMIC Thu May  7 22:13:27 UTC 2026 aarch64",
+  "cpu_model": "Icestorm-M1-Max",
+  "isa_flags_summary": "fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm jscvt fcma lrcpc dcpop sha3 asimddp sha512 asimdfhm dit uscat ilrcpc flagm ssbs sb paca pacg dcpodp flagm2 frint",
+  "caches": [
+    {
+      "level": 1,
+      "type": "Data",
+      "size": "128K",
+      "ways_of_associativity": 0,
+      "coherency_line_size": 0
+    },
+    {
+      "level": 1,
+      "type": "Instruction",
+      "size": "192K",
+      "ways_of_associativity": 0,
+      "coherency_line_size": 0
+    },
+    {
+      "level": 2,
+      "type": "Unified",
+      "size": "12288K",
+      "ways_of_associativity": 0,
+      "coherency_line_size": 0
+    }
+  ],
+  "governor": "schedutil",
+  "freq_khz_start": 1056000,
+  "freq_khz_end": 600000,
+  "pin_core": 3,
+  "taskset_used": true,
+  "platform": "neon",
+  "platform_tag": "m1",
+  "compiler_cmd": "clang++",
+  "compiler_version_full": "clang version 22.1.5 (Fedora 22.1.5-1.fc44)",
+  "cxx_flags_effective": " -O3 -ffast-math -finline-functions -funroll-loops -fno-semantic-interposition -march=native -mcpu=apple-m1 ",
+  "fastmath": true,
+  "precision": "fp64",
+  "crr_only": true,
+  "alpha": 1.0,
+  "beta": 0.0,
+  "fastpath": true,
+  "c_cold": false,
+  "num_runs": 3,
+  "repetitions": 15,
+  "sizes": [
+    [
+      32,
+      5000000,
+      500000
+    ],
+    [
+      64,
+      2500000,
+      250000
+    ],
+    [
+      128,
+      1250000,
+      125000
+    ],
+    [
+      256,
+      625000,
+      62500
+    ],
+    [
+      384,
+      416666,
+      41666
+    ],
+    [
+      512,
+      312500,
+      31250
+    ],
+    [
+      1024,
+      156250,
+      15625
+    ]
+  ],
+  "kernels": [
+    "mippv2_x60_mr6_nr4_fmaddi_crr",
+    "blis_native"
+  ],
+  "cooldown_sec": 2.0,
+  "throttle_warnings": [
+    "CPU freq dropped 43.2% (1056 \u2192 600 MHz) \u2014 possible thermal throttling",
+    "CPU freq dropped 43.2% (1056 \u2192 600 MHz) \u2014 possible thermal throttling",
+    "CPU freq dropped 43.2% (1056 \u2192 600 MHz) \u2014 possible thermal throttling"
+  ]
+}

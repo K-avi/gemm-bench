@@ -1,0 +1,128 @@
+{
+  "schema_version": 1,
+  "date_utc_start": "2026-10-22T23:10:14Z",
+  "date_utc_end": "2026-10-22T23:20:31Z",
+  "git_commit": "652f5413e3c1d06e3bee9e7285a97b42e160b8d6",
+  "git_dirty": 0,
+  "binary_build_info": {
+    "git_commit": "652f5413e3c1d06e3bee9e7285a97b42e160b8d6",
+    "git_dirty": "0",
+    "cxx_compiler_id": "Clang",
+    "cxx_compiler_version": "21.1.8",
+    "cxx_flags": "-O3 -ffast-math -finline-functions -funroll-loops -fno-semantic-interposition -march=native --gcc-install-dir=/usr/lib/gcc/aarch64-linux-gnu/15 -O3 -DNDEBUG",
+    "build_type": "Release",
+    "fastmath": "ON",
+    "blis_target": "ARMV8A",
+    "explo": "OFF",
+    "compiler_macro_version": "Ubuntu Clang 21.1.8 (6ubuntu1)"
+  },
+  "binary_sha256": "3b38003a3bf3894d6c10634d02c4c1285b7a7d32fab6c99544967af3a4635762",
+  "hostname": "mono-rpi-5b",
+  "slurm_job_id": "179167",
+  "slurm_nodelist": "mono-rpi-5b",
+  "uname_a": "Linux mono-rpi-5b 7.0.0-1017-raspi #17-Ubuntu SMP PREEMPT_DYNAMIC Fri Aug  7 16:13:24 UTC 2026 aarch64",
+  "cpu_model": "Cortex-A76",
+  "isa_flags_summary": "fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm lrcpc dcpop asimddp",
+  "caches": [
+    {
+      "level": 1,
+      "type": "Data",
+      "size": "64K",
+      "ways_of_associativity": 4,
+      "coherency_line_size": 64
+    },
+    {
+      "level": 1,
+      "type": "Instruction",
+      "size": "64K",
+      "ways_of_associativity": 4,
+      "coherency_line_size": 64
+    },
+    {
+      "level": 2,
+      "type": "Unified",
+      "size": "512K",
+      "ways_of_associativity": 8,
+      "coherency_line_size": 64
+    },
+    {
+      "level": 3,
+      "type": "Unified",
+      "size": "2048K",
+      "ways_of_associativity": 16,
+      "coherency_line_size": 64
+    }
+  ],
+  "governor": "ondemand",
+  "freq_khz_start": 2200000,
+  "freq_khz_end": 2200000,
+  "pin_core": 2,
+  "taskset_used": true,
+  "platform": "neon",
+  "platform_tag": "rpi5",
+  "compiler_cmd": "clang++",
+  "compiler_version_full": "Ubuntu clang version 21.1.8 (6ubuntu1)",
+  "cxx_flags_effective": " -O3 -ffast-math -finline-functions -funroll-loops -fno-semantic-interposition -march=native --gcc-install-dir=/usr/lib/gcc/aarch64-linux-gnu/15 ",
+  "fastmath": true,
+  "precision": "fp64",
+  "crr_only": true,
+  "alpha": 1.0,
+  "beta": 0.0,
+  "fastpath": true,
+  "c_cold": false,
+  "num_runs": 3,
+  "repetitions": 15,
+  "sizes": [
+    [
+      32,
+      5000000,
+      500000
+    ],
+    [
+      64,
+      2500000,
+      250000
+    ],
+    [
+      128,
+      1250000,
+      125000
+    ],
+    [
+      256,
+      625000,
+      62500
+    ],
+    [
+      384,
+      416666,
+      41666
+    ],
+    [
+      512,
+      312500,
+      31250
+    ],
+    [
+      1024,
+      156250,
+      15625
+    ]
+  ],
+  "kernels": [
+    "mippv2_a76_mr6_nr4_fmaddi_crr",
+    "blis_native"
+  ],
+  "cooldown_sec": 2.0,
+  "throttle_warnings": [
+    "CPU freq dropped 9.1% (2200 \u2192 2000 MHz) \u2014 possible thermal throttling",
+    "CPU freq dropped 27.3% (2200 \u2192 1600 MHz) \u2014 possible thermal throttling",
+    "CPU freq dropped 27.3% (2200 \u2192 1600 MHz) \u2014 possible thermal throttling",
+    "CPU freq dropped 31.8% (2200 \u2192 1500 MHz) \u2014 possible thermal throttling",
+    "CPU freq dropped 9.1% (2200 \u2192 2000 MHz) \u2014 possible thermal throttling",
+    "CPU freq dropped 22.7% (2200 \u2192 1700 MHz) \u2014 possible thermal throttling",
+    "CPU freq dropped 18.2% (2200 \u2192 1800 MHz) \u2014 possible thermal throttling",
+    "CPU freq dropped 9.1% (2200 \u2192 2000 MHz) \u2014 possible thermal throttling",
+    "CPU freq dropped 31.8% (2200 \u2192 1500 MHz) \u2014 possible thermal throttling"
+  ]
+}
