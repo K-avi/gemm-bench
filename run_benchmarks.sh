@@ -301,21 +301,25 @@ fi
 
 # Taskset / CPU pinning configuration
 TASKSET_PREFIX=()
+TASKSET_USED=false
 if [[ -n "$PIN_CORE" ]]; then
     if command -v taskset &>/dev/null; then
         if taskset -c "${PIN_CORE}" true 2>/dev/null; then
             TASKSET_PREFIX=(taskset -c "${PIN_CORE}")
+            TASKSET_USED=true
             echo "================================================================================"
             echo "Core Affinity: Benchmarks will be pinned to Core #${PIN_CORE} via taskset"
             echo "================================================================================"
         else
-            echo "================================================================================"
-            echo "Warning: CPU core #${PIN_CORE} is not accessible via taskset."
-            echo "         Falling back to unpinned execution."
-            echo "================================================================================"
+            echo "================================================================================" >&2
+            echo "Error: CPU core #${PIN_CORE} is not accessible via taskset." >&2
+            echo "       Failing benchmark to prevent unpinned/corrupted execution." >&2
+            echo "================================================================================" >&2
+            exit 1
         fi
     else
-        echo "Warning: 'taskset' utility not found. Running without core pinning."
+        echo "Error: 'taskset' utility not found but PIN_CORE=${PIN_CORE} was requested." >&2
+        exit 1
     fi
 else
     echo "Core pinning disabled or unconfigured."
@@ -937,6 +941,7 @@ for COMPILER_REQ in "${REQUESTED_COMPILERS[@]}"; do
         --git-commit "${REPO_GIT_COMMIT}" \
         --git-dirty "${REPO_GIT_DIRTY}" \
         --pin-core "${PIN_CORE:-}" \
+        --taskset-used "${TASKSET_USED}" \
         --freq-start "${INITIAL_FREQ_KHZ:-0}" \
         --freq-end "${FINAL_FREQ_KHZ:-0}" \
         --platform "${PLATFORM}" \

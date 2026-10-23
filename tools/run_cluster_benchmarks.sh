@@ -322,7 +322,7 @@ run_target() {
             node="mono-sip-k3"
             platform="rvv_x100"
             out_prefix="x100_rvv"
-            srun_extra=""
+            srun_extra="--exclusive"
             ;;
         a100)
             partition="mono"
@@ -330,7 +330,7 @@ run_target() {
             platform="rvv_a100"
             out_prefix="a100_rvv"
             wrapper="ai "
-            srun_extra=""
+            srun_extra="--exclusive"
             ;;
         x60)
             partition="mono"
@@ -449,18 +449,11 @@ run_target() {
 
     local bench_cmd="${pre_cmd} PLATFORM_TAG=${target} ${results_env}${wrapper}./run_benchmarks.sh ${platform} ${target_bench_flags} ${compilers}"
 
-    local attempt=0
-    while [[ $attempt -lt 3 ]]; do
-        if ssh "$FRONT_HOST" "srun -p ${partition} -w ${node} ${srun_extra} bash -l -c 'cd ${REMOTE_DIR} && ${bench_cmd}'"; then
-            return 0
-        fi
-        attempt=$((attempt + 1))
-        if [[ $attempt -lt 3 ]]; then
-            echo -e "${YELLOW}⚠ [${target}] Échec SSH/srun (tentative ${attempt}/3). Nouvelle tentative dans 3s...${NC}" >&2
-            sleep 3
-        fi
-    done
-    return 1
+    if ssh "$FRONT_HOST" "srun -p ${partition} -w ${node} ${srun_extra} bash -l -c 'cd ${REMOTE_DIR} && ${bench_cmd}'"; then
+        return 0
+    else
+        return 1
+    fi
 }
 
 # -----------------------------------------------------------------------------
@@ -587,7 +580,11 @@ remote_res_dir="results"
 local_crr_dir="gemm-bench-results/crr"
 local_rrr_dir="gemm-bench-results/rrr"
 
-if [[ "$WITH_BLIS" == "true" && -n "$FP32_FLAG" ]]; then
+if [[ -n "$CUSTOM_RESULTS_DIR" ]]; then
+    remote_res_dir="$CUSTOM_RESULTS_DIR"
+    local_crr_dir="gemm-bench-results/${CUSTOM_RESULTS_DIR#results_}"
+    local_rrr_dir="gemm-bench-results/${CUSTOM_RESULTS_DIR#results_}_rrr"
+elif [[ "$WITH_BLIS" == "true" && -n "$FP32_FLAG" ]]; then
     remote_res_dir="results_blis_fp32"
     local_crr_dir="gemm-bench-results/blis_comparison_fp32"
     local_rrr_dir="gemm-bench-results/blis_comparison_rrr_fp32"
@@ -601,23 +598,16 @@ elif [[ -n "$FP32_FLAG" ]]; then
     local_rrr_dir="gemm-bench-results/rrr_fp32"
 fi
 
-echo -e "Les fichiers de résultats CSV sont disponibles dans le dossier partagé : ${BOLD}${REMOTE_DIR}/${remote_res_dir}/${NC}"
+echo -e "Les fichiers de résultats sont disponibles dans le dossier partagé : ${BOLD}${REMOTE_DIR}/${remote_res_dir}/${NC}"
 
 # -----------------------------------------------------------------------------
 # 5. Rapatriement automatique des CSV vers la machine locale
 # -----------------------------------------------------------------------------
 echo
-echo -e "${BLUE}[3/3] Rapatriement (scp) des résultats CSV vers la machine locale...${NC}"
+echo -e "${BLUE}[3/3] Rapatriement (scp) des résultats vers la machine locale...${NC}"
 mkdir -p "$local_crr_dir"
-if scp -q "${FRONT_HOST}:${REMOTE_DIR}/${remote_res_dir}/*_crr_*.csv" "${local_crr_dir}/" 2>/dev/null; then
-    echo -e "${GREEN}✓ Résultats CRR rapatriés avec succès dans ${local_crr_dir}/${NC}"
+if scp -q "${FRONT_HOST}:${REMOTE_DIR}/${remote_res_dir}/*" "${local_crr_dir}/" 2>/dev/null; then
+    echo -e "${GREEN}✓ Résultats rapatriés avec succès dans ${local_crr_dir}/${NC}"
     ls -lh "${local_crr_dir}/"
-fi
-if [[ "$RRR_ONLY" == "true" || "$CRR_ONLY" != "true" ]]; then
-    mkdir -p "$local_rrr_dir"
-    if scp -q "${FRONT_HOST}:${REMOTE_DIR}/${remote_res_dir}/*_rrr_*.csv" "${local_rrr_dir}/" 2>/dev/null; then
-        echo -e "${GREEN}✓ Résultats RRR rapatriés avec succès dans ${local_rrr_dir}/${NC}"
-        ls -lh "${local_rrr_dir}/"
-    fi
 fi
 

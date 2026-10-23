@@ -125,6 +125,7 @@ def main():
     parser.add_argument("--git-commit", default="unknown", help="Repository git commit")
     parser.add_argument("--git-dirty", type=int, default=-1, help="Repository git dirty status (0/1/-1)")
     parser.add_argument("--pin-core", default="", help="Pinned CPU core ID or empty")
+    parser.add_argument("--taskset-used", type=lambda s: s.lower() in ("true", "1", "yes", "on"), default=None, help="Explicit taskset pinning status boolean")
     parser.add_argument("--freq-start", type=int, default=0, help="Initial CPU frequency in kHz")
     parser.add_argument("--freq-end", type=int, default=0, help="Final CPU frequency in kHz")
     parser.add_argument("--platform", required=True, help="Platform name (e.g. avx2, avx512)")
@@ -150,16 +151,20 @@ def main():
 
     # Determine core for cache & governor
     target_core = 0
-    taskset_used = False
     pin_core_val = None
     if args.pin_core != "" and args.pin_core is not None:
         try:
             target_core = int(args.pin_core)
             pin_core_val = target_core
-            taskset_used = True
         except ValueError:
             pin_core_val = args.pin_core
-            taskset_used = True
+
+    if args.taskset_used is not None:
+        taskset_used = args.taskset_used
+    elif pin_core_val is not None:
+        taskset_used = True
+    else:
+        taskset_used = False
 
     bin_build_info = parse_build_info(args.bin)
     bin_sha256 = get_binary_sha256(args.bin)
