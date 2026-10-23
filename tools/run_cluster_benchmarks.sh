@@ -449,11 +449,18 @@ run_target() {
 
     local bench_cmd="${pre_cmd} PLATFORM_TAG=${target} ${results_env}${wrapper}./run_benchmarks.sh ${platform} ${target_bench_flags} ${compilers}"
 
-    if ssh "$FRONT_HOST" "srun -p ${partition} -w ${node} ${srun_extra} bash -l -c 'cd ${REMOTE_DIR} && ${bench_cmd}'"; then
-        return 0
-    else
-        return 1
-    fi
+    local attempt=0
+    while [[ $attempt -lt 3 ]]; do
+        if ssh "$FRONT_HOST" "srun -p ${partition} -w ${node} ${srun_extra} bash -l -c 'cd ${REMOTE_DIR} && ${bench_cmd}'"; then
+            return 0
+        fi
+        attempt=$((attempt + 1))
+        if [[ $attempt -lt 3 ]]; then
+            echo -e "${YELLOW}⚠ [${target}] Échec SSH/srun (tentative ${attempt}/3). Nouvelle tentative dans 3s...${NC}" >&2
+            sleep 3
+        fi
+    done
+    return 1
 }
 
 # -----------------------------------------------------------------------------
@@ -511,6 +518,7 @@ else
         ) &
         TARGET_PIDS["$target"]=$!
         echo -e "  [+] Job Slurm lancé pour ${BOLD}${target}${NC} (${CYAN}${champ_desc}${NC}, PID background ${TARGET_PIDS[$target]})"
+        sleep 0.5
     done
 
     echo
