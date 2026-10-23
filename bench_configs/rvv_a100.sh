@@ -3,7 +3,11 @@ PLATFORM_NAME="SpacemiT A100 (RVV 1024-bit)"
 BUILD_DIR_PREFIX="build_a100"
 CSV_PREFIX="gemm_results_a100"
 DEFAULT_VERSION="rvv"
-DEFAULT_PIN_CORE="8"
+# Note: A100 cores (8-15) are unlocked via /proc/set_ai_thread (ai wrapper).
+# Slurm cgroup cpuset on mono-sip-k3 is limited to 0-7, which causes taskset
+# (sched_setaffinity) on cores >=8 to fail with EINVAL. The benchmark runs
+# exclusively on the AI cluster cores (8-15) via ai wrapper.
+DEFAULT_PIN_CORE=""
 
 DEFAULT_KERNELS=(
     mippv2_a100_mr7_nr2_lmul2_pipe
