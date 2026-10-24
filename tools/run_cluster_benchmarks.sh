@@ -11,6 +11,7 @@ set -euo pipefail
 
 FRONT_HOST="${DALEK_FRONT:-front.dalek.lip6}"
 REMOTE_DIR="${DALEK_DIR:-~/Files/gemm-bench}"
+SSH_OPTS=(-o ServerAliveInterval=30 -o ServerAliveCountMax=60 -o TCPKeepAlive=yes)
 
 # Couleurs d'affichage
 RED='\033[0;31m'
@@ -269,7 +270,7 @@ echo
 if [[ "$DO_PULL" == "true" ]]; then
     local_branch="$(git rev-parse --abbrev-ref HEAD)"
     echo -e "${BLUE}[1/3] Synchronisation du dépôt NFS via ${FRONT_HOST} (branche: ${local_branch})...${NC}"
-    if ssh "$FRONT_HOST" "cd ${REMOTE_DIR} && git fetch origin && git checkout ${local_branch} && git reset --hard origin/${local_branch}"; then
+    if ssh "${SSH_OPTS[@]}" "$FRONT_HOST" "cd ${REMOTE_DIR} && git fetch origin && git checkout ${local_branch} && git reset --hard origin/${local_branch}"; then
         echo -e "${GREEN}✓ Dépôt synchronisé sur la branche '${local_branch}' sur le NFS partagé.${NC}\n"
     else
         echo -e "${RED}✗ Échec de la synchronisation de la branche '${local_branch}' sur ${FRONT_HOST}.${NC}"
@@ -295,7 +296,7 @@ fi
 echo -e "${BLUE}[+] Nettoyage / Archivage (${target_res_dir}) sur ${FRONT_HOST} pour: ${SELECTED_TARGETS[*]}...${NC}"
 targets_space="${SELECTED_TARGETS[*]}"
 is_fp32_val="${FP32_FLAG:-}"
-ssh "$FRONT_HOST" "bash -l -c 'cd ${REMOTE_DIR} && mkdir -p ${target_res_dir} && ARCHIVE_DIR=\"${target_res_dir}_archive_\$(date +%Y%m%d_%H%M%S)\" && moved=0 && for t in ${targets_space}; do if [ -n \"${is_fp32_val}\" ]; then for f in ${target_res_dir}/gemm_results_\${t}_*_fp32*; do if [ -f \"\$f\" ]; then mkdir -p \"\$ARCHIVE_DIR\" && mv \"\$f\" \"\$ARCHIVE_DIR/\" 2>/dev/null && moved=1; fi; done; else for f in ${target_res_dir}/gemm_results_\${t}_*; do if [ -f \"\$f\" ] && [[ \"\$f\" != *\"_fp32\"* ]]; then mkdir -p \"\$ARCHIVE_DIR\" && mv \"\$f\" \"\$ARCHIVE_DIR/\" 2>/dev/null && moved=1; fi; done; fi; done && if [ \"\$moved\" -eq 1 ]; then echo \"✓ Résultats antérieurs archivés dans \$ARCHIVE_DIR\"; fi'"
+ssh "${SSH_OPTS[@]}" "$FRONT_HOST" "bash -l -c 'cd ${REMOTE_DIR} && mkdir -p ${target_res_dir} && ARCHIVE_DIR=\"${target_res_dir}_archive_\$(date +%Y%m%d_%H%M%S)\" && moved=0 && for t in ${targets_space}; do if [ -n \"${is_fp32_val}\" ]; then for f in ${target_res_dir}/gemm_results_\${t}_*_fp32*; do if [ -f \"\$f\" ]; then mkdir -p \"\$ARCHIVE_DIR\" && mv \"\$f\" \"\$ARCHIVE_DIR/\" 2>/dev/null && moved=1; fi; done; else for f in ${target_res_dir}/gemm_results_\${t}_*; do if [ -f \"\$f\" ] && [[ \"\$f\" != *\"_fp32\"* ]]; then mkdir -p \"\$ARCHIVE_DIR\" && mv \"\$f\" \"\$ARCHIVE_DIR/\" 2>/dev/null && moved=1; fi; done; fi; done && if [ \"\$moved\" -eq 1 ]; then echo \"✓ Résultats antérieurs archivés dans \$ARCHIVE_DIR\"; fi'"
 
 # -----------------------------------------------------------------------------
 # 2. Définition des fonctions d'exécution par cible
@@ -430,7 +431,7 @@ run_target() {
             x60_cmake_math="-DGEMMBENCH_ENABLE_FASTMATH=OFF"
             x60_bdir="build_rvv_x60_strict_clang_rvv"
         fi
-        ssh "$FRONT_HOST" "srun -p mono -w mono-sip-k3 bash -l -c 'cd ${REMOTE_DIR} && cmake -B ${x60_bdir} -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_FLAGS=\"-O3 ${x60_math_cxx} -finline-functions -funroll-loops -fno-semantic-interposition -falign-functions=64 -falign-loops=32 -march=rv64gcv_zvl256b_zicbop -mrvv-vector-bits=zvl\" ${x60_cmake_math} -DGEMMBENCH_ENABLE_EXPLO=OFF && cmake --build ${x60_bdir} --target GemmBench --parallel'"
+        ssh "${SSH_OPTS[@]}" "$FRONT_HOST" "srun -p mono -w mono-sip-k3 bash -l -c 'cd ${REMOTE_DIR} && cmake -B ${x60_bdir} -S . -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_COMPILER=clang++ -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_FLAGS=\"-O3 ${x60_math_cxx} -finline-functions -funroll-loops -fno-semantic-interposition -falign-functions=64 -falign-loops=32 -march=rv64gcv_zvl256b_zicbop -mrvv-vector-bits=zvl\" ${x60_cmake_math} -DGEMMBENCH_ENABLE_EXPLO=OFF && cmake --build ${x60_bdir} --target GemmBench --parallel'"
         # Le binaire Clang a été compilé sur X100; éviter qu'un rebuild local n'appelle clang++ défaillant sur x60
         target_bench_flags="${target_bench_flags//--rebuild/}"
         target_bench_flags="${target_bench_flags//--tests /}"
@@ -449,7 +450,7 @@ run_target() {
 
     local bench_cmd="${pre_cmd} PLATFORM_TAG=${target} ${results_env}${wrapper}./run_benchmarks.sh ${platform} ${target_bench_flags} ${compilers}"
 
-    if ssh "$FRONT_HOST" "srun -p ${partition} -w ${node} ${srun_extra} bash -l -c 'cd ${REMOTE_DIR} && ${bench_cmd}'"; then
+    if ssh "${SSH_OPTS[@]}" "$FRONT_HOST" "srun -p ${partition} -w ${node} ${srun_extra} bash -l -c 'cd ${REMOTE_DIR} && ${bench_cmd}'"; then
         return 0
     else
         return 1
