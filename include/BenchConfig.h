@@ -93,7 +93,7 @@ inline void parseArgs(int argc,
                       << "  --legacy            Run in legacy square-matrix mode with 64-element padding\n"
                       << "  --alpha, -a <val>   Alpha parameter (default: 1.0)\n"
                       << "  --beta, -b <val>    Beta parameter (default: 0.0)\n"
-                      << "  --no-fastpath       Disable compile-time FastPath (force runtime alpha/beta epilogue)\n"
+                      << "  --no-fastpath       Disable 3-arg compile-time FastPath overload (force 5-arg runtime alpha/beta dispatch)\n"
                       << "  --kernel <name>     Kernel name (default: ijk)\n"
                       << "  --iterations <N>    Benchmark iterations (default: 100)\n"
                       << "  --repetitions, -r <N> Benchmark repetitions (default: 15)\n"

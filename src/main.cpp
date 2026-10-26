@@ -300,14 +300,14 @@ inline BenchmarkStats measureKernel(const BenchConfig &cfg, CPacked &C,
       std::memcpy(C.data, c_backup.data(), c_backup.size() * sizeof(T));
     }
 
-    pipeline_fence();
-    const uint64_t cyc0 = cyc_counter.read_cycles();
-    const uint64_t ins0 = cyc_counter.read_instructions();
-    pipeline_fence();
-
     compiler_fence();
     const auto start = std::chrono::steady_clock::now();
     compiler_fence();
+
+    pipeline_fence();
+    const uint64_t ins0 = cyc_counter.read_instructions();
+    const uint64_t cyc0 = cyc_counter.read_cycles();
+    pipeline_fence();
 
     LIKWID_MARKER_START(cfg.kernel_name.c_str());
     if (c_pool) {
@@ -326,14 +326,14 @@ inline BenchmarkStats measureKernel(const BenchConfig &cfg, CPacked &C,
     }
     LIKWID_MARKER_STOP(cfg.kernel_name.c_str());
 
+    pipeline_fence();
+    const uint64_t cyc1 = cyc_counter.read_cycles();
+    const uint64_t ins1 = cyc_counter.read_instructions();
+    pipeline_fence();
+
     compiler_fence();
     const auto end = std::chrono::steady_clock::now();
     compiler_fence();
-
-    pipeline_fence();
-    const uint64_t ins1 = cyc_counter.read_instructions();
-    const uint64_t cyc1 = cyc_counter.read_cycles();
-    pipeline_fence();
 
     const auto duration =
         std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
@@ -805,7 +805,7 @@ void validateKernel(const BenchConfig &cfg, const GemmUKernel<T> &gemm,
 
   for (size_t i = 0; i < cfg.M; ++i) {
     for (size_t j = 0; j < cfg.N; ++j) {
-      C_val(i, j) = C(i, j);
+      C_val(i, j) = (cfg.beta == 0.0) ? static_cast<T>(-1337.125) : C(i, j);
       T acc = T{0};
       for (size_t k = 0; k < cfg.K; ++k) {
         acc += A(i, k) * B(k, j);

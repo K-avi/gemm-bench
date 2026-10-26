@@ -265,10 +265,14 @@ public:
         }
 
         const size_t count = m.padded_rows * m.padded_cols;
+        // Upstream BLIS assembly micro-kernels (e.g. skx, haswell) pre-load one
+        // micro-panel (MR or NR elements) ahead on the last k iteration.
+        // Allocate one trailing guard slice (zeroed) without altering logical/padded dimensions.
+        const size_t guard = std::max<size_t>(64, std::max(m.padded_rows, m.padded_cols));
 
-        m.data = allocate(count);
+        m.data = allocate(count + guard);
 
-        std::fill_n(m.data, count, T{});
+        std::fill_n(m.data, count + guard, T{});
 
         initializeLogical(m, init);
 

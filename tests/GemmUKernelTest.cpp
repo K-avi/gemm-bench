@@ -1268,7 +1268,7 @@ TEST_CASE("Cold-C pool produces identical results", "[crr][coldc]") {
   using T = double;
   GemmUKernel<T> gemm;
   const size_t simd_width = mipp::N<T>();
-  SimdAlloc<T> alloc(sizeof(T), 1, 64, 42);
+  SimdAlloc<T> alloc(simd_width, 1, 64, 42);
 
   const size_t M = 6;
   const size_t N = 4 * simd_width;
