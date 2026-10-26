@@ -18,7 +18,7 @@
     "meteorlake": {
       "name": "Intel Meteor Lake",
       "cpu_model": "Core Ultra 9 185H",
-      "frequency_ghz": 4.78,
+      "frequency_ghz": 5.1,
       "nominal_frequency_ghz": 5.1,
       "peak_flop_per_cycle": 16.0,
       "peak_flop_per_cycle_fp32": 32.0,
@@ -28,7 +28,7 @@
       "csv_pattern": "*gemm_results_*meteorlake*_{compiler}.csv",
       "crr_csv_pattern": "*gemm_results_*meteorlake*crr*_{compiler}.csv",
       "crr_csv_pattern_fp32": "*gemm_results_*meteorlake*crr*fp32*_{compiler}.csv",
-      "notes": "Redwood Cove P-core has a 5.10 GHz light-load burst ceiling; sustained 256-bit AVX2 FMA execution operates at 4.78 GHz effective due to thermal/power limits.",
+      "notes": "Redwood Cove P-core has a 5.10 GHz single-core turbo ceiling; single-thread CRR micro-kernels operate at 4.99-5.07 GHz effective.",
       "measured_peak_flop_per_cycle_fp32": 31.68
     }
   },

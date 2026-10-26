@@ -50,7 +50,7 @@ The tables below present execution unit pipeline saturation with rated system th
 |:---|:---|:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | AVX512 | AMD Zen 5 Strix Point | Ryzen AI 9 HX 370 | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | 4x32 | gcc | **100.0%** | 16.00 / 16 | 5.09 | 5.16 | 81.4 | 82.5 | 98.6% |
 | AVX512 | AMD Zen 4 | Ryzen 9 7945HX | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | 4x32 | gcc | **99.3%** | 15.89 / 16 | 5.37 | 5.46 | 85.3 | 87.4 | 97.6% |
-| AVX2 | Intel Meteor Lake | Core Ultra 9 185H | `mippv2_meteorlake_mr4_nr3_crr` | 4x12 | clang | **97.2%** | 15.55 / 16 | 4.99 | 4.78 | 77.5 | 76.5 | 101.4% |
+| AVX2 | Intel Meteor Lake | Core Ultra 9 185H | `mippv2_meteorlake_mr4_nr3_crr` | 4x12 | clang | **97.2%** | 15.55 / 16 | 4.99 | 5.10 | 77.5 | 81.6 | 95.0% |
 | NEON | Apple M1 | Firestorm | `mippv2_x60_mr6_nr4_fmaddi_crr` | 6x8 | gcc | **99.6%** | 15.93 / 16 | 3.03 | 3.04 | 48.3 | 48.6 | 99.4% |
 | NEON | Raspberry Pi 5 | Cortex-A76 | `mippv2_a76_mr6_nr4_fmaddi_crr` | 6x8 | gcc | **99.0%** | 7.92 / 8 | 2.39 | 2.40 | 18.9 | 19.2 | 98.7% |
 | RVV | SpacemiT X100 | SpacemiT X100 | `mippv2_x100_register_blocked_apack4_crr` | 3x16 | clang | **96.8%** | 7.75 / 8 | 2.40 | 2.40 | 18.6 | 19.2 | 96.7% |
@@ -63,7 +63,7 @@ The tables below present execution unit pipeline saturation with rated system th
 |:---|:---|:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | AVX512 | AMD Zen 5 Strix Point | Ryzen AI 9 HX 370 | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | 4x64 | gcc | **99.9%** | 31.97 / 32 | 5.12 | 5.16 | 163.7 | 165.1 | 99.2% |
 | AVX512 | AMD Zen 4 | Ryzen 9 7945HX | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | 4x64 | gcc | **99.7%** | 31.89 / 32 | 5.42 | 5.46 | 172.9 | 174.8 | 98.9% |
-| AVX2 | Intel Meteor Lake | Core Ultra 9 185H | `mippv2_meteorlake_mr4_nr3_crr` | 4x24 | clang | **97.5%** | 31.19 / 32 | 5.07 | 4.78 | 158.0 | 153.0 | 103.3% |
+| AVX2 | Intel Meteor Lake | Core Ultra 9 185H | `mippv2_meteorlake_mr4_nr3_crr` | 4x24 | clang | **97.5%** | 31.19 / 32 | 5.07 | 5.10 | 158.0 | 163.2 | 96.8% |
 | NEON | Apple M1 | Firestorm | `mippv2_x60_mr6_nr4_fmaddi_crr` | 6x16 | gcc | **99.6%** | 31.87 / 32 | 3.03 | 3.04 | 96.6 | 97.2 | 99.4% |
 | NEON | Raspberry Pi 5 | Cortex-A76 | `mippv2_a76_mr6_nr4_fmaddi_crr` | 6x16 | gcc | **99.2%** | 15.88 / 16 | 2.39 | 2.40 | 38.0 | 38.4 | 98.9% |
 | RVV | SpacemiT X100 | SpacemiT X100 | `mippv2_x100_register_blocked_apack4_crr` | 3x32 | clang | **97.0%** | 15.52 / 16 | 2.40 | 2.40 | 37.2 | 38.4 | 96.8% |
@@ -77,7 +77,7 @@ The tables below present execution unit pipeline saturation with rated system th
 > - **Out-of-Order Execution Efficiency:** Apple M1 (Firestorm), AMD Zen 4, AMD Zen 5 (Strix Point), and ARM Cortex-A76 achieve $\ge 99\%$ pipeline issue saturation in both FP64 and FP32, indicating balanced register tiling and effective memory latency hiding in L1 cache across diverse out-of-order execution engines.
 > - **Sustained Vector Clock Roll-Off on Modern x86 (Zen 4 & Meteor Lake):** Under continuous dense vector FMA execution, power management envelopes (AMD Precision Boost / Intel Speed Shift) stabilize operating frequencies below light-load burst ceilings:
 >   - On **AMD Zen 4** (Ryzen 9 7945HX), sustained 512-bit execution settles at $f_{\text{eff}} = 5.35\text{–}5.42\text{ GHz}$ (vs $f_{\text{peak}} = 5.46\text{ GHz}$ burst), accounting for the entire gap to theoretical peak throughput despite near-perfect (99.6–99.7%) pipeline saturation.
->   - On **Intel Meteor Lake** (Core Ultra 9 185H), dense 256-bit AVX2 execution stabilizes Redwood Cove P-cores at $f_{\text{eff}} = 4.74\text{–}4.77\text{ GHz}$ (calibrated via `cpufp`) rather than the 5.10 GHz light-load burst ceiling.
+>   - On **Intel Meteor Lake** (Core Ultra 9 185H), single-core 256-bit AVX2 execution operates at $f_{\text{eff}} = 4.99\text{–}5.07\text{ GHz}$ (vs $f_{\text{peak}} = 5.10\text{ GHz}$ single-core turbo ceiling).
 > - **In-Order Sensitivity & Microkernel Scheduling (RISC-V Vector):** On out-of-order engines (e.g. SpacemiT X100 at 7.72 DP / 15.45 SP FLOP/cycle, 96.6% saturation), dynamic hardware scheduling acts as a tolerance buffer, absorbing instruction-level latencies and allowing portable C++ kernels to reach near-peak throughput. Conversely, on in-order dual-issue pipelines (SpacemiT X60 and A100), this hardware safety net vanishes: any scheduling sub-optimality in the C++ assembly produced by the compiler lowers execution efficiency, limiting our current portable MIPPv2 kernels to 58.1% DP / 64.2% SP on X60 and 83.7% DP / 76.4% SP on A100. As evidenced by hand-tuned assembly kernels reaching up to 6.43 DP / 13.45 SP FLOP/cycle on the X60 (Section 3), high compute density on in-order vector cores remains achievable, but demands cycle-accurate static scheduling that cannot yet be effortlessly offloaded to high-level abstractions.
 
 ---
@@ -300,7 +300,7 @@ python3 plot_results.py --input-dir gemm-bench-results --freq zen4=5.4,m1=3.0
   - `<simd>_<uarch>_crr_overview.svg`: Per-architecture scaling curves across $K \in [32..1024]$ and compilers.
   - `crr_hardware_summary_table.md`: Hardware execution and pipeline saturation summary table.
 
-- **`gemm-bench-results/paper_v1/<variant>/plots_fp{64,32}/` & `plots_blis_fp32/` (MIPPv2 vs BLIS Assembly, FP64 & FP32)**:
+- **`gemm-bench-results/paper_v1/<variant>/plots_fp{64,32}/` (MIPPv2 vs BLIS Assembly, FP64 & FP32)**:
   - `blis_vs_mippv2_ratio_comparison.svg`: Matched-$K$ window geometric mean ratio (% of BLIS) with 95% bootstrap confidence intervals.
   - `blis_vs_mippv2_k_scaling_grid.svg`: Multi-architecture scaling curves across $K \in [32..1024]$ with 95% bootstrap CI bands and L1d cache spill boundary (`†`).
 

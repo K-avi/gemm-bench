@@ -4,7 +4,7 @@
 |:---|:---|:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | AVX512 | AMD Zen 5 Strix Point | Ryzen AI 9 HX 370 | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | 4x64 | gcc | **99.9%** | 31.97 / 32 | 5.12 | 5.16 | 163.7 | 165.1 | 99.2% |
 | AVX512 | AMD Zen 4 | Ryzen 9 7945HX | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | 4x64 | gcc | **99.7%** | 31.89 / 32 | 5.42 | 5.46 | 172.9 | 174.8 | 98.9% |
-| AVX2 | Intel Meteor Lake | Core Ultra 9 185H | `mippv2_meteorlake_mr4_nr3_crr` | 4x24 | clang | **97.5%** | 31.19 / 32 | 5.07 | 4.78 | 158.0 | 153.0 | 103.3% |
+| AVX2 | Intel Meteor Lake | Core Ultra 9 185H | `mippv2_meteorlake_mr4_nr3_crr` | 4x24 | clang | **97.5%** | 31.19 / 32 | 5.07 | 5.10 | 158.0 | 163.2 | 96.8% |
 | NEON | Apple M1 | Firestorm | `mippv2_x60_mr6_nr4_fmaddi_crr` | 6x16 | gcc | **99.6%** | 31.87 / 32 | 3.03 | 3.04 | 96.6 | 97.2 | 99.4% |
 | NEON | Raspberry Pi 5 | Cortex-A76 | `mippv2_a76_mr6_nr4_fmaddi_crr` | 6x16 | gcc | **99.2%** | 15.88 / 16 | 2.39 | 2.40 | 38.0 | 38.4 | 98.9% |
 | RVV | SpacemiT X100 | SpacemiT X100 | `mippv2_x100_register_blocked_apack4_crr` | 3x32 | clang | **97.0%** | 15.52 / 16 | 2.40 | 2.40 | 37.2 | 38.4 | 96.8% |
