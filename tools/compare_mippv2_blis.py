@@ -296,7 +296,11 @@ def analyze_dataset(
                 samples_m = flop_per_cycle_samples(raw_df, mipp_champ_kernel, k)
                 samples_b = flop_per_cycle_samples(raw_df, "blis_native", k)
                 if samples_m and samples_b:
-                    _, ci_low, ci_high = bootstrap_ratio_of_medians(samples_m, samples_b)
+                    point_est, ci_low, ci_high = bootstrap_ratio_of_medians(samples_m, samples_b)
+                    if not np.isnan(point_est):
+                        m_fc = float(np.median(np.concatenate([v for v in samples_m.values() if len(v) > 0])))
+                        b_fc = float(np.median(np.concatenate([v for v in samples_b.values() if len(v) > 0])))
+                        ratio = point_est
                     ci_avail = True
 
             ws_m = working_set_bytes(int(m_row["M"]), int(m_row["N"]), k, elem_bytes)
@@ -732,7 +736,13 @@ def format_markdown_report(
     lines.append("\n---\n")
     lines.append(f"## 3. Per-Size Matched-$K$ Scaling & Working-Set Analysis (Variant: `{variant_name}`)\n")
     lines.append("> [!TIP]")
-    lines.append("> **Cache Boundary Semantics:** Rows marked with `†` denote operating points where panel working set $K \\times (M + N) \\times \\text{elem_bytes}$ exceeds L1d cache capacity, testing streaming memory throughput rather than pure in-register compute density.\n")
+    lines.append(
+        "> **Cache Boundary Semantics:** Rows marked with `†` denote operating points where panel working set "
+        "$K \\times (M + N) \\times \\text{elem\\_bytes}$ exceeds L1d cache capacity. On architectures with large private L2 caches "
+        "and aggressive hardware stream prefetchers (e.g. 1 MiB L2 on Zen 4 / Zen 5), L2-to-L1 bandwidth sustains near-100% FMA "
+        "saturation beyond L1d; on cores with smaller L1d/L2 or stricter in-order/prefetch limits (e.g. X60, X100, Meteor Lake GCC), "
+        "crossing the L1d boundary exposes cache-hierarchy throughput.\n"
+    )
 
     for key, k_data in details.items():
         platform, compiler, precision, variant, layout = key
@@ -743,7 +753,15 @@ def format_markdown_report(
         for k in sorted(k_data.keys()):
             entry = k_data[k]
             r = entry["Ratio_pct"]
-            adv = f"MIPPv2 (+{r - 100.0:.1f}%)" if r > 102.0 else (f"BLIS (+{100.0 - r:.1f}%)" if r < 98.0 else "Parity (±2%)")
+            if entry["CI_available"] and not np.isnan(entry["CI_low"]) and not np.isnan(entry["CI_high"]):
+                if entry["CI_low"] <= 1.02 and entry["CI_high"] >= 0.98:
+                    adv = "Parity (±2% CI)"
+                elif entry["CI_low"] > 1.02:
+                    adv = f"MIPPv2 (+{r - 100.0:.1f}%)"
+                else:
+                    adv = f"BLIS (+{100.0 - r:.1f}%)"
+            else:
+                adv = f"MIPPv2 (+{r - 100.0:.1f}%)" if r > 102.0 else (f"BLIS (+{100.0 - r:.1f}%)" if r < 98.0 else "Parity (±2%)")
 
             ci_str = f"[{entry['CI_low']*100:.1f}%, {entry['CI_high']*100:.1f}%]" if entry["CI_available"] else "N/A (no raw)"
             spill_mark = " †" if (entry["MIPP_exceeds_L1d"] or entry["BLIS_exceeds_L1d"]) else ""
@@ -760,7 +778,7 @@ def format_markdown_report(
     lines.append("\n---\n")
     lines.append("## Appendix: Best-Compiler Envelope (Post-Hoc)\n")
     lines.append("> [!IMPORTANT]")
-    lines.append("> This appendix selects the post-hoc envelope across compilers (`max(gcc, clang)` at each measurement point). It is presented exclusively for secondary reference.\n")
+    lines.append("> This appendix computes the post-hoc per-$K$ envelope across compilers (`max(gcc, clang)` at each $K \\in [128, 384]$). It is presented exclusively for secondary reference.\n")
 
     lines.append("| Microarchitecture | Precision | Variant | Best Compiler by Ratio | Envelope Ratio Geomean | Envelope [Min, Max] |")
     lines.append("| :--- | :---: | :---: | :---: | :---: | :---: |")
@@ -771,9 +789,31 @@ def format_markdown_report(
         if grp.empty:
             continue
         best_row = grp.loc[grp["Ratio_geomean"].idxmax()]
+        if len(grp) > 1 and (grp["Ratio_geomean"].max() - grp["Ratio_geomean"].min()) < 0.001:
+            comp_label = "`gcc` / `clang` (tie)"
+        else:
+            comp_label = f"`{best_row['Compiler']}`"
+
+        d_sub = detailed_df[
+            (detailed_df["Platform"] == plat)
+            & (detailed_df["Precision"] == prec)
+            & (detailed_df["Variant"] == var)
+            & (detailed_df["K"] >= k_min)
+            & (detailed_df["K"] <= k_max)
+        ]
+        if not d_sub.empty:
+            per_k_max = d_sub.groupby("K")["Ratio"].max().values
+            env_geo = geomean(per_k_max) * 100.0
+            env_min = float(np.min(per_k_max)) * 100.0
+            env_max = float(np.max(per_k_max)) * 100.0
+        else:
+            env_geo = best_row["Ratio_geomean"] * 100.0
+            env_min = best_row["Ratio_min"] * 100.0
+            env_max = best_row["Ratio_max"] * 100.0
+
         lines.append(
-            f"| `{plat}` | `{prec}` | `{var}` | `{best_row['Compiler']}` | "
-            f"**{best_row['Ratio_geomean']*100:.1f}%** | [{best_row['Ratio_min']*100:.1f}%, {best_row['Ratio_max']*100:.1f}%] |"
+            f"| `{plat}` | `{prec}` | `{var}` | {comp_label} | "
+            f"**{env_geo:.1f}%** | [{env_min:.1f}%, {env_max:.1f}%] |"
         )
 
     return "\n".join(lines)

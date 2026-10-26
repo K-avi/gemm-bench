@@ -107,16 +107,16 @@ The table below presents the geometric mean throughput ratio ($\text{geomean}(R_
 | :--- | :--- | :---: | :--- | :---: | :---: | :---: | :---: |
 | `zen4_avx512` | `gcc` | FP64 | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | **100.8%** ≈ | **100.6%** ≈ | **97.3%** ± | — |
 | `zen4_avx512` | `clang` | FP64 | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | **100.8%** ≈ | **100.7%** ≈ | **98.0%** ± | — |
-| `zen4_avx512` | `gcc` | FP32 | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | **100.9%** ≈ | **100.7%** ≈ | **99.6%** ≈ | **100.9%** ≈ |
-| `zen4_avx512` | `clang` | FP32 | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | **100.6%** ≈ | **100.7%** ≈ | **99.3%** ≈ | **100.6%** ≈ |
+| `zen4_avx512` | `gcc` | FP32 | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | **100.9%** ≈ | **100.7%** ≈ | **99.5%** ≈ | **100.9%** ≈ |
+| `zen4_avx512` | `clang` | FP32 | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | **100.6%** ≈ | **100.6%** ≈ | **99.3%** ≈ | **100.6%** ≈ |
 | `zen5_avx512` | `gcc` | FP64 | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | **100.5%** ≈ | **100.5%** ≈ | **100.5%** ≈ | — |
 | `zen5_avx512` | `clang` | FP64 | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | **100.5%** ≈ | **100.5%** ≈ | **100.5%** ≈ | — |
 | `zen5_avx512` | `gcc` | FP32 | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | **100.5%** ≈ | **100.5%** ≈ | **100.6%** ≈ | **100.5%** ≈ |
 | `zen5_avx512` | `clang` | FP32 | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | **100.5%** ≈ | **100.5%** ≈ | **100.5%** ≈ | **100.5%** ≈ |
 | `meteorlake_avx2` | `gcc` | FP64 | `mippv2_meteorlake_mr4_nr3_crr` | **91.2%** - | **91.1%** - | **91.2%** - | — |
-| `meteorlake_avx2` | `clang` | FP64 | `mippv2_meteorlake_mr4_nr3_crr` | **99.5%** ≈ | **99.5%** ≈ | **100.4%** ≈ | — |
-| `meteorlake_avx2` | `gcc` | FP32 | `mippv2_meteorlake_mr4_nr3_crr` | **98.6%** ≈ | **98.5%** ± | **96.1%** ± | **97.8%** ± |
-| `meteorlake_avx2` | `clang` | FP32 | `mippv2_meteorlake_mr4_nr3_crr` | **100.8%** ≈ | **100.8%** ≈ | **100.8%** ≈ | **100.8%** ≈ |
+| `meteorlake_avx2` | `clang` | FP64 | `mippv2_meteorlake_mr4_nr3_crr` | **99.5%** ≈ | **99.6%** ≈ | **100.2%** ≈ | — |
+| `meteorlake_avx2` | `gcc` | FP32 | `mippv2_meteorlake_mr4_nr3_crr` | **98.7%** ≈ | **98.5%** ± | **96.1%** ± | **97.9%** ± |
+| `meteorlake_avx2` | `clang` | FP32 | `mippv2_meteorlake_mr4_nr3_crr` | **100.7%** ≈ | **100.8%** ≈ | **100.8%** ≈ | **100.8%** ≈ |
 | `m1_neon` | `gcc` | FP64 | `mippv2_x60_mr6_nr4_fmaddi_crr` | **101.7%** ± | **101.6%** ± | **101.8%** ± | — |
 | `m1_neon` | `clang` | FP64 | `mippv2_x60_mr6_nr4_fmaddi_crr` | **101.4%** ± | **101.5%** ± | **101.5%** ± | — |
 | `m1_neon` | `gcc` | FP32 | `mippv2_x60_mr6_nr4_fmaddi_crr` | **101.8%** ± | **101.8%** ± | **102.0%** ± | **101.8%** ± |
@@ -129,13 +129,13 @@ The table below presents the geometric mean throughput ratio ($\text{geomean}(R_
 | `x100_rvv` | `clang` | FP64 | `mippv2_x100_register_blocked_apack4_crr` | **103.0%** ± | **101.5%** ± | **105.9%** + | — |
 | `x100_rvv` | `gcc` | FP32 | `mippv2_x100_register_blocked_apack4_crr` | **90.3%** - | **89.6%** - | **90.5%** - | **90.4%** - |
 | `x100_rvv` | `clang` | FP32 | `mippv2_x100_register_blocked_apack4_crr` | **102.5%** ± | **102.6%** ± | **106.4%** + | **102.5%** ± |
-| `a100_rvv` | `gcc` | FP64 | `mippv2_a100_mr7_nr2_lmul2_pipe_crr` | **367.3%** + | **366.1%** + | **365.9%** + | — |
-| `a100_rvv` | `clang` | FP64 | `mippv2_a100_mr7_nr2_lmul2_pipe_crr` | **352.6%** + | **349.8%** + | **355.8%** + | — |
-| `a100_rvv` | `gcc` | FP32 | `mippv2_a100_mr7_nr2_lmul2_pipe_crr` | **333.0%** + | **333.0%** + | **336.1%** + | **336.0%** + |
+| `a100_rvv` | `gcc` | FP64 | `mippv2_a100_mr7_nr2_lmul2_pipe_crr` | **367.2%** + | **364.9%** + | **365.9%** + | — |
+| `a100_rvv` | `clang` | FP64 | `mippv2_a100_mr7_nr2_lmul2_pipe_crr` | **352.5%** + | **349.4%** + | **355.4%** + | — |
+| `a100_rvv` | `gcc` | FP32 | `mippv2_a100_mr7_nr2_lmul2_pipe_crr` | **333.2%** + | **333.2%** + | **336.1%** + | **335.9%** + |
 | `a100_rvv` | `clang` | FP32 | `mippv2_a100_mr7_nr2_lmul2_pipe_crr` | **359.6%** + | **359.8%** + | **367.5%** + | **360.0%** + |
 | `x60_rvv` | `gcc` | FP64 | `mippv2_a100_mr7_nr4_pipe_crr` | **78.3%** - | **79.6%** - | **80.4%** - | — |
 | `x60_rvv` | `clang` | FP64 | `mippv2_a100_mr7_nr4_pipe_crr` | **83.7%** - | **84.5%** - | **87.7%** - | — |
-| `x60_rvv` | `gcc` | FP32 | `mippv2_x60_mr6_nr4_fmaddi_crr` | **66.5%** - | **66.7%** - | **66.8%** - | **65.6%** - |
+| `x60_rvv` | `gcc` | FP32 | `mippv2_x60_mr6_nr4_fmaddi_crr` | **66.5%** - | **66.7%** - | **66.9%** - | **65.6%** - |
 | `x60_rvv` | `clang` | FP32 | `mippv2_x60_mr6_nr4_fmaddi_crr` | **74.0%** - | **72.8%** - | **74.9%** - | **74.9%** - |
 
 Detailed analytical reports with 95% bootstrap confidence intervals and working-set footprints:
