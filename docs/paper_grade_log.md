@@ -373,17 +373,17 @@ Build,Kernel,M,N,K,Alpha,Beta,Time_median_s,Time_min_s,Time_max_s,Time_stddev_s,
   - Répertoire local : `gemm-bench-results/paper_v1/default/` (48 fichiers générés pour FP64 : 16 CSV, 16 raw.csv, 16 meta.json).
   - Taux de complétion FP64 : **100 % (16 / 16 configurations)**.
 
-#### Synthèse des Ratios de Parité Géométrique MIPPv2 vs BLIS natif (Default FP64)
-| Cible | Ratio MIPP / BLIS (GCC) | Ratio MIPP / BLIS (Clang) | MIPP Max GFLOP/s (Clang) | BLIS Max GFLOP/s (Clang) |
-|---|:---:|:---:|:---:|:---:|
-| **Zen 4** | **1.03×** [1.01–1.08] | **1.03×** [1.01–1.09] | 85.2 | 84.4 |
-| **Zen 5** | **1.01×** [1.00–1.04] | **1.01×** [1.00–1.03] | 80.8 | 80.5 |
-| **Meteor Lake** | **0.92×** [0.82–0.97] | **1.01×** [0.97–1.05] | 78.4 | 78.1 |
-| **Apple M1** | **1.04×** [1.00–1.17] | **1.04×** [1.00–1.15] | 48.3 | 47.9 |
-| **RPi5** | **1.03×** [0.96–1.12] | **1.03×** [0.97–1.11] | 18.9 | 18.8 |
-| **X100** | **0.85×** [0.76–0.92] | **0.95×** [0.86–1.05] | 18.6 | 18.0 |
-| **A100** | **3.67×** [3.63–3.71] | **3.52×** [3.46–3.60] | 24.3 | 6.8 |
-| **X60** | **0.78×** [0.68–0.85] | **0.84×** [0.72–0.90] | 7.4 | 10.3 |
+#### Synthèse des Ratios de Parité Géométrique MIPPv2 vs BLIS natif (Default FP64, fenêtre $K \in [128, 384]$)
+| Cible | Ratio MIPP / BLIS (GCC) | Ratio MIPP / BLIS (Clang) | MIPP Max GFLOP/s (Clang) | BLIS Max GFLOP/s (Clang) | Régime empirique |
+|---|:---:|:---:|:---:|:---:|:---|
+| **Zen 4** | **100.8%** [100.2–101.6%] | **100.8%** [100.3–101.6%] | 85.3 | 84.6 | Parité (±2%) |
+| **Zen 5** | **100.5%** [100.3–100.8%] | **100.5%** [100.3–100.8%] | 81.6 | 81.2 | Parité (±2%) |
+| **Meteor Lake** | **91.2%** [81.1–96.7%] | **99.5%** [97.9–100.6%] | 73.6 | 74.0 | Parité (Clang) / BLIS avantage (GCC) |
+| **Apple M1** | **101.7%** [100.9–102.7%] | **101.4%** [100.8–102.3%] | 48.3 | 47.7 | MIPPv2 (+1.4–1.7%) |
+| **RPi5** | **101.9%** [100.8–103.3%] | **101.7%** [100.6–103.0%] | 19.0 | 18.7 | MIPPv2 (+1.7–1.9%) |
+| **X100** | **90.5%** [89.4–91.5%] | **103.0%** [101.0–104.9%] | 18.5 | 18.0 | MIPPv2 (+3.0% Clang) / BLIS avantage (GCC) |
+| **A100** | **367.3%** [362.7–374.3%] | **352.6%** [347.8–359.0%] | 13.3 | 3.8 | MIPPv2 (VLEN=1024 natif) |
+| **X60** | **78.3%** [68.3–84.4%] | **83.7%** [72.3–90.3%] | 7.4 | 8.8 | BLIS avantage (asm dual-issue in-order) |
 
 
 ### P9.b — Exécution et ingestion de la campagne Default FP32
@@ -403,19 +403,56 @@ Build,Kernel,M,N,K,Alpha,Beta,Time_median_s,Time_min_s,Time_max_s,Time_stddev_s,
   - Sélection médiane des runs (`selection=median_of_runs`)
 - **Résultats rapatriés** :
   - Répertoire local : `gemm-bench-results/paper_v1/default/` (48 fichiers générés pour FP32 : `.csv`, `.raw.csv`, `.meta.json`).
-  - Total cumulé Default (FP64 + FP32) : 93 fichiers de résultats bruts et métadonnées.
+  - Total cumulé Default (FP64 + FP32) : 96 fichiers de résultats bruts et métadonnées (16 cibles/compilateurs $\times$ 2 précisions).
 
-#### Synthèse des Ratios de Parité Géométrique MIPPv2 vs BLIS natif (Default FP32)
-| Cible | Ratio MIPP / BLIS (GCC) | Ratio MIPP / BLIS (Clang) | MIPP Max GFLOP/s (Clang) | BLIS Max GFLOP/s (Clang) |
-|---|:---:|:---:|:---:|:---:|
-| **Zen 4** | **1.03×** [1.01–1.10] | **1.02×** [1.00–1.09] | 171.6 | 170.4 |
-| **Zen 5** | **1.01×** [1.00–1.04] | **1.01×** [1.00–1.03] | 162.6 | 162.5 |
-| **Meteor Lake** | **0.94×** [0.85–0.99] | **1.01×** [0.98–1.06] | 158.0 | 158.2 |
-| **Apple M1** | **1.05×** [1.01–1.18] | **1.04×** [1.00–1.16] | 96.5 | 96.1 |
-| **RPi5** | **1.03×** [0.96–1.12] | **1.03×** [0.97–1.12] | 37.9 | 37.8 |
-| **X100** | **0.86×** [0.78–0.91] | **0.96×** [0.87–1.03] | 37.2 | 36.0 |
-| **A100** | **3.46×** [3.24–3.93] | **3.67×** [3.58–3.91] | 48.8 | 13.5 |
-| **X60** | **0.72×** [0.52–0.80] | **0.79×** [0.62–0.87] | 16.4 | 21.3 |
+#### Synthèse des Ratios de Parité Géométrique MIPPv2 vs BLIS natif (Default FP32, fenêtre $K \in [128, 384]$)
+| Cible | Ratio MIPP / BLIS (GCC) | Ratio MIPP / BLIS (Clang) | MIPP Max GFLOP/s (Clang) | BLIS Max GFLOP/s (Clang) | Régime empirique |
+|---|:---:|:---:|:---:|:---:|:---|
+| **Zen 4** | **100.9%** [100.4–101.5%] | **100.6%** [100.2–101.0%] | 172.7 | 171.7 | Parité (±2%) |
+| **Zen 5** | **100.5%** [100.3–100.8%] | **100.5%** [100.3–100.8%] | 163.7 | 162.9 | Parité (±2%) |
+| **Meteor Lake** | **98.6%** [97.9–99.2%] | **100.8%** [100.5–101.2%] | 146.5 | 145.3 | Parité (±2%) |
+| **Apple M1** | **101.8%** [101.0–103.0%] | **101.5%** [100.8–102.4%] | 96.6 | 95.2 | MIPPv2 (+1.5–1.8%) |
+| **RPi5** | **102.1%** [101.0–103.5%] | **101.6%** [100.6–102.7%] | 38.0 | 37.4 | MIPPv2 (+1.6–2.1%) |
+| **X100** | **90.3%** [89.8–90.5%] | **102.5%** [100.9–103.5%] | 37.0 | 36.1 | MIPPv2 (+2.5% Clang) / BLIS avantage (GCC) |
+| **A100** | **333.0%** [328.1–335.6%] | **359.6%** [358.8–360.3%] | 48.7 | 13.5 | MIPPv2 (VLEN=1024 natif) |
+| **X60** | **66.5%** [52.0–80.1%] | **74.0%** [62.4–84.4%] | 16.4 | 22.2 | BLIS avantage (asm dual-issue in-order) |
+
+
+### P9.c — Exécution et ingestion des campagnes d'ablation (`nofp`, `coldc`, `strict`)
+- **Ablation `nofp` (No-FastPath, `--no-fastpath`)** :
+  - FP64 et FP32 exécutés sur les 8 cibles physiques ($K \in \{64, 128, 256, 384\}$).
+  - 100% de succès (16/16 runs FP64, 16/16 runs FP32).
+  - Rapatrié dans `gemm-bench-results/paper_v1/nofp/` (96 fichiers, commit `51bf497`).
+  - **Résultat** : Impact négligeable ($<0.3\%$) sur la fenêtre $K \in [128, 384]$, prouvant l'amortissement complet de l'épilogue face à la boucle $K$.
+
+- **Ablation `coldc` (Cold Output Tile C, `--c-cold`)** :
+  - FP64 et FP32 exécutés sur les 8 cibles physiques ($K \in \{128, 256, 384\}$).
+  - 100% de succès (16/16 runs FP64, 16/16 runs FP32).
+  - Rapatrié dans `gemm-bench-results/paper_v1/coldc/` (96 fichiers, commit `5e2fd81`).
+  - **Résultat** : Dégradation imperceptible sur les cœurs modernes ($\ge 98\%$ des cycles en registres, écriture $C$ unique à la fin de la boucle).
+
+- **Ablation `strict` (Strict IEEE-754, `--no-fast-math`)** :
+  - FP32 exécuté sur les 8 cibles physiques ($K \in \{128, 256, 384\}$).
+  - 100% de succès (16/16 runs FP32).
+  - Rapatrié dans `gemm-bench-results/paper_v1/strict/` (48 fichiers, commit `60b85c5`).
+  - **Résultat** : Parité stricte maintenue sur x86 et ARM (l'arbre d'accumulateurs explicite de MIPPv2 ne dépend pas de réassociations algébriques agressives).
+
+---
+
+## P10 — Rapports statistiques, Synthèse globale et Finalisation
+
+- **Génération des rapports analytiques Markdown** :
+  - `report_fp64_default.md`, `report_fp32_default.md`
+  - `report_fp64_nofp.md`, `report_fp32_nofp.md`
+  - `report_fp64_coldc.md`, `report_fp32_coldc.md`
+  - `report_fp32_strict.md`
+- **Génération du document de synthèse unique** :
+  - Script automatisé : `tools/make_paper_summary.py`
+  - Fichier de référence : `gemm-bench-results/paper_v1/SUMMARY.md`
+- **Mise à jour de `README.md`** :
+  - Liens vers `SUMMARY.md` et les 7 rapports détaillés.
+  - Tableau de synthèse unifié par compilateur et précision.
+  - Section formelle « Threats to Validity ».
 
 
 

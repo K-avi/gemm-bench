@@ -85,7 +85,7 @@ The tables below present execution unit pipeline saturation with rated system th
 
 ### 3. Native BLIS Assembly vs. Portable MIPPv2 C++ Comparison
 
-To establish a reference against industry-standard hand-tuned kernels, GEMMBench incorporates comparison against reference assembly microkernels from the upstream [FLAME BLIS framework](https://github.com/flame/blis) and community ports ([Stepan Nassyr's SpacemiT X60 port](https://github.com/stepannassyr/blis/tree/x60/kernels)):
+To establish an empirical baseline against industry-standard hand-tuned kernels, GEMMBench evaluates MIPPv2 against reference assembly microkernels from the upstream [FLAME BLIS framework](https://github.com/flame/blis) and community ports ([Stepan Nassyr's SpacemiT X60 port](https://github.com/stepannassyr/blis/tree/x60/kernels)):
 
 | Architecture / SIMD | Precision | Reference Assembly Kernel | Geometry ($M_R \times N_R$) | Source Repository & Attribution |
 | :--- | :---: | :--- | :---: | :--- |
@@ -94,31 +94,53 @@ To establish a reference against industry-standard hand-tuned kernels, GEMMBench
 | **AArch64 NEON** (M1, Cortex-A76) | DP / SP | `armv8a_d6x8.c` (`d6x8` / `s8x12`) | $6 \times 8$ / $8 \times 12$ | [flame/blis](https://github.com/flame/blis/tree/a8037cfc4330030c726efaec1ffeb1f93d468aa3) (`a8037cf`, Upstream) |
 | **RISC-V Vector 1.0** (SpacemiT X60) | DP / SP | `dgemm_x60_2vx14.c` / `sgemm_x60_2vx14.c` | $8 \times 14$ / $16 \times 14$ | [stepannassyr/blis (`x60`)](https://github.com/stepannassyr/blis/tree/6ffc1d35fcafe74788b2aeaf00d5792d2618e0b9/kernels/x60) (`6ffc1d3`, Stepan Nassyr) |
 
-#### Comparative Performance Across Microarchitectures (FP64 & FP32)
+#### Comprehensive Summary & Methodological Ablations
 
-The table below compares the peak sustained median throughput and compute density between MIPPv2 C++ champion kernels and native BLIS assembly across all evaluated platforms:
+> [!IMPORTANT]
+> The full, canonical cross-architecture synthesis across all 4 experimental variants (`default`, `nofp`, `coldc`, `strict`) is available in:
+> 📄 **[gemm-bench-results/paper_v1/SUMMARY.md](gemm-bench-results/paper_v1/SUMMARY.md)**
 
-| Platform | Comp | MIPPv2 Champion | FP64 MIPPv2 / BLIS (FLOP/cyc) | **FP64 Ratio** | FP32 MIPPv2 / BLIS (FLOP/cyc) | **FP32 Ratio** | Microarchitectural Regime |
-| :--- | :---: | :--- | :---: | :---: | :---: | :---: | :--- |
-| **AMD Zen 5** | gcc | `firestorm_mr4_nr4_fmaddi_crr` | 16.00 / 15.98 | **101.2%** | 31.99 / 31.96 | **100.6%** | Parity |
-| **AMD Zen 4** | gcc | `firestorm_mr4_nr4_fmaddi_crr` | 15.95 / 15.95 | **101.6%** | 31.93 / 31.88 | **100.6%** | Parity |
-| **Intel Meteor Lake** | clang | `meteorlake_mr4_nr3_crr` | 15.56 / 15.48 | **100.3%** | 31.14 / 31.15 | **99.9%** | Parity |
-| **Apple M1** | gcc | `x60_mr6_nr4_fmaddi_crr` | 15.93 / 15.81 | **100.8%** | 31.87 / 31.71 | **100.5%** | Parity |
-| **Raspberry Pi 5** | gcc | `a76_mr6_nr4_fmaddi_crr` | 7.91 / 7.85 | **100.8%** | 15.89 / 15.77 | **100.7%** | Parity |
-| **SpacemiT X100** | clang | `x100_register_blocked_apack4_crr` | 7.72 / 7.51 | **102.8%** | 15.44 / 15.06 | **102.5%** | Parity (+2.5–2.8%) |
-| **SpacemiT X60** | clang | `a100_mr7_nr4_pipe_crr` (DP) / `x60_mr6_nr4_fmaddi_crr` (SP) | 4.65 / 6.43 | **72.3%** | 10.27 / 13.45 | **76.4%** | BLIS advantage (static dual-issue scheduling) |
-| **SpacemiT A100** | gcc / clang | `a100_mr7_nr2_lmul2_pipe_crr` | 6.69 / 1.84 | *(365%)*\* | 24.51 / 6.75 | *(363%)*\* | MIPPv2 custom 1024b tile |
+#### Synthesis Table: Matched-$K$ Window Ratio ($K \in [128, 384]$)
 
-*\* Note on SpacemiT A100: Upstream BLIS provides no native 1024-bit vector microkernel; executing BLIS on A100 defaults to the 256-bit X60 assembly kernel (`dgemm_x60_2vx14.c` / `sgemm_x60_2vx14.c`), which clamps vector length to 256 bits, utilizing only 25% of datapath capacity per instruction (1.84 DP / 6.75 SP FLOP/cycle). Conversely, the dedicated MIPPv2 A100 kernel adapts automatically to VLEN=1024 ($7 \times 64$ DP / $7 \times 128$ SP tile, LMUL=2) and reaches 6.69 DP / 24.51 SP FLOP/cycle (83.7% DP / 76.6% SP of peak). This comparison does not imply that C++ inherently outperforms handwritten assembly on this platform: an A100-specific assembly kernel with cycle-accurate static scheduling would likely outperform the MIPPv2 implementation on this in-order dual-issue pipeline. Such a kernel is simply not implemented in BLIS as of October 2026.*
+The table below presents the geometric mean throughput ratio ($\text{geomean}(R_K)$) evaluated at identical panel depths $K \in [128, 384]$ over 3 independent process runs $\times$ 15 repetitions:
 
-Detailed comparison reports and vector scaling figures are generated via:
-```bash
-# FP64 (DGEMM) comparison report and plots
-python3 tools/compare_mippv2_blis.py --plot
+| Platform | Compiler | MIPPv2 Champion | FP64 Default | FP32 Default | FP32 Strict IEEE | Empirical Regime |
+| :--- | :---: | :--- | :---: | :---: | :---: | :--- |
+| **AMD Zen 5** | gcc | `firestorm_mr4_nr4_fmaddi_crr` | **100.5%** ≈ | **100.5%** ≈ | **100.5%** ≈ | Parity |
+| **AMD Zen 5** | clang | `firestorm_mr4_nr4_fmaddi_crr` | **100.5%** ≈ | **100.5%** ≈ | **100.5%** ≈ | Parity |
+| **AMD Zen 4** | gcc | `firestorm_mr4_nr4_fmaddi_crr` | **100.8%** ≈ | **100.9%** ≈ | **100.9%** ≈ | Parity |
+| **AMD Zen 4** | clang | `firestorm_mr4_nr4_fmaddi_crr` | **100.8%** ≈ | **100.6%** ≈ | **100.6%** ≈ | Parity |
+| **Intel Meteor Lake** | clang | `meteorlake_mr4_nr3_crr` | **99.5%** ≈ | **100.8%** ≈ | **100.8%** ≈ | Parity |
+| **Intel Meteor Lake** | gcc | `meteorlake_mr4_nr3_crr` | **91.2%** - | **98.6%** ≈ | **97.8%** | Parity (FP32) / BLIS Faster (FP64 GCC) |
+| **Apple M1** | gcc | `x60_mr6_nr4_fmaddi_crr` | **101.7%** | **101.8%** | **101.8%** | MIPPv2 +1.7–1.8% |
+| **Apple M1** | clang | `x60_mr6_nr4_fmaddi_crr` | **101.4%** | **101.5%** | **101.5%** | MIPPv2 +1.4–1.5% |
+| **Raspberry Pi 5** | gcc | `a76_mr6_nr4_fmaddi_crr` | **101.9%** | **102.1%** | **102.0%** | MIPPv2 +1.9–2.1% |
+| **Raspberry Pi 5** | clang | `a76_mr6_nr4_fmaddi_crr` | **101.7%** | **101.6%** | **101.6%** | MIPPv2 +1.6–1.7% |
+| **SpacemiT X100** | clang | `x100_register_blocked_apack4_crr` | **103.0%** | **102.5%** | **102.5%** | MIPPv2 +2.5–3.0% |
+| **SpacemiT X100** | gcc | `x100_register_blocked_apack4_crr` | **90.5%** - | **90.3%** - | **90.4%** - | BLIS Faster (GCC RVV scheduling) |
+| **SpacemiT A100** | gcc | `a100_mr7_nr2_lmul2_pipe_crr` | **367.3%** | **333.0%** | **336.0%** | MIPPv2 VLEN=1024 native scaling |
+| **SpacemiT A100** | clang | `a100_mr7_nr2_lmul2_pipe_crr` | **352.6%** | **359.6%** | **360.0%** | MIPPv2 VLEN=1024 native scaling |
+| **SpacemiT X60** | clang | `a100_mr7_nr4_pipe_crr` (DP) / `x60_mr6_nr4_fmaddi_crr` (SP) | **83.7%** - | **74.0%** - | **74.9%** - | BLIS Faster (dual-issue in-order asm) |
+| **SpacemiT X60** | gcc | `a100_mr7_nr4_pipe_crr` (DP) / `x60_mr6_nr4_fmaddi_crr` (SP) | **78.3%** - | **66.5%** - | **65.6%** - | BLIS Faster (dual-issue in-order asm) |
 
-# FP32 (SGEMM) comparison report and plots
-python3 tools/compare_mippv2_blis.py --fp32 --plot
-```
+Detailed analytical reports with 95% bootstrap confidence intervals and working-set footprints:
+- [Default FP64 Report](gemm-bench-results/paper_v1/report_fp64_default.md) | [Default FP32 Report](gemm-bench-results/paper_v1/report_fp32_default.md)
+- [No-FastPath FP64 Report](gemm-bench-results/paper_v1/report_fp64_nofp.md) | [No-FastPath FP32 Report](gemm-bench-results/paper_v1/report_fp32_nofp.md)
+- [Cold-C FP64 Report](gemm-bench-results/paper_v1/report_fp64_coldc.md) | [Cold-C FP32 Report](gemm-bench-results/paper_v1/report_fp32_coldc.md)
+- [Strict IEEE FP32 Report](gemm-bench-results/paper_v1/report_fp32_strict.md)
+
+---
+
+### Threats to Validity
+
+1. **Isolated Micro-Kernel Scope vs. Macro-Kernel Framework:**
+   Measurements focus strictly on the computational GEMM micro-kernel ($C_{MR \times NR} += A_{MR \times K} \cdot B_{K \times NR}$) operating on pre-packed panel buffers residing in L1/L2 cache. This methodology follows Goto & van de Geijn (2008) and Van Zee & van de Geijn (2015), isolating vector compute density from macro-kernel cache partitioning, multi-threaded work distribution, and dynamic memory packing.
+2. **Asymmetric Tile Geometries & Cache Footprints:**
+   BLIS reference kernels employ specific microarchitecture-tuned register blockings (e.g. $16 \times 14$ on AVX-512, $6 \times 8$ on AVX2, $8 \times 12$ on NEON), whereas MIPPv2 champions use symmetric or platform-optimized register tilings ($4 \times 4$ on AVX-512, $4 \times 3$ on AVX2, $6 \times 4$ on NEON). As detailed in the reports, working set footprints differ across implementations and are marked with `†` when exceeding L1d cache boundaries.
+3. **Upstream BLIS Baseline Availability on RISC-V:**
+   Upstream BLIS provides no native 1024-bit vector microkernel for SpacemiT A100 nor an out-of-order tuned microkernel for SpacemiT X100. Both evaluate the 256-bit X60 community kernel by Stepan Nassyr, under-utilizing A100's wide 1024-bit VPU.
+4. **Pre-Registered Champion Selection:**
+   To guard against post-hoc selection bias, MIPPv2 champions are pre-registered prior to benchmarking in `uarch_config.json`. The post-hoc best-compiler envelope across GCC and Clang is reported strictly as a secondary reference in the report appendix.
 
 ---
 
