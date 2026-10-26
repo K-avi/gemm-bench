@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "date_utc_start": "2026-10-26T02:32:24Z",
+  "date_utc_end": "2026-10-26T02:36:13Z",
+  "git_commit": "51bf497385bf22605a1fea1d3bc9b1880432782f",
+  "git_dirty": 0,
+  "binary_build_info": {
+    "git_commit": "51bf497385bf22605a1fea1d3bc9b1880432782f",
+    "git_dirty": "0",
+    "cxx_compiler_id": "GNU",
+    "cxx_compiler_version": "13.3.0",
+    "cxx_flags": "-O3 -ffast-math -finline-functions -funroll-loops -fno-semantic-interposition -march=native -mavx512f -mavx512dq -mavx512vl -mavx512bw -O3 -DNDEBUG",
+    "build_type": "Release",
+    "fastmath": "ON",
+    "blis_target": "SKX",
+    "explo": "OFF",
+    "compiler_macro_version": "13.3.0"
+  },
+  "binary_sha256": "22e2be345d0e43b43bce7fdd9fa897dbdc14acef626c24a7984ffa441a8a8b89",
+  "hostname": "az5-a890m-0",
+  "slurm_job_id": "179381",
+  "slurm_nodelist": "az5-a890m-0",
+  "uname_a": "Linux az5-a890m-0 6.17.0-35-generic #35~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Tue May 26 19:30:42 UTC 2 x86_64",
+  "cpu_model": "AMD Ryzen AI 9 HX 370 w/ Radeon 890M",
+  "isa_flags_summary": "fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 sse4_1 sse4_2 movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb cat_l3 ",
+  "caches": [
+    {
+      "level": 1,
+      "type": "Data",
+      "size": "48K",
+      "ways_of_associativity": 12,
+      "coherency_line_size": 64
+    },
+    {
+      "level": 1,
+      "type": "Instruction",
+      "size": "32K",
+      "ways_of_associativity": 8,
+      "coherency_line_size": 64
+    },
+    {
+      "level": 2,
+      "type": "Unified",
+      "size": "1024K",
+      "ways_of_associativity": 16,
+      "coherency_line_size": 64
+    },
+    {
+      "level": 3,
+      "type": "Unified",
+      "size": "16384K",
+      "ways_of_associativity": 16,
+      "coherency_line_size": 64
+    }
+  ],
+  "governor": "powersave",
+  "freq_khz_start": 2031620,
+  "freq_khz_end": 2000000,
+  "pin_core": 1,
+  "taskset_used": true,
+  "platform": "avx512",
+  "platform_tag": "zen5",
+  "compiler_cmd": "g++",
+  "compiler_version_full": "g++ (Ubuntu 13.3.0-6ubuntu2~24.04.1) 13.3.0",
+  "cxx_flags_effective": " -O3 -ffast-math -finline-functions -funroll-loops -fno-semantic-interposition -march=native -mavx512f -mavx512dq -mavx512vl -mavx512bw ",
+  "fastmath": true,
+  "precision": "fp64",
+  "crr_only": true,
+  "alpha": 1.0,
+  "beta": 0.0,
+  "fastpath": true,
+  "c_cold": true,
+  "num_runs": 3,
+  "repetitions": 15,
+  "sizes": [
+    [
+      128,
+      1250000,
+      125000
+    ],
+    [
+      256,
+      625000,
+      62500
+    ],
+    [
+      384,
+      416666,
+      41666
+    ]
+  ],
+  "kernels": [
+    "mippv2_firestorm_mr4_nr4_fmaddi_crr",
+    "blis_native"
+  ],
+  "cooldown_sec": 2.0,
+  "throttle_warnings": []
+}

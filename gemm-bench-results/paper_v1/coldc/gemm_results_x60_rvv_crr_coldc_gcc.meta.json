@@ -1,0 +1,95 @@
+{
+  "schema_version": 1,
+  "date_utc_start": "2026-10-26T04:38:27Z",
+  "date_utc_end": "2026-10-26T05:09:19Z",
+  "git_commit": "51bf497385bf22605a1fea1d3bc9b1880432782f",
+  "git_dirty": 0,
+  "binary_build_info": {
+    "git_commit": "51bf497385bf22605a1fea1d3bc9b1880432782f",
+    "git_dirty": "0",
+    "cxx_compiler_id": "GNU",
+    "cxx_compiler_version": "15.2.0",
+    "cxx_flags": "-O3 -march=rv64gcv_zvl256b_zicbop -mrvv-vector-bits=zvl -O3 -DNDEBUG",
+    "build_type": "Release",
+    "fastmath": "ON",
+    "blis_target": "X60",
+    "explo": "OFF",
+    "compiler_macro_version": "15.2.0"
+  },
+  "binary_sha256": "b40e02595147cdd706b54ad257aeb2cd6ede84615880e451ccf0f9cef3e16238",
+  "hostname": "mono-bpi-f3",
+  "slurm_job_id": "179384",
+  "slurm_nodelist": "mono-bpi-f3",
+  "uname_a": "Linux mono-bpi-f3 6.6.63 #2.2.7.2+20250925145424 SMP PREEMPT Thu Sep 25 10:12:29 UTC 2025 riscv64",
+  "cpu_model": "Spacemit(R) X60",
+  "isa_flags_summary": "rv64imafdcv_zicbom_zicboz_zicntr_zicond_zicsr_zifencei_zihintpause_zihpm_zfh_zfhmin_zca_zcd_zba_zbb_zbc_zbs_zkt_zve32f_zve32x_zve64d_zve64f_zve64x_zvfh_zvfhmin_zvkt_sscofpmf_sstc_svinval_svnapot_svpbmt_ime",
+  "caches": [
+    {
+      "level": 1,
+      "type": "Instruction",
+      "size": "32K",
+      "ways_of_associativity": 4,
+      "coherency_line_size": 64
+    },
+    {
+      "level": 1,
+      "type": "Data",
+      "size": "32K",
+      "ways_of_associativity": 4,
+      "coherency_line_size": 64
+    },
+    {
+      "level": 2,
+      "type": "Unified",
+      "size": "512K",
+      "ways_of_associativity": 16,
+      "coherency_line_size": 64
+    }
+  ],
+  "governor": "ondemand",
+  "freq_khz_start": 1228800,
+  "freq_khz_end": 1600000,
+  "pin_core": 1,
+  "taskset_used": true,
+  "platform": "rvv_x60",
+  "platform_tag": "x60",
+  "compiler_cmd": "g++",
+  "compiler_version_full": "g++ (RISCstar Toolchain 15.2-r1) 15.2.0",
+  "cxx_flags_effective": " -O3 -ffast-math -finline-functions -funroll-loops -fno-semantic-interposition -falign-functions=64 -falign-loops=32 -march=rv64gcv_zvl256b_zicbop -mrvv-vector-bits=zvl ",
+  "fastmath": true,
+  "precision": "fp64",
+  "crr_only": true,
+  "alpha": 1.0,
+  "beta": 0.0,
+  "fastpath": true,
+  "c_cold": true,
+  "num_runs": 3,
+  "repetitions": 15,
+  "sizes": [
+    [
+      128,
+      1250000,
+      125000
+    ],
+    [
+      256,
+      625000,
+      62500
+    ],
+    [
+      384,
+      416666,
+      41666
+    ]
+  ],
+  "kernels": [
+    "mippv2_a100_mr7_nr4_pipe_crr",
+    "blis_native"
+  ],
+  "cooldown_sec": 2.0,
+  "throttle_warnings": [
+    "CPU freq dropped 18.6% (1228 \u2192 1000 MHz) \u2014 possible thermal throttling",
+    "CPU freq dropped 18.6% (1228 \u2192 1000 MHz) \u2014 possible thermal throttling",
+    "CPU freq dropped 18.6% (1228 \u2192 1000 MHz) \u2014 possible thermal throttling"
+  ]
+}
