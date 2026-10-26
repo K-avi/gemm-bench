@@ -10,9 +10,9 @@ Ce document trace l'avancement phase par phase du plan d'implémentation paper-g
 - **Fichiers modifiés / créés** :
   - `cmake/build_info.h.in` : template de métadonnées de build dans `GEMMBench::build_info`.
   - `cmake/gen_build_info.cmake` : script CMake exécuté à chaque build via custom target pour inspecter git (`rev-parse HEAD`, `status --porcelain`), les flags effectifs, le target BLIS et fastmath, avec mise à jour atomique `copy_if_different`.
-  - [CMakeLists.txt](file:///home/ivan/Files/projets/gemm_bench/CMakeLists.txt) : intégration de la cible `gemmbench_build_info`, inclusion de `${CMAKE_BINARY_DIR}/generated`, dépendance de `GemmBench` et `GemmBenchTests`.
-  - [include/BenchConfig.h](file:///home/ivan/Files/projets/gemm_bench/include/BenchConfig.h) : option CLI `--build-info` affichant chaque champ clé=valeur + `compiler_macro_version=__VERSION__`, sortie immédiate `exit(0)`.
-  - [tests/CMakeLists.txt](file:///home/ivan/Files/projets/gemm_bench/tests/CMakeLists.txt) : ajout de la dépendance vers `gemmbench_build_info`.
+  - [CMakeLists.txt](../CMakeLists.txt) : intégration de la cible `gemmbench_build_info`, inclusion de `${CMAKE_BINARY_DIR}/generated`, dépendance de `GemmBench` et `GemmBenchTests`.
+  - [include/BenchConfig.h](../include/BenchConfig.h) : option CLI `--build-info` affichant chaque champ clé=valeur + `compiler_macro_version=__VERSION__`, sortie immédiate `exit(0)`.
+  - [tests/CMakeLists.txt](../tests/CMakeLists.txt) : ajout de la dépendance vers `gemmbench_build_info`.
 - **Commandes de vérification** :
   - `cmake -B build_check -S . -DCMAKE_BUILD_TYPE=Release && cmake --build build_check -j`
   - `./build_check/GemmBench --build-info` : commit complet, flags, statut dirty, version compilateur affichés correctement.
@@ -23,7 +23,7 @@ Ce document trace l'avancement phase par phase du plan d'implémentation paper-g
 ### P1.b — Manifeste `meta.json` par CSV + garde-fous
 - **Fichiers modifiés / créés** :
   - `tools/write_run_manifest.py` : script stdlib générant un JSON conforme au schéma v1 (horodatage UTC ISO 8601, sha256 du binaire, parsed `--build-info`, topologie caches sysfs `/sys/devices/system/cpu/cpu*/cache/index*`, gouverneur, fréquences start/end, uname, modèle CPU, flags ISA, flags compilateur, etc.).
-  - [run_benchmarks.sh](file:///home/ivan/Files/projets/gemm_bench/run_benchmarks.sh) :
+  - [run_benchmarks.sh](../run_benchmarks.sh) :
     - Garde-fou `--allow-dirty` (défaut `false`) : bloque dès le démarrage si l'arbre de travail a des modifications suivies.
     - Garde-fou `--allow-stale-binary` (défaut `false`) : vérifie avant le benchmark que le commit du binaire correspond exactement à `git rev-parse HEAD`.
     - Colonne CSV `Commit` ajoutée en dernière position.
@@ -40,14 +40,14 @@ Ce document trace l'avancement phase par phase du plan d'implémentation paper-g
 
 ### P2.a — C++ : export des échantillons bruts
 - **Fichiers modifiés** :
-  - [include/BenchConfig.h](file:///home/ivan/Files/projets/gemm_bench/include/BenchConfig.h) : ajout des champs `raw_out` et `run_id`, parsing des options CLI `--raw-out` et `--run-id`.
-  - [src/main.cpp](file:///home/ivan/Files/projets/gemm_bench/src/main.cpp) :
+  - [include/BenchConfig.h](../include/BenchConfig.h) : ajout des champs `raw_out` et `run_id`, parsing des options CLI `--raw-out` et `--run-id`.
+  - [src/main.cpp](../src/main.cpp) :
     - `BenchmarkStats` : conservation des vecteurs `samples_s`, `samples_cyc`, `samples_ins` copiés par `compute_stats`.
     - Fonction `exportRawSamples` : écriture en append format `%.12g` des métriques par itération avec en-tête `Kernel,M,N,K,Alpha,Beta,Fastpath,CCold,Precision,RunId,Rep,Time_s,Cycles,Instructions`.
 
 ### P2.b — Script : conservation de tous les runs et sélection médiane
 - **Fichiers modifiés** :
-  - [run_benchmarks.sh](file:///home/ivan/Files/projets/gemm_bench/run_benchmarks.sh) :
+  - [run_benchmarks.sh](../run_benchmarks.sh) :
     - Passage de `--raw-out "${TMP_RAW}" --run-id "${run_idx}"` à chaque invocation.
     - Publication atomique de `${CSV%.csv}.raw.csv`.
     - Sélection du run à médiane `floor(NUM_RUNS / 2)` au lieu du meilleur temps.
@@ -65,7 +65,7 @@ Ce document trace l'avancement phase par phase du plan d'implémentation paper-g
 ## P3 — Correctif des itérations en mode CRR + K=384
 
 - **Fichiers modifiés** :
-  - [run_benchmarks.sh](file:///home/ivan/Files/projets/gemm_bench/run_benchmarks.sh) :
+  - [run_benchmarks.sh](../run_benchmarks.sh) :
     - Fonction `crr_iters_for_k` : `iters = max(1000, 160000000 / K)` et `warmup = iters / 10`.
     - Utilisation systématique de cette mise à l'échelle pour `CRR_ONLY` (que les tailles soient spécifiées via `--sizes` ou par défaut).
     - Balayage par défaut CRR étendu à : `32 64 128 256 384 512 1024` (ajout de $K=384$).
@@ -197,8 +197,8 @@ native,blis_native,6,8,128,1,0,3.823231144e-07,3.722569152e-07,6.706005552e-07,1
 
 ### P4.a — Câblage `--no-fastpath` dans les scripts
 - **Fichiers modifiés** :
-  - [run_benchmarks.sh](file:///home/ivan/Files/projets/gemm_bench/run_benchmarks.sh) : option `--no-fastpath` relayée à `EXTRA_BENCH_ARGS` ; insertion du suffixe `_nofp` dans `file_suffix` ; métadonnée `--fastpath` dans l'appel `write_run_manifest.py` ; colonne `Fastpath` (0 ou 1) ajoutée au CSV après `NumRuns`.
-  - [tools/run_cluster_benchmarks.sh](file:///home/ivan/Files/projets/gemm_bench/tools/run_cluster_benchmarks.sh) : option `--no-fastpath` relayée dans `bench_flags`.
+  - [run_benchmarks.sh](../run_benchmarks.sh) : option `--no-fastpath` relayée à `EXTRA_BENCH_ARGS` ; insertion du suffixe `_nofp` dans `file_suffix` ; métadonnée `--fastpath` dans l'appel `write_run_manifest.py` ; colonne `Fastpath` (0 ou 1) ajoutée au CSV après `NumRuns`.
+  - [tools/run_cluster_benchmarks.sh](../tools/run_cluster_benchmarks.sh) : option `--no-fastpath` relayée dans `bench_flags`.
 - **Commandes de vérification** :
   - `./run_benchmarks.sh avx2 --crr -k blis_native --sizes "128" -r 3 --runs 2 --no-fastpath -o test_nofp --allow-dirty gcc`
   - Fichier produit : `results/gemm_results_test_nofp_crr_nofp_gcc.csv`, avec `Fastpath=0`.
@@ -207,15 +207,15 @@ native,blis_native,6,8,128,1,0,3.823231144e-07,3.722569152e-07,6.706005552e-07,1
 
 ### P4.b — Mode C froid (`--c-cold`)
 - **Fichiers modifiés / créés** :
-  - [include/ColdCPool.h](file:///home/ivan/Files/projets/gemm_bench/include/ColdCPool.h) : classe RAII `ColdCPool<T>` allouant un buffer aligné 64 B de $P \times \text{stride\_bytes}$, avec $P = 2^{\lceil \log_2(\dots) \rceil} \ge 2$, stride avec décalage de 64 B pour casser les conflits d'associativité de cache, initialisation conditionnelle (zéros si $\beta=0$ ou recopie de tuile).
-  - [include/BenchConfig.h](file:///home/ivan/Files/projets/gemm_bench/include/BenchConfig.h) : options `--c-cold` et `--c-pool-mib <N>` (défaut 256 MiB).
-  - [src/main.cpp](file:///home/ivan/Files/projets/gemm_bench/src/main.cpp) :
+  - [include/ColdCPool.h](../include/ColdCPool.h) : classe RAII `ColdCPool<T>` allouant un buffer aligné 64 B de $P \times \text{stride\_bytes}$, avec $P = 2^{\lceil \log_2(\dots) \rceil} \ge 2$, stride avec décalage de 64 B pour casser les conflits d'associativité de cache, initialisation conditionnelle (zéros si $\beta=0$ ou recopie de tuile).
+  - [include/BenchConfig.h](../include/BenchConfig.h) : options `--c-cold` et `--c-pool-mib <N>` (défaut 256 MiB).
+  - [src/main.cpp](../src/main.cpp) :
     - `measureKernel` : paramètre `const std::vector<T*> *c_pool = nullptr`. Boucle de mesure dédoublée via `if (c_pool)` pour garantir que le chemin chaud (`!c_pool`) conserve une génération de code strictement inchangée sans instruction superflue ni branche dans la boucle critique.
     - Export `CCold` (1 ou 0) dans `exportRawSamples`.
     - Contrôle NaN/Inf post-mesure sur la dernière tuile active du pool avec restauration RAII du pointeur d'origine `C.data`.
-  - [tests/GemmUKernelTest.cpp](file:///home/ivan/Files/projets/gemm_bench/tests/GemmUKernelTest.cpp) : test unitaire `Cold-C pool produces identical results` validant bit-à-bit l'identité du résultat entre tuile chaude et tuile du pool froid pour `mippv2_x60_mr6_nr4_fmaddi_crr` et `blis_native`.
-  - [run_benchmarks.sh](file:///home/ivan/Files/projets/gemm_bench/run_benchmarks.sh) : option `--c-cold`, suffixe `_coldc` (ordre : `_crr[_strict][_nofp][_coldc][_fp32]`), colonne `CCold` (0/1) après `Fastpath`.
-  - [tools/run_cluster_benchmarks.sh](file:///home/ivan/Files/projets/gemm_bench/tools/run_cluster_benchmarks.sh) : option `--c-cold` relayée dans `bench_flags`.
+  - [tests/GemmUKernelTest.cpp](../tests/GemmUKernelTest.cpp) : test unitaire `Cold-C pool produces identical results` validant bit-à-bit l'identité du résultat entre tuile chaude et tuile du pool froid pour `mippv2_x60_mr6_nr4_fmaddi_crr` et `blis_native`.
+  - [run_benchmarks.sh](../run_benchmarks.sh) : option `--c-cold`, suffixe `_coldc` (ordre : `_crr[_strict][_nofp][_coldc][_fp32]`), colonne `CCold` (0/1) après `Fastpath`.
+  - [tools/run_cluster_benchmarks.sh](../tools/run_cluster_benchmarks.sh) : option `--c-cold` relayée dans `bench_flags`.
 - **Commandes de vérification** :
   - `ctest --test-dir build` : 34/34 tests passés avec succès.
   - Test comparatif chaud vs froid :

@@ -870,7 +870,11 @@ def main():
     except Exception:
         k_window = (128, 384)
 
-    default_input = "gemm-bench-results/blis_comparison_fp32" if args.fp32 else "gemm-bench-results/blis_comparison"
+    default_input = (
+        "gemm-bench-results/paper_v1/default"
+        if Path("gemm-bench-results/paper_v1/default").is_dir()
+        else ("gemm-bench-results/blis_comparison_fp32" if args.fp32 else "gemm-bench-results/blis_comparison")
+    )
     input_str = args.input_dir if args.input_dir else default_input
     input_path = Path(input_str)
 

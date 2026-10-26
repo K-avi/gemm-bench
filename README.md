@@ -48,13 +48,12 @@ The tables below present execution unit pipeline saturation with rated system th
 
 | SIMD | Microarchitecture | CPU Model | Champion Kernel | Tile ($M_R \times N_R$) | Comp | Pipe Saturation (%) | FLOP/cycle | $f_{\text{eff}}$ (GHz) | $f_{\text{peak}}$ (GHz) | Achieved (GFLOP/s) | Peak Theo (GFLOP/s) | % Peak Theo |
 |:---|:---|:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| AVX512 | AMD Zen 5 Strix Point | Ryzen AI 9 HX 370 | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | 4x32 | gcc | **100.0%** | 16.00 / 16 | 5.10 | 5.16 | 81.6 | 82.5 | 98.9% |
-| AVX512 | AMD Zen 4 | Ryzen 9 7945HX | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | 4x32 | gcc | **99.7%** | 15.95 / 16 | 5.35 | 5.46 | 85.3 | 87.4 | 97.6% |
-| AVX2 | Intel Meteor Lake | Core Ultra 9 185H | `mippv2_meteorlake_mr4_nr3_crr` | 4x12 | clang | **96.5%** | 15.43 / 16 | 4.77 | 4.78 | 73.6 | 76.5 | 96.2% |
-| AVX2 | Intel Skylake | i5-6200U | `mippv2_meteorlake_mr4_nr3_crr` | 4x12 | clang | **96.2%** | 15.39 / 16 | 2.28 | 2.30 | 35.1 | 36.8 | 95.5% |
+| AVX512 | AMD Zen 5 Strix Point | Ryzen AI 9 HX 370 | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | 4x32 | gcc | **100.0%** | 16.00 / 16 | 5.09 | 5.16 | 81.4 | 82.5 | 98.6% |
+| AVX512 | AMD Zen 4 | Ryzen 9 7945HX | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | 4x32 | gcc | **99.3%** | 15.89 / 16 | 5.37 | 5.46 | 85.3 | 87.4 | 97.6% |
+| AVX2 | Intel Meteor Lake | Core Ultra 9 185H | `mippv2_meteorlake_mr4_nr3_crr` | 4x12 | clang | **97.2%** | 15.55 / 16 | 4.99 | 4.78 | 77.5 | 76.5 | 101.4% |
 | NEON | Apple M1 | Firestorm | `mippv2_x60_mr6_nr4_fmaddi_crr` | 6x8 | gcc | **99.6%** | 15.93 / 16 | 3.03 | 3.04 | 48.3 | 48.6 | 99.4% |
-| NEON | Raspberry Pi 5 | Cortex-A76 | `mippv2_a76_mr6_nr4_fmaddi_crr` | 6x8 | gcc | **99.1%** | 7.93 / 8 | 2.39 | 2.40 | 19.0 | 19.2 | 98.7% |
-| RVV | SpacemiT X100 | SpacemiT X100 | `mippv2_x100_register_blocked_apack4_crr` | 3x16 | clang | **96.5%** | 7.72 / 8 | 2.40 | 2.40 | 18.5 | 19.2 | 96.4% |
+| NEON | Raspberry Pi 5 | Cortex-A76 | `mippv2_a76_mr6_nr4_fmaddi_crr` | 6x8 | gcc | **99.0%** | 7.92 / 8 | 2.39 | 2.40 | 18.9 | 19.2 | 98.7% |
+| RVV | SpacemiT X100 | SpacemiT X100 | `mippv2_x100_register_blocked_apack4_crr` | 3x16 | clang | **96.8%** | 7.75 / 8 | 2.40 | 2.40 | 18.6 | 19.2 | 96.7% |
 | RVV | SpacemiT A100 | SpacemiT A100 | `mippv2_a100_mr7_nr2_lmul2_pipe_crr` | 7x64 | gcc | **83.7%** | 6.69 / 8 | 1.99 | 2.00 | 13.3 | 16.0 | 83.3% |
 | RVV | SpacemiT X60 | SpacemiT X60 | `mippv2_a100_mr7_nr4_pipe_crr` | 7x16 | clang | **58.1%** | 4.65 / 8 | 1.60 | 1.60 | 7.4 | 12.8 | 58.0% |
 
@@ -62,14 +61,14 @@ The tables below present execution unit pipeline saturation with rated system th
 
 | SIMD | Microarchitecture | CPU Model | Champion Kernel | Tile ($M_R \times N_R$) | Comp | Pipe Saturation (%) | FLOP/cycle | $f_{\text{eff}}$ (GHz) | $f_{\text{peak}}$ (GHz) | Achieved (GFLOP/s) | Peak Theo (GFLOP/s) | % Peak Theo |
 |:---|:---|:---|:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
-| AVX512 | AMD Zen 5 Strix Point | Ryzen AI 9 HX 370 | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | 4x64 | gcc | **100.0%** | 31.99 / 32 | 5.12 | 5.16 | 163.7 | 165.1 | 99.2% |
-| AVX512 | AMD Zen 4 | Ryzen 9 7945HX | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | 4x64 | gcc | **99.6%** | 31.87 / 32 | 5.42 | 5.46 | 172.7 | 174.8 | 98.8% |
-| AVX2 | Intel Meteor Lake | Core Ultra 9 185H | `mippv2_meteorlake_mr4_nr3_crr` | 4x24 | clang | **96.5%** | 30.89 / 32 | 4.74 | 4.78 | 146.5 | 153.0 | 95.8% |
+| AVX512 | AMD Zen 5 Strix Point | Ryzen AI 9 HX 370 | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | 4x64 | gcc | **99.9%** | 31.97 / 32 | 5.12 | 5.16 | 163.7 | 165.1 | 99.2% |
+| AVX512 | AMD Zen 4 | Ryzen 9 7945HX | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | 4x64 | gcc | **99.7%** | 31.89 / 32 | 5.42 | 5.46 | 172.9 | 174.8 | 98.9% |
+| AVX2 | Intel Meteor Lake | Core Ultra 9 185H | `mippv2_meteorlake_mr4_nr3_crr` | 4x24 | clang | **97.5%** | 31.19 / 32 | 5.07 | 4.78 | 158.0 | 153.0 | 103.3% |
 | NEON | Apple M1 | Firestorm | `mippv2_x60_mr6_nr4_fmaddi_crr` | 6x16 | gcc | **99.6%** | 31.87 / 32 | 3.03 | 3.04 | 96.6 | 97.2 | 99.4% |
-| NEON | Raspberry Pi 5 | Cortex-A76 | `mippv2_a76_mr6_nr4_fmaddi_crr` | 6x16 | gcc | **99.3%** | 15.89 / 16 | 2.39 | 2.40 | 38.0 | 38.4 | 98.9% |
-| RVV | SpacemiT X100 | SpacemiT X100 | `mippv2_x100_register_blocked_apack4_crr` | 3x32 | clang | **96.6%** | 15.45 / 16 | 2.40 | 2.40 | 37.0 | 38.4 | 96.4% |
-| RVV | SpacemiT A100 | SpacemiT A100 | `mippv2_a100_mr7_nr2_lmul2_pipe_crr` | 7x128 | clang | **76.4%** | 24.44 / 32 | 1.99 | 2.00 | 48.7 | 64.0 | 76.1% |
-| RVV | SpacemiT X60 | SpacemiT X60 | `mippv2_x60_mr6_nr4_fmaddi_crr` | 6x32 | clang | **64.2%** | 10.27 / 16 | 1.60 | 1.60 | 16.4 | 25.6 | 64.1% |
+| NEON | Raspberry Pi 5 | Cortex-A76 | `mippv2_a76_mr6_nr4_fmaddi_crr` | 6x16 | gcc | **99.2%** | 15.88 / 16 | 2.39 | 2.40 | 38.0 | 38.4 | 98.9% |
+| RVV | SpacemiT X100 | SpacemiT X100 | `mippv2_x100_register_blocked_apack4_crr` | 3x32 | clang | **97.0%** | 15.52 / 16 | 2.40 | 2.40 | 37.2 | 38.4 | 96.8% |
+| RVV | SpacemiT A100 | SpacemiT A100 | `mippv2_a100_mr7_nr2_lmul2_pipe_crr` | 7x128 | clang | **76.4%** | 24.45 / 32 | 1.99 | 2.00 | 48.7 | 64.0 | 76.1% |
+| RVV | SpacemiT X60 | SpacemiT X60 | `mippv2_x60_mr6_nr4_fmaddi_crr` | 6x32 | clang | **64.1%** | 10.26 / 16 | 1.60 | 1.60 | 16.4 | 25.6 | 64.0% |
 
 > [!NOTE]
 > **Zen 5 Mobile Datapath Ceiling:** Mobile Zen 5 (Strix Point / Ryzen AI 9 HX 370) implements dual 256-bit physical FMA datapaths (double-pumped 512-bit execution), establishing a physical ceiling of 16 DP / 32 SP FLOP/cycle (identical to Zen 4), rather than the 32 DP / 64 SP FLOP/cycle dual 512-bit pipes of desktop/server Zen 5.
@@ -261,14 +260,18 @@ All figures are generated as **SVG** graphics:
 `plot_results_crr.py` analyzes CRR micro-kernel benchmark results with automatic champion selection and FLOP/cycle efficiency. It can optionally generate side-by-side comparisons against RRR baselines:
 
 ```bash
-# Generate all FP64 CRR plots (auto-detects gemm-bench-results/crr/)
+# Generate all FP64 CRR plots (auto-detects gemm-bench-results/paper_v1/default/)
 python3 plot_results_crr.py --output plots_crr
 
-# Generate all FP32 CRR plots (auto-detects gemm-bench-results/crr_fp32/)
+# Generate all FP32 CRR plots (auto-detects gemm-bench-results/paper_v1/default/)
 python3 plot_results_crr.py --fp32 --output plots_crr_fp32
 
-# With side-by-side CRR vs RRR comparison
-python3 plot_results_crr.py --output plots_crr --compare-rrr gemm-bench-results
+# Generate MIPPv2 vs BLIS reports and plots for a variant
+python3 tools/compare_mippv2_blis.py --input-dir gemm-bench-results/paper_v1/default --plot
+python3 tools/compare_mippv2_blis.py --input-dir gemm-bench-results/paper_v1/default --fp32 --plot
+
+# Regenerate unified paper summary table
+python3 tools/make_paper_summary.py
 
 # Filter specific architectures
 python3 plot_results_crr.py --uarch zen4 m1 x100 --output plots_crr
@@ -294,14 +297,12 @@ python3 plot_results.py --input-dir gemm-bench-results --freq zen4=5.4,m1=3.0
 - **`plots_crr/` & `plots_crr_fp32/` (Primary — CRR Tile Layout, FP64 & FP32)**:
   - `cross_uarch_crr_flop_cycle_comparison.svg`: Compute density (FLOP/cycle) across architectures against hardware issue ceilings.
   - `cross_uarch_crr_efficiency_comparison.svg`: Pipeline saturation (% of theoretical peak GFLOP/s).
-  - `cross_uarch_crr_vs_rrr_comparison.svg`: Relative speedup of CRR over the legacy RRR baseline (with `--compare-rrr`).
   - `<simd>_<uarch>_crr_overview.svg`: Per-architecture scaling curves across $K \in [32..1024]$ and compilers.
   - `crr_hardware_summary_table.md`: Hardware execution and pipeline saturation summary table.
 
-- **`gemm-bench-results/blis_comparison/plots/` & `plots_blis_fp32/` (MIPPv2 vs BLIS Assembly, FP64 & FP32)**:
-  - `blis_vs_mippv2_ratio_comparison.svg`: Sustained throughput ratio (% of BLIS Peak).
-  - `blis_vs_mippv2_flop_per_cycle_comparison.svg`: Compute density comparison (FLOP/cycle vs theoretical limits).
-  - `blis_vs_mippv2_k_scaling_grid.svg`: Multi-architecture scaling curves across $K \in [32..1024]$.
+- **`gemm-bench-results/paper_v1/<variant>/plots_fp{64,32}/` & `plots_blis_fp32/` (MIPPv2 vs BLIS Assembly, FP64 & FP32)**:
+  - `blis_vs_mippv2_ratio_comparison.svg`: Matched-$K$ window geometric mean ratio (% of BLIS) with 95% bootstrap confidence intervals.
+  - `blis_vs_mippv2_k_scaling_grid.svg`: Multi-architecture scaling curves across $K \in [32..1024]$ with 95% bootstrap CI bands and L1d cache spill boundary (`†`).
 
 - **`plots/` (Legacy — RRR Baseline)**:
   - `cross_uarch_flop_cycle_comparison.svg`: Compute density (DP FLOP/cycle) across architectures.

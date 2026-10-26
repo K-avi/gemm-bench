@@ -180,6 +180,8 @@ def find_crr_csv_files(input_dir: Path, spec: UArchSpecCRR, is_fp32: bool = Fals
     for compiler in ["gcc", "clang"]:
         pattern = spec.csv_pattern.replace("{compiler}", compiler)
         for p in input_dir.glob("**/*.csv"):
+            if p.name.endswith(".raw.csv") or p.name == "summary_metrics.csv":
+                continue
             # Ensure strict separation between FP32 and FP64 files
             if is_fp32 and "fp32" not in p.name.lower():
                 continue
@@ -1204,7 +1206,9 @@ def main() -> None:
     # 1. Determine input directory
     input_dir = args.input_dir
     if input_dir is None:
-        if is_fp32:
+        if Path("gemm-bench-results/paper_v1/default").is_dir():
+            input_dir = Path("gemm-bench-results/paper_v1/default")
+        elif is_fp32:
             if Path("gemm-bench-results/crr_fp32").is_dir():
                 input_dir = Path("gemm-bench-results/crr_fp32")
             elif Path("results_fp32/crr").is_dir():
@@ -1212,7 +1216,7 @@ def main() -> None:
             elif Path("results_fp32").is_dir():
                 input_dir = Path("results_fp32")
             else:
-                input_dir = Path("gemm-bench-results/crr_fp32")
+                input_dir = Path("gemm-bench-results/paper_v1/default")
         elif Path("gemm-bench-results/crr").is_dir():
             input_dir = Path("gemm-bench-results/crr")
         elif Path("results/crr").is_dir():
@@ -1220,7 +1224,7 @@ def main() -> None:
         elif Path("results").is_dir():
             input_dir = Path("results")
         else:
-            input_dir = Path("gemm-bench-results")
+            input_dir = Path("gemm-bench-results/paper_v1/default")
     else:
         if "fp32" in str(input_dir).lower():
             is_fp32 = True
