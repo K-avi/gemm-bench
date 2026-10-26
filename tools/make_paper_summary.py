@@ -44,12 +44,15 @@ def format_ratio_cell(ratio_pct: Optional[float], parity_label: Optional[str]) -
     
     label_short = ""
     if parity_label:
-        if "parity" in parity_label.lower():
+        pl = parity_label.lower()
+        if pl.startswith("parity"):
             label_short = " ≈"
-        elif "mippv2_faster" in parity_label.lower() or "mippv2" in parity_label.lower():
+        elif pl.startswith("mipp_faster") or pl.startswith("mippv2_faster"):
             label_short = " +"
-        elif "blis_faster" in parity_label.lower():
+        elif pl.startswith("blis_faster"):
             label_short = " -"
+        elif pl.startswith("mixed"):
+            label_short = " ±"
     
     return f"**{ratio_pct:.1f}%**{label_short}"
 
@@ -170,7 +173,7 @@ def make_summary(
         f"> - **Analysis Window:** Summary ratios represent $\\text{{geomean}}(R_K)$ across panel depths $K \\in [{k_window[0]}, {k_window[1]}]$.",
         "> - **Ratio Definition:** $R_K = \\frac{\\text{FLOP/cyc}_{\\text{MIPPv2}, K}}{\\text{FLOP/cyc}_{\\text{BLIS}, K}}$. Values $>100\\%$ indicate MIPPv2 advantage.",
         "> - **Pre-registered Champions:** MIPPv2 champions are locked prior to measurement in `uarch_config.json` (no post-hoc argmax).",
-        "> - **Parity Notation:** `≈` indicates parity within $\\pm 2\\%$ across the window; `+` indicates MIPPv2 advantage; `-` indicates BLIS advantage.",
+        "> - **Parity Notation:** `≈` indicates parity (95% CI overlaps $[0.98, 1.02]$ at all $K$ in window); `+` indicates strict MIPPv2 advantage ($\\text{CI}_{\\text{low}} > 1.02$ at all $K$); `-` indicates strict BLIS advantage ($\\text{CI}_{\\text{high}} < 0.98$ at all $K$); `±` indicates a mixed regime across $K$ in the window (e.g. transition between $>2\\%$ advantage and parity).",
         "",
         "| Platform | Compiler | Prec. | MIPPv2 Champion | Default | No-FastPath | Cold-C | Strict IEEE (FP32) |",
         "| :--- | :--- | :---: | :--- | :---: | :---: | :---: | :---: |",
@@ -224,9 +227,10 @@ def make_summary(
         "",
         "## 4. Threats to Validity",
         "",
-        "1. **Isolated Micro-Kernel Scope:** Measurements focus strictly on the computational GEMM micro-kernel ($C_{MR \\times NR} += A_{MR \\times K} \\cdot B_{K \\times NR}$), operating on pre-packed panel buffers in L1/L2 cache. This isolates vector compute density from macro-kernel cache partitioning (GotoBLIS 5-loop framework), as established by Goto & van de Geijn (2008).",
-        "2. **Asymmetric Tile Geometries:** BLIS reference kernels employ specific microarchitecture-tuned register blockings (e.g. $6 \\times 16$ on AVX-512, $8 \\times 4$ on AVX2, $8 \\times 12$ on NEON), whereas MIPPv2 champions use symmetric or platform-optimized register tilings ($4 \\times 4$ on AVX-512, $4 \\times 3$ on AVX2, $6 \\times 4$ on NEON).",
-        "3. **In-Order Core Sensitivity:** As demonstrated on SpacemiT X60, in-order processor pipelines exhibit extreme sensitivity to static instruction interleaving and register allocation, where handcrafted assembly can exploit pipeline latency quirks inaccessible to general-purpose vector C++ compilers.",
+        "1. **Isolated Micro-Kernel Scope:** Measurements focus strictly on the computational GEMM micro-kernel ($C_{MR \\times NR} += A_{MR \\times K} \\cdot B_{K \\times NR}$), operating on pre-packed panel buffers in L1/L2 cache. This isolates vector compute density from macro-kernel cache partitioning (GotoBLAS/BLIS 5-loop framework), as established by Goto & van de Geijn (2008) and Van Zee & van de Geijn (2015).",
+        "2. **Asymmetric Tile Geometries:** BLIS reference kernels employ specific microarchitecture-tuned register blockings ($16 \\times 14$ DP / $32 \\times 12$ SP on AVX-512 `skx`, $6 \\times 8$ DP / $6 \\times 16$ SP on AVX2 `haswell`, $6 \\times 8$ DP / $8 \\times 12$ SP on NEON `armv8a`, and $8 \\times 14$ DP / $16 \\times 14$ SP on RVV `x60`), whereas MIPPv2 champions use platform-parameterized register tilings ($4 \\times 4$ vectors on AVX-512, $4 \\times 3$ on AVX2, $6 \\times 4$ on NEON, $3 \\times 2$ `apack4` on X100, $7 \\times 2$ `lmul2` on A100). Working-set footprints at each $K$ and L1d cache spill boundaries (`†`) are tracked in the per-variant analytical reports.",
+        "3. **Pre-Registered Champion Selection:** To eliminate post-hoc selection bias across exploratory kernel variants, a single MIPPv2 champion per target and precision is locked in `uarch_config.json` prior to the benchmark campaign. Post-hoc best-compiler envelopes (`max(gcc, clang)`) are isolated in report appendices.",
+        "4. **RISC-V Baselines & In-Order Core Sensitivity:** Upstream BLIS lacks a native 1024-bit RVV micro-kernel for SpacemiT A100 and an out-of-order tuned micro-kernel for SpacemiT X100; both evaluate Stepan Nassyr's 256-bit X60 assembly micro-kernel. On the dual-issue in-order X60 core, static assembly scheduling exploits pipeline latencies inaccessible to general-purpose C++ compilers. On SpacemiT K3 (`a100`), threads are migrated to the AI core cluster (`cpu8..15`) via `/proc/set_ai_thread`; primary `FLOP/cycle` ratios are derived directly from per-thread hardware cycle counters (`PERF_COUNT_HW_CPU_CYCLES`).",
     ])
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

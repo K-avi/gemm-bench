@@ -109,7 +109,10 @@ def get_expected_champion(
 
 def load_dataset(input_dir: Path) -> pd.DataFrame:
     """Loads all benchmark CSV files in input_dir and annotates metadata."""
-    csv_files = sorted([f for f in input_dir.glob("*.csv") if not f.name.endswith(".raw.csv")])
+    csv_files = sorted([
+        f for f in input_dir.glob("*.csv")
+        if not f.name.endswith(".raw.csv") and f.name != "summary_metrics.csv"
+    ])
     if not csv_files:
         print(f"Warning: No CSV files found in {input_dir}", file=sys.stderr)
         return pd.DataFrame()
@@ -176,6 +179,7 @@ def analyze_dataset(
     raw_dir: Optional[Path] = None,
     legacy_argmax: bool = False,
     variant_filter: str = "default",
+    precision_filter: Optional[str] = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame, Dict]:
     """
     Processes the benchmark dataframe with matched-K analysis and bootstrap CIs:
@@ -197,6 +201,11 @@ def analyze_dataset(
 
     if variant_filter != "all":
         df = df[df["Variant"] == variant_filter]
+        if df.empty:
+            return pd.DataFrame(), pd.DataFrame(), {}
+
+    if precision_filter in ("fp32", "fp64"):
+        df = df[df["Precision"] == precision_filter]
         if df.empty:
             return pd.DataFrame(), pd.DataFrame(), {}
 
@@ -348,12 +357,18 @@ def analyze_dataset(
             r_geomean = geomean(w_ratios)
             r_min = float(np.min(w_ratios))
             r_max = float(np.max(w_ratios))
+            valid_ci_low = [x for x in w_ci_low if not np.isnan(x)]
+            valid_ci_high = [x for x in w_ci_high if not np.isnan(x)]
+            ci_low_min = float(np.min(valid_ci_low)) if (w_ci_avail and valid_ci_low) else r_min
+            ci_high_max = float(np.max(valid_ci_high)) if (w_ci_avail and valid_ci_high) else r_max
             n_k = len(window_entries)
             parity_label = determine_parity_label(w_ratios, w_ci_low, w_ci_high, w_ci_avail)
         else:
             r_geomean = float("nan")
             r_min = float("nan")
             r_max = float("nan")
+            ci_low_min = float("nan")
+            ci_high_max = float("nan")
             n_k = 0
             parity_label = "no_data"
 
@@ -377,6 +392,8 @@ def analyze_dataset(
             "Ratio_geomean": r_geomean,
             "Ratio_min": r_min,
             "Ratio_max": r_max,
+            "CI_low_min": ci_low_min,
+            "CI_high_max": ci_high_max,
             "N_K": n_k,
             "Parity_label": parity_label,
             "Legacy_PeakOverPeak_pct": legacy_pop_pct,
@@ -415,6 +432,10 @@ def plot_blis_ratio_comparison(
         return
 
     sub_df = summary_df.copy()
+    if "Precision" in sub_df.columns:
+        target_prec = "fp32" if is_fp32 else "fp64"
+        if (sub_df["Precision"] == target_prec).any():
+            sub_df = sub_df[sub_df["Precision"] == target_prec]
     fig = plt.figure(figsize=(13.5, 9.0))
     gs = fig.add_gridspec(2, 1, height_ratios=[6.5, 2.2], hspace=0.35)
 
@@ -449,10 +470,12 @@ def plot_blis_ratio_comparison(
         val = (r["Ratio_geomean"] * 100.0) if not np.isnan(r["Ratio_geomean"]) else 0.0
         ratios.append(val)
 
-        r_min = (r["Ratio_min"] * 100.0) if not np.isnan(r["Ratio_min"]) else val
-        r_max = (r["Ratio_max"] * 100.0) if not np.isnan(r["Ratio_max"]) else val
-        err_low.append(max(0.0, val - r_min))
-        err_high.append(max(0.0, r_max - val))
+        ci_l_raw = r.get("CI_low_min", r["Ratio_min"])
+        ci_h_raw = r.get("CI_high_max", r["Ratio_max"])
+        ci_l = (ci_l_raw * 100.0) if not np.isnan(ci_l_raw) else val
+        ci_h = (ci_h_raw * 100.0) if not np.isnan(ci_h_raw) else val
+        err_low.append(max(0.0, val - ci_l))
+        err_high.append(max(0.0, ci_h - val))
 
     xerr = [err_low, err_high] if len(main_rows) > 0 else None
 
@@ -511,7 +534,7 @@ def plot_blis_ratio_comparison(
     ax_a100.set_title("SpacemiT A100 VLEN=1024b Portability Study", fontsize=11.5, pad=8)
 
     fig.suptitle(f"GEMMBench — MIPPv2 vs BLIS Matched-K Geometric Mean Ratio ({prec_label}, {variant_name})", fontsize=14, fontweight="bold", y=0.985)
-    fig.text(0.5, 0.005, "Bar represents Ratio_geomean; error whiskers show [Ratio_min, Ratio_max] over K window", ha="center", fontsize=8.5, color="#64748b", fontstyle="italic")
+    fig.text(0.5, 0.005, "Bar represents Ratio_geomean; error whiskers show [min CI_low, max CI_high] over K window", ha="center", fontsize=8.5, color="#64748b", fontstyle="italic")
 
     svg_path = out_dir / "blis_vs_mippv2_ratio_comparison.svg"
     fig.savefig(svg_path, bbox_inches="tight")
@@ -656,7 +679,7 @@ def format_markdown_report(
     lines.append("Empirical comparison of sustained in-register compute density and throughput between MIPPv2 champions")
     lines.append(f"and hand-tuned BLIS assembly micro-kernels across target microarchitectures in {prec_str}.\n")
 
-    lines.append("## 1. Summary: Matched-$K$ Window Ratio ($K \\in [{k_min}, {k_max}]$)\n")
+    lines.append(f"## 1. Summary: Matched-$K$ Window Ratio ($K \\in [{k_min}, {k_max}]$, Variant: `{variant_name}`)\n")
     lines.append("> [!NOTE]")
     lines.append("> **Statistical Methodology & Reporting Rules:**")
     lines.append(f"> - **Pre-registered Champions:** MIPPv2 champions are locked prior to measurement in `uarch_config.json`; no post-hoc argmax across kernels.")
@@ -874,11 +897,15 @@ def main():
         k_window=k_window,
         legacy_argmax=args.legacy_argmax_champion,
         variant_filter=args.variant,
+        precision_filter="fp32" if args.fp32 else "fp64",
     )
 
     plot_dir_path = None
     if args.plot or args.plot_dir:
-        default_plot_dir = Path("plots_blis_fp32") if args.fp32 else (input_path / "plots")
+        if args.input_dir:
+            default_plot_dir = input_path / ("plots_fp32" if args.fp32 else "plots_fp64")
+        else:
+            default_plot_dir = Path("plots_blis_fp32") if args.fp32 else (input_path / "plots")
         plot_dir_path = Path(args.plot_dir) if args.plot_dir else default_plot_dir
         print(f"\nGenerating publication-grade comparative figures in {plot_dir_path}...")
         enable_png = not args.no_png
@@ -909,7 +936,7 @@ def main():
         print(f"\n✓ Markdown report written to {out_p}")
 
     out_csv_path = args.output_csv
-    if not out_csv_path and args.plot and not args.fp32:
+    if not out_csv_path and args.plot and not args.fp32 and not args.input_dir:
         out_csv_path = str(input_path / "summary_metrics.csv")
 
     if out_csv_path and not summary_df.empty:

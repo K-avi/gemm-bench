@@ -102,26 +102,42 @@ To establish an empirical baseline against industry-standard hand-tuned kernels,
 
 #### Synthesis Table: Matched-$K$ Window Ratio ($K \in [128, 384]$)
 
-The table below presents the geometric mean throughput ratio ($\text{geomean}(R_K)$) evaluated at identical panel depths $K \in [128, 384]$ over 3 independent process runs $\times$ 15 repetitions:
+The table below presents the geometric mean throughput ratio ($\text{geomean}(R_K)$) evaluated at identical panel depths $K \in [128, 384]$ over 3 independent process runs $\times$ 15 repetitions (`≈`: 95% CI overlaps $[0.98, 1.02]$ at all $K$; `+`: strict MIPPv2 advantage $\text{CI}_{\text{low}} > 1.02$ at all $K$; `-`: strict BLIS advantage $\text{CI}_{\text{high}} < 0.98$ at all $K$; `±`: mixed transition regime across $K$ in window):
 
-| Platform | Compiler | MIPPv2 Champion | FP64 Default | FP32 Default | FP32 Strict IEEE | Empirical Regime |
-| :--- | :---: | :--- | :---: | :---: | :---: | :--- |
-| **AMD Zen 5** | gcc | `firestorm_mr4_nr4_fmaddi_crr` | **100.5%** ≈ | **100.5%** ≈ | **100.5%** ≈ | Parity |
-| **AMD Zen 5** | clang | `firestorm_mr4_nr4_fmaddi_crr` | **100.5%** ≈ | **100.5%** ≈ | **100.5%** ≈ | Parity |
-| **AMD Zen 4** | gcc | `firestorm_mr4_nr4_fmaddi_crr` | **100.8%** ≈ | **100.9%** ≈ | **100.9%** ≈ | Parity |
-| **AMD Zen 4** | clang | `firestorm_mr4_nr4_fmaddi_crr` | **100.8%** ≈ | **100.6%** ≈ | **100.6%** ≈ | Parity |
-| **Intel Meteor Lake** | clang | `meteorlake_mr4_nr3_crr` | **99.5%** ≈ | **100.8%** ≈ | **100.8%** ≈ | Parity |
-| **Intel Meteor Lake** | gcc | `meteorlake_mr4_nr3_crr` | **91.2%** - | **98.6%** ≈ | **97.8%** | Parity (FP32) / BLIS Faster (FP64 GCC) |
-| **Apple M1** | gcc | `x60_mr6_nr4_fmaddi_crr` | **101.7%** | **101.8%** | **101.8%** | MIPPv2 +1.7–1.8% |
-| **Apple M1** | clang | `x60_mr6_nr4_fmaddi_crr` | **101.4%** | **101.5%** | **101.5%** | MIPPv2 +1.4–1.5% |
-| **Raspberry Pi 5** | gcc | `a76_mr6_nr4_fmaddi_crr` | **101.9%** | **102.1%** | **102.0%** | MIPPv2 +1.9–2.1% |
-| **Raspberry Pi 5** | clang | `a76_mr6_nr4_fmaddi_crr` | **101.7%** | **101.6%** | **101.6%** | MIPPv2 +1.6–1.7% |
-| **SpacemiT X100** | clang | `x100_register_blocked_apack4_crr` | **103.0%** | **102.5%** | **102.5%** | MIPPv2 +2.5–3.0% |
-| **SpacemiT X100** | gcc | `x100_register_blocked_apack4_crr` | **90.5%** - | **90.3%** - | **90.4%** - | BLIS Faster (GCC RVV scheduling) |
-| **SpacemiT A100** | gcc | `a100_mr7_nr2_lmul2_pipe_crr` | **367.3%** | **333.0%** | **336.0%** | MIPPv2 VLEN=1024 native scaling |
-| **SpacemiT A100** | clang | `a100_mr7_nr2_lmul2_pipe_crr` | **352.6%** | **359.6%** | **360.0%** | MIPPv2 VLEN=1024 native scaling |
-| **SpacemiT X60** | clang | `a100_mr7_nr4_pipe_crr` (DP) / `x60_mr6_nr4_fmaddi_crr` (SP) | **83.7%** - | **74.0%** - | **74.9%** - | BLIS Faster (dual-issue in-order asm) |
-| **SpacemiT X60** | gcc | `a100_mr7_nr4_pipe_crr` (DP) / `x60_mr6_nr4_fmaddi_crr` (SP) | **78.3%** - | **66.5%** - | **65.6%** - | BLIS Faster (dual-issue in-order asm) |
+| Platform | Compiler | Prec. | MIPPv2 Champion | Default | No-FastPath | Cold-C | Strict IEEE (FP32) |
+| :--- | :--- | :---: | :--- | :---: | :---: | :---: | :---: |
+| `zen4_avx512` | `gcc` | FP64 | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | **100.8%** ≈ | **100.6%** ≈ | **97.3%** ± | — |
+| `zen4_avx512` | `clang` | FP64 | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | **100.8%** ≈ | **100.7%** ≈ | **98.0%** ± | — |
+| `zen4_avx512` | `gcc` | FP32 | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | **100.9%** ≈ | **100.7%** ≈ | **99.6%** ≈ | **100.9%** ≈ |
+| `zen4_avx512` | `clang` | FP32 | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | **100.6%** ≈ | **100.7%** ≈ | **99.3%** ≈ | **100.6%** ≈ |
+| `zen5_avx512` | `gcc` | FP64 | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | **100.5%** ≈ | **100.5%** ≈ | **100.5%** ≈ | — |
+| `zen5_avx512` | `clang` | FP64 | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | **100.5%** ≈ | **100.5%** ≈ | **100.5%** ≈ | — |
+| `zen5_avx512` | `gcc` | FP32 | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | **100.5%** ≈ | **100.5%** ≈ | **100.6%** ≈ | **100.5%** ≈ |
+| `zen5_avx512` | `clang` | FP32 | `mippv2_firestorm_mr4_nr4_fmaddi_crr` | **100.5%** ≈ | **100.5%** ≈ | **100.5%** ≈ | **100.5%** ≈ |
+| `meteorlake_avx2` | `gcc` | FP64 | `mippv2_meteorlake_mr4_nr3_crr` | **91.2%** - | **91.1%** - | **91.2%** - | — |
+| `meteorlake_avx2` | `clang` | FP64 | `mippv2_meteorlake_mr4_nr3_crr` | **99.5%** ≈ | **99.5%** ≈ | **100.4%** ≈ | — |
+| `meteorlake_avx2` | `gcc` | FP32 | `mippv2_meteorlake_mr4_nr3_crr` | **98.6%** ≈ | **98.5%** ± | **96.1%** ± | **97.8%** ± |
+| `meteorlake_avx2` | `clang` | FP32 | `mippv2_meteorlake_mr4_nr3_crr` | **100.8%** ≈ | **100.8%** ≈ | **100.8%** ≈ | **100.8%** ≈ |
+| `m1_neon` | `gcc` | FP64 | `mippv2_x60_mr6_nr4_fmaddi_crr` | **101.7%** ± | **101.6%** ± | **101.8%** ± | — |
+| `m1_neon` | `clang` | FP64 | `mippv2_x60_mr6_nr4_fmaddi_crr` | **101.4%** ± | **101.5%** ± | **101.5%** ± | — |
+| `m1_neon` | `gcc` | FP32 | `mippv2_x60_mr6_nr4_fmaddi_crr` | **101.8%** ± | **101.8%** ± | **102.0%** ± | **101.8%** ± |
+| `m1_neon` | `clang` | FP32 | `mippv2_x60_mr6_nr4_fmaddi_crr` | **101.5%** ± | **101.5%** ± | **101.7%** ± | **101.5%** ± |
+| `rpi5_neon` | `gcc` | FP64 | `mippv2_a76_mr6_nr4_fmaddi_crr` | **101.9%** ± | **102.1%** ± | **102.1%** ± | — |
+| `rpi5_neon` | `clang` | FP64 | `mippv2_a76_mr6_nr4_fmaddi_crr` | **101.7%** ± | **101.5%** ± | **100.5%** ≈ | — |
+| `rpi5_neon` | `gcc` | FP32 | `mippv2_a76_mr6_nr4_fmaddi_crr` | **102.1%** ± | **102.0%** ± | **102.3%** ± | **102.0%** ± |
+| `rpi5_neon` | `clang` | FP32 | `mippv2_a76_mr6_nr4_fmaddi_crr` | **101.6%** ± | **101.6%** ± | **99.8%** ≈ | **101.6%** ± |
+| `x100_rvv` | `gcc` | FP64 | `mippv2_x100_register_blocked_apack4_crr` | **90.5%** - | **88.8%** - | **90.1%** - | — |
+| `x100_rvv` | `clang` | FP64 | `mippv2_x100_register_blocked_apack4_crr` | **103.0%** ± | **101.5%** ± | **105.9%** + | — |
+| `x100_rvv` | `gcc` | FP32 | `mippv2_x100_register_blocked_apack4_crr` | **90.3%** - | **89.6%** - | **90.5%** - | **90.4%** - |
+| `x100_rvv` | `clang` | FP32 | `mippv2_x100_register_blocked_apack4_crr` | **102.5%** ± | **102.6%** ± | **106.4%** + | **102.5%** ± |
+| `a100_rvv` | `gcc` | FP64 | `mippv2_a100_mr7_nr2_lmul2_pipe_crr` | **367.3%** + | **366.1%** + | **365.9%** + | — |
+| `a100_rvv` | `clang` | FP64 | `mippv2_a100_mr7_nr2_lmul2_pipe_crr` | **352.6%** + | **349.8%** + | **355.8%** + | — |
+| `a100_rvv` | `gcc` | FP32 | `mippv2_a100_mr7_nr2_lmul2_pipe_crr` | **333.0%** + | **333.0%** + | **336.1%** + | **336.0%** + |
+| `a100_rvv` | `clang` | FP32 | `mippv2_a100_mr7_nr2_lmul2_pipe_crr` | **359.6%** + | **359.8%** + | **367.5%** + | **360.0%** + |
+| `x60_rvv` | `gcc` | FP64 | `mippv2_a100_mr7_nr4_pipe_crr` | **78.3%** - | **79.6%** - | **80.4%** - | — |
+| `x60_rvv` | `clang` | FP64 | `mippv2_a100_mr7_nr4_pipe_crr` | **83.7%** - | **84.5%** - | **87.7%** - | — |
+| `x60_rvv` | `gcc` | FP32 | `mippv2_x60_mr6_nr4_fmaddi_crr` | **66.5%** - | **66.7%** - | **66.8%** - | **65.6%** - |
+| `x60_rvv` | `clang` | FP32 | `mippv2_x60_mr6_nr4_fmaddi_crr` | **74.0%** - | **72.8%** - | **74.9%** - | **74.9%** - |
 
 Detailed analytical reports with 95% bootstrap confidence intervals and working-set footprints:
 - [Default FP64 Report](gemm-bench-results/paper_v1/report_fp64_default.md) | [Default FP32 Report](gemm-bench-results/paper_v1/report_fp32_default.md)
@@ -136,11 +152,11 @@ Detailed analytical reports with 95% bootstrap confidence intervals and working-
 1. **Isolated Micro-Kernel Scope vs. Macro-Kernel Framework:**
    Measurements focus strictly on the computational GEMM micro-kernel ($C_{MR \times NR} += A_{MR \times K} \cdot B_{K \times NR}$) operating on pre-packed panel buffers residing in L1/L2 cache. This methodology follows Goto & van de Geijn (2008) and Van Zee & van de Geijn (2015), isolating vector compute density from macro-kernel cache partitioning, multi-threaded work distribution, and dynamic memory packing.
 2. **Asymmetric Tile Geometries & Cache Footprints:**
-   BLIS reference kernels employ specific microarchitecture-tuned register blockings (e.g. $16 \times 14$ on AVX-512, $6 \times 8$ on AVX2, $8 \times 12$ on NEON), whereas MIPPv2 champions use symmetric or platform-optimized register tilings ($4 \times 4$ on AVX-512, $4 \times 3$ on AVX2, $6 \times 4$ on NEON). As detailed in the reports, working set footprints differ across implementations and are marked with `†` when exceeding L1d cache boundaries.
-3. **Upstream BLIS Baseline Availability on RISC-V:**
-   Upstream BLIS provides no native 1024-bit vector microkernel for SpacemiT A100 nor an out-of-order tuned microkernel for SpacemiT X100. Both evaluate the 256-bit X60 community kernel by Stepan Nassyr, under-utilizing A100's wide 1024-bit VPU.
+   BLIS reference kernels employ specific microarchitecture-tuned register blockings ($16 \times 14$ DP / $32 \times 12$ SP on AVX-512 `skx`, $6 \times 8$ DP / $6 \times 16$ SP on AVX2 `haswell`, $6 \times 8$ DP / $8 \times 12$ SP on NEON `armv8a`, and $8 \times 14$ DP / $16 \times 14$ SP on RVV `x60`), whereas MIPPv2 champions use platform-parameterized register tilings ($4 \times 4$ vectors on AVX-512, $4 \times 3$ on AVX2, $6 \times 4$ on NEON, $3 \times 2$ `apack4` on X100, $7 \times 2$ `lmul2` on A100). As detailed in the reports, working set footprints differ across implementations and are marked with `†` when exceeding L1d cache boundaries.
+3. **Upstream BLIS Baseline Availability on RISC-V & SpacemiT K3 Scheduling:**
+   Upstream BLIS provides no native 1024-bit vector microkernel for SpacemiT A100 nor an out-of-order tuned microkernel for SpacemiT X100. Both evaluate the 256-bit X60 community kernel by Stepan Nassyr, under-utilizing A100's wide 1024-bit VPU. On SpacemiT K3 (`a100`), threads are migrated to the AI core cluster (`cpu8..15`) via `/proc/set_ai_thread`; primary `FLOP/cycle` ratios are derived directly from per-thread hardware cycle counters (`PERF_COUNT_HW_CPU_CYCLES`).
 4. **Pre-Registered Champion Selection:**
-   To guard against post-hoc selection bias, MIPPv2 champions are pre-registered prior to benchmarking in `uarch_config.json`. The post-hoc best-compiler envelope across GCC and Clang is reported strictly as a secondary reference in the report appendix.
+   To guard against post-hoc selection bias across exploratory kernel variants, MIPPv2 champions are pre-registered prior to benchmarking in `uarch_config.json`. The post-hoc best-compiler envelope across GCC and Clang is reported strictly as a secondary reference in the report appendix.
 
 ---
 

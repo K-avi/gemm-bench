@@ -1,247 +1,260 @@
 # GEMMBench — Comparative Analysis: MIPPv2 vs BLIS Reference Micro-Kernels (Single-Precision (FP32 / SGEMM))
 
+**Ablation Variant:** `default` | **Analysis Window:** $K \in [128, 384]$ (inclusive)
+
 Empirical comparison of sustained in-register compute density and throughput between MIPPv2 champions
 and hand-tuned BLIS assembly micro-kernels across target microarchitectures in Single-Precision (FP32 / SGEMM).
 
-## 1. Symmetric Microarchitectural Comparison (Direct Micro-Kernel Equivalents)
+## 1. Summary: Matched-$K$ Window Ratio ($K \in [128, 384]$, Variant: `default`)
 
 > [!NOTE]
-> **Methodological Scope:**
-> - **In-Register Scope:** This benchmark strictly measures in-register compute saturation ($M_R \times N_R \times K$) on hot L1 cache panels, isolating FMA pipeline throughput without end-to-end SGEMM cache blocking (GotoBLAS $J_C, P_C, I_C$), dynamic packing overheads, or fringe tiles.
-> - **Architectural Symmetry:** Evaluates targets where BLIS provides a native, ISA-matched microkernel (AVX-512, AVX2, NEON, RVV 256b).
-> - **Native Epilogue Layout Alignment:** Each microkernel is evaluated against its optimal hardware storage layout: MIPPv2 writes $C$ in row-major (`CRR`), while BLIS writes $C$ in native column-major (`CRC` on SKX, X60, and ARMv8A) to ensure both frameworks leverage contiguous vector stores and avoid scalar scatter/gather epilogue distortion.
-> - **Small-$K$ Epilogue & Prologue Specialization ($K=32, 64$):** By default, MIPPv2 microkernels use compile-time `FastPath` specialization ($\alpha=1, \beta=0$) that emits direct vector stores without $\alpha$ scaling or $\beta$ branch checks, whereas BLIS assembly microkernels execute runtime $\alpha/\beta$ epilogue scaling and unconditional prologue $C$-tile prefetches (e.g., 24 `prfm pldl1keep` instructions in `armv8a`). At $K=32$, this fixed prologue/epilogue instruction overhead accounts for the 25–35% throughput gap on ARMv8-A and AVX-512 (use `--no-fastpath` to evaluate MIPPv2 with runtime $\alpha/\beta$ epilogue).
-> - **L1d/L2 Working Set Boundary:** While $K \in [32, 128]$ fits entirely within L1d cache, $K \ge 256$ spills the packed panel $B$ ($W_B = K \times N_R \times 4\text{ bytes}$) into L2 cache (e.g. 64–256 KiB on AVX-512 with $N_R=64$), testing sustained L2 streaming throughput rather than pure in-register FMA saturation.
+> **Statistical Methodology & Reporting Rules:**
+> - **Pre-registered Champions:** MIPPv2 champions are locked prior to measurement in `uarch_config.json`; no post-hoc argmax across kernels.
+> - **Matched-K Ratios:** Ratios are strictly evaluated at identical panel depth $K$ ($R_K = \text{FLOP/cyc}_{\text{MIPP}, K} / \text{FLOP/cyc}_{\text{BLIS}, K}$).
+> - **Geometric Mean over Cache-Resident Window:** Summary ratio is $\text{geomean}(R_K)$ for $K \in [128, 384]$.
+> - **Separate Compiler Rows:** GCC and Clang are reported on distinct rows. Post-hoc best-compiler envelope is provided in the Appendix.
 
-| Microarchitecture | Compiler | Layout | MIPPv2 Champion | MIPPv2 (GFLOP/s) | BLIS (GFLOP/s) | **% of BLIS Peak** | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | Status |
-| :--- | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- |
-| `m1_neon` | `clang` | `CRR` | `x60_mr6_nr4_fmaddi_crr` | **96.55** | **96.11** | **100.5%** | 31.85 | 31.71 | 🟢 Parity (98–102%) |
-| `m1_neon` | `gcc` | `CRR` | `x60_mr6_nr4_fmaddi_crr` | **96.60** | **96.12** | **100.5%** | 31.87 | 31.71 | 🟢 Parity (98–102%) |
-| `meteorlake_avx2` | `clang` | `CRR` | `meteorlake_mr4_nr3_crr` | **158.32** | **158.41** | **99.9%** | 31.14 | 31.15 | 🟢 Parity (98–102%) |
-| `meteorlake_avx2` | `gcc` | `CRR` | `meteorlake_mr4_nr3_crr` | **153.76** | **157.40** | **97.7%** | 30.25 | 30.95 | 🟢 Near-Parity (≥95%) |
-| `rpi5_neon` | `clang` | `CRR` | `a76_mr6_nr4_fmaddi_crr` | **37.93** | **37.71** | **100.6%** | 15.86 | 15.77 | 🟢 Parity (98–102%) |
-| `rpi5_neon` | `gcc` | `CRR` | `a76_mr6_nr4_fmaddi_crr` | **37.99** | **37.71** | **100.7%** | 15.89 | 15.77 | 🟢 Parity (98–102%) |
-| `x100_rvv` | `clang` | `CRR` | `x100_register_blocked_apack4_crr` | **36.99** | **36.08*** | **102.5%** | 15.44 | 15.06 | 🔵 MIPPv2 (+2.5%) |
-| `x100_rvv` | `gcc` | `CRR` | `x100_register_blocked_apack4_crr` | **32.44** | **36.12*** | **89.8%** | 13.54 | 15.08 | 🔴 Delta (<90%) |
-| `x60_rvv` | `clang` | `CRR` | `x60_mr6_nr4_fmaddi_crr` | **16.40** | **21.48** | **76.4%** | 10.27 | 13.45 | 🔴 Delta (<90%) |
-| `x60_rvv` | `gcc` | `CRR` | `x60_mr6_nr4_fmaddi_crr` | **14.87** | **21.39** | **69.5%** | 9.31 | 13.39 | 🔴 Delta (<90%) |
-| `zen4_avx512` | `clang` | `CRR` | `firestorm_mr4_nr4_fmaddi_crr` | **173.28** | **171.62** | **101.0%** | 31.99 | 31.89 | 🟢 Parity (98–102%) |
-| `zen4_avx512` | `gcc` | `CRR` | `firestorm_mr4_nr4_fmaddi_crr` | **173.15** | **172.09** | **100.6%** | 31.93 | 31.88 | 🟢 Parity (98–102%) |
-| `zen5_avx512` | `clang` | `CRR` | `firestorm_mr4_nr4_fmaddi_crr` | **163.12** | **162.87** | **100.2%** | 31.99 | 31.96 | 🟢 Parity (98–102%) |
-| `zen5_avx512` | `gcc` | `CRR` | `firestorm_mr4_nr4_fmaddi_crr` | **163.84** | **162.91** | **100.6%** | 31.99 | 31.96 | 🟢 Parity (98–102%) |
-
-*\*Note: On SpacemiT X100 (RVV 256b, OOO dual-issue), BLIS runs the in-order X60 microkernel (`sgemm_x60_2vx14.c`).*
+| Microarchitecture | Compiler | Variant | Precision | MIPPv2 Champion | $N_K$ | **Ratio Geomean** | [Min, Max] | Parity Classification |
+| :--- | :--- | :---: | :---: | :--- | :---: | :---: | :---: | :--- |
+| `a100_rvv` | `clang` | `default` | `fp32` | `a100_mr7_nr2_lmul2_pipe_crr` | 3 | **359.6%** | [358.8%, 360.3%] | MIPPv2 Faster |
+| `a100_rvv` | `gcc` | `default` | `fp32` | `a100_mr7_nr2_lmul2_pipe_crr` | 3 | **333.0%** | [328.1%, 335.6%] | MIPPv2 Faster |
+| `m1_neon` | `clang` | `default` | `fp32` | `x60_mr6_nr4_fmaddi_crr` | 3 | **101.5%** | [100.8%, 102.4%] | Mixed Advantage |
+| `m1_neon` | `gcc` | `default` | `fp32` | `x60_mr6_nr4_fmaddi_crr` | 3 | **101.8%** | [101.0%, 103.0%] | Mixed Advantage |
+| `meteorlake_avx2` | `clang` | `default` | `fp32` | `meteorlake_mr4_nr3_crr` | 3 | **100.8%** | [100.5%, 101.2%] | Parity (±2% CI) |
+| `meteorlake_avx2` | `gcc` | `default` | `fp32` | `meteorlake_mr4_nr3_crr` | 3 | **98.6%** | [97.9%, 99.2%] | Parity (±2% CI) |
+| `rpi5_neon` | `clang` | `default` | `fp32` | `a76_mr6_nr4_fmaddi_crr` | 3 | **101.6%** | [100.6%, 102.7%] | Mixed Advantage |
+| `rpi5_neon` | `gcc` | `default` | `fp32` | `a76_mr6_nr4_fmaddi_crr` | 3 | **102.1%** | [101.0%, 103.5%] | Mixed Advantage |
+| `x100_rvv` | `clang` | `default` | `fp32` | `x100_register_blocked_apack4_crr` | 3 | **102.5%** | [100.9%, 103.5%] | Mixed Advantage |
+| `x100_rvv` | `gcc` | `default` | `fp32` | `x100_register_blocked_apack4_crr` | 3 | **90.3%** | [89.8%, 90.5%] | BLIS Faster |
+| `x60_rvv` | `clang` | `default` | `fp32` | `x60_mr6_nr4_fmaddi_crr` | 3 | **74.0%** | [62.4%, 84.4%] | BLIS Faster |
+| `x60_rvv` | `gcc` | `default` | `fp32` | `x60_mr6_nr4_fmaddi_crr` | 3 | **66.5%** | [52.0%, 80.1%] | BLIS Faster |
+| `zen4_avx512` | `clang` | `default` | `fp32` | `firestorm_mr4_nr4_fmaddi_crr` | 3 | **100.6%** | [100.2%, 101.0%] | Parity (±2% CI) |
+| `zen4_avx512` | `gcc` | `default` | `fp32` | `firestorm_mr4_nr4_fmaddi_crr` | 3 | **100.9%** | [100.4%, 101.5%] | Parity (±2% CI) |
+| `zen5_avx512` | `clang` | `default` | `fp32` | `firestorm_mr4_nr4_fmaddi_crr` | 3 | **100.5%** | [100.3%, 100.8%] | Parity (±2% CI) |
+| `zen5_avx512` | `gcc` | `default` | `fp32` | `firestorm_mr4_nr4_fmaddi_crr` | 3 | **100.5%** | [100.3%, 100.8%] | Parity (±2% CI) |
 
 ---
 
-## 2. VLEN Agility & Cross-Vector Portability Study (SpacemiT A100 VLEN=1024b)
+## 2. Visual Comparative Figures
+
+- **Matched-K Ratio Comparison:** [blis_vs_mippv2_ratio_comparison.svg](blis_vs_mippv2_ratio_comparison.svg)
+- **Scaling Grid Across $K \in [32, 1024]$:** [blis_vs_mippv2_k_scaling_grid.svg](blis_vs_mippv2_k_scaling_grid.svg)
+
+
+---
+
+## 3. Per-Size Matched-$K$ Scaling & Working-Set Analysis (Variant: `default`)
+
+> [!TIP]
+> **Cache Boundary Semantics:** Rows marked with `†` denote operating points where panel working set $K \times (M + N) \times \text{elem_bytes}$ exceeds L1d cache capacity, testing streaming memory throughput rather than pure in-register compute density.
+
+### Platform: `a100_rvv` (clang, fp32, default)
+
+| Panel Depth $K$ | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | **Ratio MIPP / BLIS** | 95% Bootstrap CI | WS MIPP (KiB) | WS BLIS (KiB) | Advantage |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| $K=32$ | 21.56 | 5.88 | **367.0%** | [364.9%, 373.5%] | 16.9 | 3.8 | MIPPv2 (+267.0%) |
+| $K=64$ | 22.98 | 6.40 | **359.3%** | [359.0%, 359.9%] | 33.8 | 7.5 | MIPPv2 (+259.3%) |
+| $K=128$ † | 23.75 | 6.62 | **358.8%** | [358.5%, 359.1%] | 67.5 | 15.0 | MIPPv2 (+258.8%) |
+| $K=256$ † | 24.20 | 6.73 | **359.7%** | [359.7%, 359.8%] | 135.0 | 30.0 | MIPPv2 (+259.7%) |
+| $K=384$ † | 24.36 | 6.76 | **360.3%** | [360.2%, 360.6%] | 202.5 | 45.0 | MIPPv2 (+260.3%) |
+| $K=512$ † | 24.45 | 6.77 | **361.4%** | [360.9%, 361.8%] | 270.0 | 60.0 | MIPPv2 (+261.4%) |
+| $K=1024$ † | 24.45 | 6.22 | **393.0%** | [385.5%, 404.9%] | 540.0 | 120.0 | MIPPv2 (+293.0%) |
+
+### Platform: `a100_rvv` (gcc, fp32, default)
+
+| Panel Depth $K$ | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | **Ratio MIPP / BLIS** | 95% Bootstrap CI | WS MIPP (KiB) | WS BLIS (KiB) | Advantage |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| $K=32$ | 20.90 | 5.43 | **384.9%** | [355.9%, 407.1%] | 16.9 | 3.8 | MIPPv2 (+284.9%) |
+| $K=64$ | 21.98 | 6.37 | **345.3%** | [341.7%, 346.6%] | 33.8 | 7.5 | MIPPv2 (+245.3%) |
+| $K=128$ † | 21.77 | 6.63 | **328.1%** | [327.7%, 337.2%] | 67.5 | 15.0 | MIPPv2 (+228.1%) |
+| $K=256$ † | 22.62 | 6.74 | **335.6%** | [335.5%, 335.7%] | 135.0 | 30.0 | MIPPv2 (+235.6%) |
+| $K=384$ † | 22.66 | 6.76 | **335.4%** | [335.3%, 335.8%] | 202.5 | 45.0 | MIPPv2 (+235.4%) |
+| $K=512$ † | 22.72 | 6.77 | **335.9%** | [335.6%, 336.4%] | 270.0 | 60.0 | MIPPv2 (+235.9%) |
+| $K=1024$ † | 22.75 | 6.27 | **363.0%** | [360.5%, 364.3%] | 540.0 | 120.0 | MIPPv2 (+263.0%) |
+
+### Platform: `m1_neon` (clang, fp32, default)
+
+| Panel Depth $K$ | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | **Ratio MIPP / BLIS** | 95% Bootstrap CI | WS MIPP (KiB) | WS BLIS (KiB) | Advantage |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| $K=32$ | 29.59 | 25.56 | **115.7%** | [115.7%, 115.8%] | 2.8 | 2.5 | MIPPv2 (+15.7%) |
+| $K=64$ | 30.75 | 28.43 | **108.2%** | [108.2%, 108.2%] | 5.5 | 5.0 | MIPPv2 (+8.2%) |
+| $K=128$ | 30.83 | 30.11 | **102.4%** | [102.4%, 102.4%] | 11.0 | 10.0 | MIPPv2 (+2.4%) |
+| $K=256$ | 31.40 | 31.03 | **101.2%** | [101.2%, 101.2%] | 22.0 | 20.0 | Parity (±2%) |
+| $K=384$ | 31.60 | 31.34 | **100.8%** | [100.8%, 100.8%] | 33.0 | 30.0 | Parity (±2%) |
+| $K=512$ | 31.70 | 31.41 | **100.9%** | [100.9%, 100.9%] | 44.0 | 40.0 | Parity (±2%) |
+| $K=1024$ | 31.85 | 31.70 | **100.5%** | [100.5%, 100.5%] | 88.0 | 80.0 | Parity (±2%) |
+
+### Platform: `m1_neon` (gcc, fp32, default)
+
+| Panel Depth $K$ | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | **Ratio MIPP / BLIS** | 95% Bootstrap CI | WS MIPP (KiB) | WS BLIS (KiB) | Advantage |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| $K=32$ | 30.04 | 25.52 | **117.7%** | [117.7%, 117.7%] | 2.8 | 2.5 | MIPPv2 (+17.7%) |
+| $K=64$ | 30.99 | 28.39 | **109.1%** | [109.1%, 109.1%] | 5.5 | 5.0 | MIPPv2 (+9.1%) |
+| $K=128$ | 30.99 | 30.09 | **103.0%** | [103.0%, 103.0%] | 11.0 | 10.0 | MIPPv2 (+3.0%) |
+| $K=256$ | 31.49 | 31.01 | **101.5%** | [101.5%, 101.5%] | 22.0 | 20.0 | Parity (±2%) |
+| $K=384$ | 31.65 | 31.34 | **101.0%** | [101.0%, 101.3%] | 33.0 | 30.0 | Parity (±2%) |
+| $K=512$ | 31.74 | 31.42 | **101.0%** | [101.0%, 101.0%] | 44.0 | 40.0 | Parity (±2%) |
+| $K=1024$ | 31.87 | 31.71 | **100.5%** | [100.5%, 100.5%] | 88.0 | 80.0 | Parity (±2%) |
+
+### Platform: `meteorlake_avx2` (clang, fp32, default)
+
+| Panel Depth $K$ | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | **Ratio MIPP / BLIS** | 95% Bootstrap CI | WS MIPP (KiB) | WS BLIS (KiB) | Advantage |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| $K=32$ | 29.69 | 27.72 | **107.1%** | [107.0%, 107.1%] | 3.5 | 2.8 | MIPPv2 (+7.1%) |
+| $K=64$ | 30.16 | 29.45 | **102.4%** | [102.4%, 102.7%] | 7.0 | 5.5 | MIPPv2 (+2.4%) |
+| $K=128$ | 30.66 | 30.28 | **101.2%** | [100.8%, 101.2%] | 14.0 | 11.0 | Parity (±2%) |
+| $K=256$ | 31.00 | 30.84 | **100.5%** | [100.5%, 100.7%] | 28.0 | 22.0 | Parity (±2%) |
+| $K=384$ | 31.19 | 31.03 | **100.5%** | [100.4%, 100.5%] | 42.0 | 33.0 | Parity (±2%) |
+| $K=512$ † | 30.84 | 31.12 | **99.1%** | [98.9%, 99.1%] | 56.0 | 44.0 | Parity (±2%) |
+| $K=1024$ † | 31.04 | 30.75 | **100.9%** | [100.9%, 101.0%] | 112.0 | 88.0 | Parity (±2%) |
+
+### Platform: `meteorlake_avx2` (gcc, fp32, default)
+
+| Panel Depth $K$ | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | **Ratio MIPP / BLIS** | 95% Bootstrap CI | WS MIPP (KiB) | WS BLIS (KiB) | Advantage |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| $K=32$ | 26.99 | 27.51 | **98.1%** | [98.1%, 98.2%] | 3.5 | 2.8 | Parity (±2%) |
+| $K=64$ | 28.24 | 29.38 | **96.1%** | [96.1%, 96.4%] | 7.0 | 5.5 | BLIS (+3.9%) |
+| $K=128$ | 29.53 | 30.16 | **97.9%** | [97.9%, 98.0%] | 14.0 | 11.0 | BLIS (+2.1%) |
+| $K=256$ | 30.41 | 30.78 | **98.8%** | [98.7%, 98.9%] | 28.0 | 22.0 | Parity (±2%) |
+| $K=384$ | 30.73 | 30.96 | **99.2%** | [98.9%, 99.3%] | 42.0 | 33.0 | Parity (±2%) |
+| $K=512$ † | 26.28 | 30.73 | **85.5%** | [84.7%, 85.9%] | 56.0 | 44.0 | BLIS (+14.5%) |
+| $K=1024$ † | 26.30 | 30.74 | **85.6%** | [85.3%, 85.7%] | 112.0 | 88.0 | BLIS (+14.4%) |
+
+### Platform: `rpi5_neon` (clang, fp32, default)
+
+| Panel Depth $K$ | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | **Ratio MIPP / BLIS** | 95% Bootstrap CI | WS MIPP (KiB) | WS BLIS (KiB) | Advantage |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| $K=32$ | 14.58 | 13.03 | **111.9%** | [111.3%, 111.9%] | 2.8 | 2.5 | MIPPv2 (+11.9%) |
+| $K=64$ | 15.22 | 14.42 | **105.5%** | [105.5%, 105.7%] | 5.5 | 5.0 | MIPPv2 (+5.5%) |
+| $K=128$ | 15.58 | 15.16 | **102.7%** | [102.7%, 102.9%] | 11.0 | 10.0 | MIPPv2 (+2.7%) |
+| $K=256$ | 15.79 | 15.57 | **101.4%** | [101.4%, 101.5%] | 22.0 | 20.0 | Parity (±2%) |
+| $K=384$ | 15.81 | 15.71 | **100.6%** | [100.6%, 100.6%] | 33.0 | 30.0 | Parity (±2%) |
+| $K=512$ | 15.85 | 15.78 | **100.4%** | [100.4%, 100.5%] | 44.0 | 40.0 | Parity (±2%) |
+| $K=1024$ † | 15.36 | 15.82 | **97.1%** | [97.0%, 97.3%] | 88.0 | 80.0 | BLIS (+2.9%) |
+
+### Platform: `rpi5_neon` (gcc, fp32, default)
+
+| Panel Depth $K$ | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | **Ratio MIPP / BLIS** | 95% Bootstrap CI | WS MIPP (KiB) | WS BLIS (KiB) | Advantage |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| $K=32$ | 14.66 | 13.05 | **112.4%** | [112.3%, 112.7%] | 2.8 | 2.5 | MIPPv2 (+12.4%) |
+| $K=64$ | 15.32 | 14.34 | **106.8%** | [106.7%, 106.8%] | 5.5 | 5.0 | MIPPv2 (+6.8%) |
+| $K=128$ | 15.65 | 15.12 | **103.5%** | [103.3%, 103.5%] | 11.0 | 10.0 | MIPPv2 (+3.5%) |
+| $K=256$ | 15.82 | 15.55 | **101.8%** | [101.7%, 101.8%] | 22.0 | 20.0 | Parity (±2%) |
+| $K=384$ | 15.84 | 15.70 | **101.0%** | [100.9%, 101.0%] | 33.0 | 30.0 | Parity (±2%) |
+| $K=512$ | 15.88 | 15.78 | **100.7%** | [100.6%, 100.7%] | 44.0 | 40.0 | Parity (±2%) |
+| $K=1024$ † | 15.15 | 15.81 | **95.9%** | [95.7%, 96.0%] | 88.0 | 80.0 | BLIS (+4.1%) |
+
+### Platform: `x100_rvv` (clang, fp32, default)
+
+| Panel Depth $K$ | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | **Ratio MIPP / BLIS** | 95% Bootstrap CI | WS MIPP (KiB) | WS BLIS (KiB) | Advantage |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| $K=32$ | 12.35 | 13.61 | **90.7%** | [90.7%, 91.1%] | 4.4 | 3.8 | BLIS (+9.3%) |
+| $K=64$ | 13.95 | 14.35 | **97.2%** | [97.2%, 97.4%] | 8.8 | 7.5 | BLIS (+2.8%) |
+| $K=128$ | 14.88 | 14.75 | **100.9%** | [100.8%, 101.2%] | 17.5 | 15.0 | Parity (±2%) |
+| $K=256$ | 15.45 | 14.93 | **103.5%** | [103.4%, 103.5%] | 35.0 | 30.0 | MIPPv2 (+3.5%) |
+| $K=384$ | 15.52 | 15.02 | **103.3%** | [98.8%, 103.9%] | 52.5 | 45.0 | MIPPv2 (+3.3%) |
+| $K=512$ † | 13.89 | 14.97 | **92.8%** | [92.3%, 93.0%] | 70.0 | 60.0 | BLIS (+7.2%) |
+| $K=1024$ † | 13.09 | 15.07 | **86.9%** | [86.5%, 87.3%] | 140.0 | 120.0 | BLIS (+13.1%) |
+
+### Platform: `x100_rvv` (gcc, fp32, default)
+
+| Panel Depth $K$ | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | **Ratio MIPP / BLIS** | 95% Bootstrap CI | WS MIPP (KiB) | WS BLIS (KiB) | Advantage |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| $K=32$ | 11.70 | 13.61 | **85.9%** | [85.8%, 86.5%] | 4.4 | 3.8 | BLIS (+14.1%) |
+| $K=64$ | 12.69 | 14.32 | **88.6%** | [88.5%, 88.8%] | 8.8 | 7.5 | BLIS (+11.4%) |
+| $K=128$ | 13.24 | 14.75 | **89.8%** | [89.8%, 90.0%] | 17.5 | 15.0 | BLIS (+10.2%) |
+| $K=256$ | 13.53 | 14.94 | **90.5%** | [90.5%, 90.6%] | 35.0 | 30.0 | BLIS (+9.5%) |
+| $K=384$ | 13.60 | 15.02 | **90.5%** | [87.5%, 90.7%] | 52.5 | 45.0 | BLIS (+9.5%) |
+| $K=512$ † | 12.00 | 14.97 | **80.2%** | [79.1%, 82.1%] | 70.0 | 60.0 | BLIS (+19.8%) |
+| $K=1024$ † | 11.96 | 15.05 | **79.5%** | [79.3%, 79.8%] | 140.0 | 120.0 | BLIS (+20.5%) |
+
+### Platform: `x60_rvv` (clang, fp32, default)
+
+| Panel Depth $K$ | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | **Ratio MIPP / BLIS** | 95% Bootstrap CI | WS MIPP (KiB) | WS BLIS (KiB) | Advantage |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| $K=32$ | 9.34 | 11.42 | **81.8%** | [81.8%, 87.5%] | 4.8 | 3.8 | BLIS (+18.2%) |
+| $K=64$ | 9.94 | 11.38 | **87.4%** | [86.9%, 87.4%] | 9.5 | 7.5 | BLIS (+12.6%) |
+| $K=128$ | 10.26 | 13.35 | **76.9%** | [76.8%, 85.6%] | 19.0 | 15.0 | BLIS (+23.1%) |
+| $K=256$ † | 7.57 | 12.13 | **62.4%** | [52.6%, 63.6%] | 38.0 | 30.0 | BLIS (+37.6%) |
+| $K=384$ † | 8.12 | 9.63 | **84.4%** | [82.7%, 87.7%] | 57.0 | 45.0 | BLIS (+15.6%) |
+| $K=512$ † | 8.27 | 9.89 | **83.6%** | [82.9%, 84.3%] | 76.0 | 60.0 | BLIS (+16.4%) |
+| $K=1024$ † | 8.30 | 10.21 | **81.2%** | [79.2%, 82.3%] | 152.0 | 120.0 | BLIS (+18.8%) |
+
+### Platform: `x60_rvv` (gcc, fp32, default)
+
+| Panel Depth $K$ | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | **Ratio MIPP / BLIS** | 95% Bootstrap CI | WS MIPP (KiB) | WS BLIS (KiB) | Advantage |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| $K=32$ | 8.65 | 11.40 | **75.9%** | [75.8%, 75.9%] | 4.8 | 3.8 | BLIS (+24.1%) |
+| $K=64$ | 9.08 | 12.55 | **72.3%** | [72.3%, 72.3%] | 9.5 | 7.5 | BLIS (+27.7%) |
+| $K=128$ | 9.31 | 13.20 | **70.5%** | [70.5%, 70.5%] | 19.0 | 15.0 | BLIS (+29.5%) |
+| $K=256$ † | 6.99 | 13.43 | **52.0%** | [51.6%, 55.2%] | 38.0 | 30.0 | BLIS (+48.0%) |
+| $K=384$ † | 7.90 | 9.87 | **80.1%** | [78.5%, 81.4%] | 57.0 | 45.0 | BLIS (+19.9%) |
+| $K=512$ † | 7.96 | 10.02 | **79.5%** | [78.7%, 81.2%] | 76.0 | 60.0 | BLIS (+20.5%) |
+| $K=1024$ † | 8.05 | 10.27 | **78.4%** | [77.5%, 78.7%] | 152.0 | 120.0 | BLIS (+21.6%) |
+
+### Platform: `zen4_avx512` (clang, fp32, default)
+
+| Panel Depth $K$ | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | **Ratio MIPP / BLIS** | 95% Bootstrap CI | WS MIPP (KiB) | WS BLIS (KiB) | Advantage |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| $K=32$ | 31.99 | 29.23 | **109.5%** | [109.4%, 109.7%] | 8.5 | 5.5 | MIPPv2 (+9.5%) |
+| $K=64$ | 31.99 | 30.65 | **104.4%** | [104.4%, 104.4%] | 17.0 | 11.0 | MIPPv2 (+4.4%) |
+| $K=128$ † | 31.65 | 31.34 | **101.0%** | [101.0%, 101.1%] | 34.0 | 22.0 | Parity (±2%) |
+| $K=256$ † | 31.86 | 31.66 | **100.6%** | [100.3%, 100.7%] | 68.0 | 44.0 | Parity (±2%) |
+| $K=384$ † | 31.81 | 31.76 | **100.2%** | [100.1%, 100.7%] | 102.0 | 66.0 | Parity (±2%) |
+| $K=512$ † | 31.84 | 31.82 | **100.1%** | [100.0%, 100.2%] | 136.0 | 88.0 | Parity (±2%) |
+| $K=1024$ † | 31.91 | 31.89 | **100.1%** | [100.1%, 100.1%] | 272.0 | 176.0 | Parity (±2%) |
+
+### Platform: `zen4_avx512` (gcc, fp32, default)
+
+| Panel Depth $K$ | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | **Ratio MIPP / BLIS** | 95% Bootstrap CI | WS MIPP (KiB) | WS BLIS (KiB) | Advantage |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| $K=32$ | 31.88 | 29.04 | **109.8%** | [109.5%, 109.8%] | 8.5 | 5.5 | MIPPv2 (+9.8%) |
+| $K=64$ | 31.89 | 30.57 | **104.3%** | [104.3%, 104.4%] | 17.0 | 11.0 | MIPPv2 (+4.3%) |
+| $K=128$ † | 31.71 | 31.24 | **101.5%** | [100.7%, 101.6%] | 34.0 | 22.0 | Parity (±2%) |
+| $K=256$ † | 31.86 | 31.60 | **100.8%** | [100.8%, 100.8%] | 68.0 | 44.0 | Parity (±2%) |
+| $K=384$ † | 31.86 | 31.73 | **100.4%** | [100.4%, 100.4%] | 102.0 | 66.0 | Parity (±2%) |
+| $K=512$ † | 31.86 | 31.80 | **100.2%** | [100.1%, 100.2%] | 136.0 | 88.0 | Parity (±2%) |
+| $K=1024$ † | 31.92 | 31.88 | **100.1%** | [100.1%, 100.1%] | 272.0 | 176.0 | Parity (±2%) |
+
+### Platform: `zen5_avx512` (clang, fp32, default)
+
+| Panel Depth $K$ | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | **Ratio MIPP / BLIS** | 95% Bootstrap CI | WS MIPP (KiB) | WS BLIS (KiB) | Advantage |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| $K=32$ | 31.99 | 31.02 | **103.1%** | [103.1%, 103.1%] | 8.5 | 5.5 | MIPPv2 (+3.1%) |
+| $K=64$ | 31.99 | 31.50 | **101.6%** | [101.6%, 101.6%] | 17.0 | 11.0 | Parity (±2%) |
+| $K=128$ | 31.99 | 31.74 | **100.8%** | [100.8%, 100.8%] | 34.0 | 22.0 | Parity (±2%) |
+| $K=256$ † | 31.99 | 31.87 | **100.4%** | [100.4%, 100.4%] | 68.0 | 44.0 | Parity (±2%) |
+| $K=384$ † | 31.99 | 31.91 | **100.3%** | [100.3%, 100.3%] | 102.0 | 66.0 | Parity (±2%) |
+| $K=512$ † | 31.99 | 31.93 | **100.2%** | [100.2%, 100.2%] | 136.0 | 88.0 | Parity (±2%) |
+| $K=1024$ † | 31.99 | 31.96 | **100.1%** | [100.1%, 100.1%] | 272.0 | 176.0 | Parity (±2%) |
+
+### Platform: `zen5_avx512` (gcc, fp32, default)
+
+| Panel Depth $K$ | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | **Ratio MIPP / BLIS** | 95% Bootstrap CI | WS MIPP (KiB) | WS BLIS (KiB) | Advantage |
+| :---: | :---: | :---: | :---: | :---: | :---: | :---: | :--- |
+| $K=32$ | 31.97 | 31.02 | **103.1%** | [103.1%, 103.1%] | 8.5 | 5.5 | MIPPv2 (+3.1%) |
+| $K=64$ | 31.99 | 31.50 | **101.6%** | [101.2%, 101.6%] | 17.0 | 11.0 | Parity (±2%) |
+| $K=128$ | 31.99 | 31.74 | **100.8%** | [100.8%, 100.8%] | 34.0 | 22.0 | Parity (±2%) |
+| $K=256$ † | 31.99 | 31.87 | **100.4%** | [100.4%, 100.4%] | 68.0 | 44.0 | Parity (±2%) |
+| $K=384$ † | 31.99 | 31.91 | **100.3%** | [100.3%, 100.3%] | 102.0 | 66.0 | Parity (±2%) |
+| $K=512$ † | 31.99 | 31.93 | **100.2%** | [100.2%, 100.2%] | 136.0 | 88.0 | Parity (±2%) |
+| $K=1024$ † | 31.99 | 31.96 | **100.1%** | [100.1%, 100.1%] | 272.0 | 176.0 | Parity (±2%) |
+
+
+---
+
+## Appendix: Best-Compiler Envelope (Post-Hoc)
 
 > [!IMPORTANT]
-> **Asymmetry Disclosure & Portability Framing:**
-> - Upstream BLIS provides no native 1024-bit vector microkernel; executing BLIS on A100 defaults to the 256-bit in-order X60 assembly kernel (`sgemm_x60_2vx14.c, 16×14`), utilizing only 25% of vector capacity per iteration.
-> - MIPPv2's parameterized template vectorization automatically adapts to the 1024-bit VLEN across precision targets.
-> - This comparison is presented not as a peer algorithmic match, but as an empirical demonstration of C++ template agility across variable vector lengths versus static assembly fragility.
+> This appendix selects the post-hoc envelope across compilers (`max(gcc, clang)` at each measurement point). It is presented exclusively for secondary reference.
 
-| Microarchitecture | Compiler | MIPPv2 Champion | MIPPv2 Peak (GFLOP/s) | MIPPv2 (FLOP/cyc) | Hardware Peak (FLOP/cyc) | % Machine Peak | BLIS Fallback (X60 asm GFLOP/s) | Relative Speedup |
-| :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| `a100_rvv` | `clang` | `a100_mr7_nr2_lmul2_pipe_crr` | **48.91** | 24.56 | 32.0 | **76.7%** | 13.48 (X60) | **3.63×** |
-| `a100_rvv` | `gcc` | `a100_mr7_nr2_lmul2_pipe_crr` | **45.30** | 22.73 | 32.0 | **71.0%** | 13.44 (X60) | **3.37×** |
-
----
-
-## 3. Visual Comparative Figures
-
-- **Peak Performance Ratio:** [blis_vs_mippv2_ratio_comparison.svg](blis_vs_mippv2_ratio_comparison.svg)
-- **FLOP / Cycle Compute Density:** [blis_vs_mippv2_flop_per_cycle_comparison.svg](blis_vs_mippv2_flop_per_cycle_comparison.svg)
-- **Scaling Grid Across K ∈ [32..1024]:** [blis_vs_mippv2_k_scaling_grid.svg](blis_vs_mippv2_k_scaling_grid.svg)
-
-
----
-
-## 4. Per-Size Scaling & Efficiency Analysis ($K \in [32, 1024]$)
-
-### Platform: `a100_rvv` (clang, CRR)
-
-| K Dimension | MIPPv2 (GFLOP/s) | BLIS (GFLOP/s) | **MIPPv2 / BLIS (%)** | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | Advantage |
-| :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| K=32 | 43.09 | 11.46 | **376.0%** | 21.61 | 5.75 | MIPPv2 (+276.0%) |
-| K=64 | 46.10 | 12.73 | **362.2%** | 23.12 | 6.38 | MIPPv2 (+262.2%) |
-| K=128 | 47.52 | 13.20 | **360.0%** | 23.84 | 6.62 | MIPPv2 (+260.0%) |
-| K=256 | 48.25 | 13.41 | **359.7%** | 24.20 | 6.73 | MIPPv2 (+259.7%) |
-| K=512 | 48.70 | 13.48 | **361.2%** | 24.44 | 6.77 | MIPPv2 (+261.2%) |
-| K=1024 | 48.91 | 12.49 | **391.4%** | 24.56 | 6.27 | MIPPv2 (+291.4%) |
-
-### Platform: `a100_rvv` (gcc, CRR)
-
-| K Dimension | MIPPv2 (GFLOP/s) | BLIS (GFLOP/s) | **MIPPv2 / BLIS (%)** | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | Advantage |
-| :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| K=32 | 41.57 | 11.72 | **354.6%** | 20.85 | 5.88 | MIPPv2 (+254.6%) |
-| K=64 | 44.02 | 12.77 | **344.8%** | 22.08 | 6.40 | MIPPv2 (+244.8%) |
-| K=128 | 44.38 | 13.22 | **335.6%** | 22.27 | 6.63 | MIPPv2 (+235.6%) |
-| K=256 | 45.06 | 13.43 | **335.4%** | 22.60 | 6.74 | MIPPv2 (+235.4%) |
-| K=512 | 45.30 | 13.44 | **337.0%** | 22.72 | 6.75 | MIPPv2 (+237.0%) |
-| K=1024 | 45.27 | 12.53 | **361.2%** | 22.73 | 6.29 | MIPPv2 (+261.2%) |
-
-### Platform: `m1_neon` (clang, CRR)
-
-| K Dimension | MIPPv2 (GFLOP/s) | BLIS (GFLOP/s) | **MIPPv2 / BLIS (%)** | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | Advantage |
-| :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| K=32 | 89.97 | 77.68 | **115.8%** | 29.68 | 25.62 | MIPPv2 (+15.8%) |
-| K=64 | 93.35 | 86.32 | **108.2%** | 30.80 | 28.48 | MIPPv2 (+8.2%) |
-| K=128 | 93.58 | 91.32 | **102.5%** | 30.87 | 30.13 | MIPPv2 (+2.5%) |
-| K=256 | 95.25 | 94.08 | **101.3%** | 31.42 | 31.03 | MIPPv2 (+1.3%) |
-| K=512 | 96.12 | 95.27 | **100.9%** | 31.71 | 31.43 | MIPPv2 (+0.9%) |
-| K=1024 | 96.55 | 96.11 | **100.5%** | 31.85 | 31.71 | Equivalent |
-
-### Platform: `m1_neon` (gcc, CRR)
-
-| K Dimension | MIPPv2 (GFLOP/s) | BLIS (GFLOP/s) | **MIPPv2 / BLIS (%)** | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | Advantage |
-| :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| K=32 | 91.06 | 77.32 | **117.8%** | 30.04 | 25.51 | MIPPv2 (+17.8%) |
-| K=64 | 93.94 | 86.04 | **109.2%** | 30.99 | 28.38 | MIPPv2 (+9.2%) |
-| K=128 | 93.95 | 91.19 | **103.0%** | 30.99 | 30.08 | MIPPv2 (+3.0%) |
-| K=256 | 95.44 | 94.00 | **101.5%** | 31.49 | 31.01 | MIPPv2 (+1.5%) |
-| K=512 | 96.21 | 95.28 | **101.0%** | 31.74 | 31.43 | MIPPv2 (+1.0%) |
-| K=1024 | 96.60 | 96.12 | **100.5%** | 31.87 | 31.71 | MIPPv2 (+0.5%) |
-
-### Platform: `meteorlake_avx2` (clang, CRR)
-
-| K Dimension | MIPPv2 (GFLOP/s) | BLIS (GFLOP/s) | **MIPPv2 / BLIS (%)** | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | Advantage |
-| :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| K=32 | 151.45 | 141.54 | **107.0%** | 29.79 | 27.84 | MIPPv2 (+7.0%) |
-| K=64 | 154.96 | 150.55 | **102.9%** | 30.47 | 29.60 | MIPPv2 (+2.9%) |
-| K=128 | 156.46 | 154.32 | **101.4%** | 30.77 | 30.34 | MIPPv2 (+1.4%) |
-| K=256 | 158.28 | 157.14 | **100.7%** | 31.12 | 30.90 | MIPPv2 (+0.7%) |
-| K=512 | 156.96 | 158.41 | **99.1%** | 30.89 | 31.15 | BLIS (+0.9%) |
-| K=1024 | 158.32 | 156.76 | **101.0%** | 31.14 | 30.83 | MIPPv2 (+1.0%) |
-
-### Platform: `meteorlake_avx2` (gcc, CRR)
-
-| K Dimension | MIPPv2 (GFLOP/s) | BLIS (GFLOP/s) | **MIPPv2 / BLIS (%)** | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | Advantage |
-| :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| K=32 | 137.27 | 140.32 | **97.8%** | 26.99 | 27.59 | BLIS (+2.2%) |
-| K=64 | 143.91 | 147.65 | **97.5%** | 28.30 | 29.03 | BLIS (+2.5%) |
-| K=128 | 149.82 | 152.63 | **98.2%** | 29.47 | 30.01 | BLIS (+1.8%) |
-| K=256 | 153.76 | 155.81 | **98.7%** | 30.25 | 30.63 | BLIS (+1.3%) |
-| K=512 | 132.73 | 157.40 | **84.3%** | 26.13 | 30.95 | BLIS (+15.7%) |
-| K=1024 | 134.66 | 157.21 | **85.7%** | 26.48 | 30.91 | BLIS (+14.3%) |
-
-### Platform: `rpi5_neon` (clang, CRR)
-
-| K Dimension | MIPPv2 (GFLOP/s) | BLIS (GFLOP/s) | **MIPPv2 / BLIS (%)** | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | Advantage |
-| :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| K=32 | 35.06 | 27.41 | **127.9%** | 14.66 | 11.46 | MIPPv2 (+27.9%) |
-| K=64 | 36.50 | 31.86 | **114.6%** | 15.26 | 13.32 | MIPPv2 (+14.6%) |
-| K=128 | 37.31 | 34.74 | **107.4%** | 15.60 | 14.53 | MIPPv2 (+7.4%) |
-| K=256 | 37.78 | 36.42 | **103.7%** | 15.80 | 15.23 | MIPPv2 (+3.7%) |
-| K=512 | 37.93 | 37.31 | **101.6%** | 15.86 | 15.60 | MIPPv2 (+1.6%) |
-| K=1024 | 36.99 | 37.71 | **98.1%** | 15.47 | 15.77 | BLIS (+1.9%) |
-
-### Platform: `rpi5_neon` (gcc, CRR)
-
-| K Dimension | MIPPv2 (GFLOP/s) | BLIS (GFLOP/s) | **MIPPv2 / BLIS (%)** | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | Advantage |
-| :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| K=32 | 35.13 | 27.34 | **128.5%** | 14.69 | 11.43 | MIPPv2 (+28.5%) |
-| K=64 | 36.63 | 31.86 | **114.9%** | 15.32 | 13.32 | MIPPv2 (+14.9%) |
-| K=128 | 37.43 | 34.77 | **107.6%** | 15.65 | 14.54 | MIPPv2 (+7.6%) |
-| K=256 | 37.84 | 36.42 | **103.9%** | 15.82 | 15.23 | MIPPv2 (+3.9%) |
-| K=512 | 37.99 | 37.32 | **101.8%** | 15.89 | 15.61 | MIPPv2 (+1.8%) |
-| K=1024 | 36.40 | 37.71 | **96.5%** | 15.23 | 15.77 | BLIS (+3.5%) |
-
-### Platform: `x100_rvv` (clang, CRR)
-
-| K Dimension | MIPPv2 (GFLOP/s) | BLIS (GFLOP/s) | **MIPPv2 / BLIS (%)** | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | Advantage |
-| :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| K=32 | 29.73 | 32.64 | **91.1%** | 12.41 | 13.62 | BLIS (+8.9%) |
-| K=64 | 33.54 | 34.42 | **97.4%** | 14.00 | 14.36 | BLIS (+2.6%) |
-| K=128 | 35.79 | 35.36 | **101.2%** | 14.94 | 14.76 | MIPPv2 (+1.2%) |
-| K=256 | 36.99 | 35.77 | **103.4%** | 15.44 | 14.93 | MIPPv2 (+3.4%) |
-| K=512 | 33.25 | 36.01 | **92.3%** | 13.88 | 15.03 | BLIS (+7.7%) |
-| K=1024 | 31.16 | 36.08 | **86.4%** | 13.01 | 15.06 | BLIS (+13.6%) |
-
-### Platform: `x100_rvv` (gcc, CRR)
-
-| K Dimension | MIPPv2 (GFLOP/s) | BLIS (GFLOP/s) | **MIPPv2 / BLIS (%)** | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | Advantage |
-| :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| K=32 | 28.27 | 32.66 | **86.6%** | 11.80 | 13.63 | BLIS (+13.4%) |
-| K=64 | 30.44 | 34.41 | **88.4%** | 12.70 | 14.36 | BLIS (+11.6%) |
-| K=128 | 31.70 | 35.41 | **89.5%** | 13.23 | 14.78 | BLIS (+10.5%) |
-| K=256 | 32.44 | 35.83 | **90.6%** | 13.54 | 14.95 | BLIS (+9.4%) |
-| K=512 | 29.28 | 35.99 | **81.4%** | 12.23 | 15.03 | BLIS (+18.6%) |
-| K=1024 | 28.81 | 36.12 | **79.7%** | 12.03 | 15.08 | BLIS (+20.3%) |
-
-### Platform: `x60_rvv` (clang, CRR)
-
-| K Dimension | MIPPv2 (GFLOP/s) | BLIS (GFLOP/s) | **MIPPv2 / BLIS (%)** | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | Advantage |
-| :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| K=32 | 14.95 | 18.28 | **81.8%** | 9.36 | 11.44 | BLIS (+18.2%) |
-| K=64 | 15.89 | 20.22 | **78.6%** | 9.95 | 12.66 | BLIS (+21.4%) |
-| K=128 | 16.40 | 21.36 | **76.8%** | 10.27 | 13.37 | BLIS (+23.2%) |
-| K=256 | 12.61 | 21.48 | **58.7%** | 7.90 | 13.45 | BLIS (+41.3%) |
-| K=512 | 13.30 | 15.91 | **83.6%** | 8.32 | 9.96 | BLIS (+16.4%) |
-| K=1024 | 13.47 | 16.34 | **82.4%** | 8.44 | 10.23 | BLIS (+17.6%) |
-
-### Platform: `x60_rvv` (gcc, CRR)
-
-| K Dimension | MIPPv2 (GFLOP/s) | BLIS (GFLOP/s) | **MIPPv2 / BLIS (%)** | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | Advantage |
-| :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| K=32 | 13.84 | 17.97 | **77.0%** | 8.66 | 11.25 | BLIS (+23.0%) |
-| K=64 | 14.52 | 19.76 | **73.5%** | 9.09 | 12.37 | BLIS (+26.5%) |
-| K=128 | 14.87 | 20.79 | **71.5%** | 9.31 | 13.01 | BLIS (+28.5%) |
-| K=256 | 11.82 | 21.39 | **55.3%** | 7.40 | 13.39 | BLIS (+44.7%) |
-| K=512 | 12.86 | 15.91 | **80.8%** | 8.05 | 9.96 | BLIS (+19.2%) |
-| K=1024 | 12.87 | 16.41 | **78.4%** | 8.06 | 10.27 | BLIS (+21.6%) |
-
-### Platform: `zen4_avx512` (clang, CRR)
-
-| K Dimension | MIPPv2 (GFLOP/s) | BLIS (GFLOP/s) | **MIPPv2 / BLIS (%)** | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | Advantage |
-| :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| K=32 | 173.28 | 157.58 | **110.0%** | 31.99 | 29.07 | MIPPv2 (+10.0%) |
-| K=64 | 173.07 | 165.29 | **104.7%** | 31.99 | 30.62 | MIPPv2 (+4.7%) |
-| K=128 | 170.49 | 168.48 | **101.2%** | 31.59 | 31.30 | MIPPv2 (+1.2%) |
-| K=256 | 171.94 | 170.29 | **101.0%** | 31.88 | 31.63 | MIPPv2 (+1.0%) |
-| K=512 | 172.03 | 171.33 | **100.4%** | 31.87 | 31.81 | Equivalent |
-| K=1024 | 172.45 | 171.62 | **100.5%** | 31.95 | 31.89 | Equivalent |
-
-### Platform: `zen4_avx512` (gcc, CRR)
-
-| K Dimension | MIPPv2 (GFLOP/s) | BLIS (GFLOP/s) | **MIPPv2 / BLIS (%)** | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | Advantage |
-| :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| K=32 | 172.96 | 157.07 | **110.1%** | 31.89 | 28.97 | MIPPv2 (+10.1%) |
-| K=64 | 172.95 | 165.61 | **104.4%** | 31.89 | 30.54 | MIPPv2 (+4.4%) |
-| K=128 | 172.21 | 168.71 | **102.1%** | 31.76 | 31.21 | MIPPv2 (+2.1%) |
-| K=256 | 173.09 | 170.64 | **101.4%** | 31.92 | 31.61 | MIPPv2 (+1.4%) |
-| K=512 | 172.97 | 171.54 | **100.8%** | 31.90 | 31.78 | MIPPv2 (+0.8%) |
-| K=1024 | 173.15 | 172.09 | **100.6%** | 31.93 | 31.88 | MIPPv2 (+0.6%) |
-
-### Platform: `zen5_avx512` (clang, CRR)
-
-| K Dimension | MIPPv2 (GFLOP/s) | BLIS (GFLOP/s) | **MIPPv2 / BLIS (%)** | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | Advantage |
-| :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| K=32 | 163.12 | 158.28 | **103.1%** | 31.99 | 31.02 | MIPPv2 (+3.1%) |
-| K=64 | 162.84 | 160.46 | **101.5%** | 31.99 | 31.50 | MIPPv2 (+1.5%) |
-| K=128 | 162.99 | 161.82 | **100.7%** | 31.99 | 31.74 | MIPPv2 (+0.7%) |
-| K=256 | 162.58 | 162.47 | **100.1%** | 31.99 | 31.87 | Equivalent |
-| K=512 | 162.72 | 162.85 | **99.9%** | 31.99 | 31.93 | Equivalent |
-| K=1024 | 162.72 | 162.87 | **99.9%** | 31.99 | 31.96 | Equivalent |
-
-### Platform: `zen5_avx512` (gcc, CRR)
-
-| K Dimension | MIPPv2 (GFLOP/s) | BLIS (GFLOP/s) | **MIPPv2 / BLIS (%)** | MIPPv2 (FLOP/cyc) | BLIS (FLOP/cyc) | Advantage |
-| :---: | :---: | :---: | :---: | :---: | :---: | :--- |
-| K=32 | 163.83 | 158.50 | **103.4%** | 31.99 | 31.02 | MIPPv2 (+3.4%) |
-| K=64 | 163.84 | 160.82 | **101.9%** | 31.99 | 31.50 | MIPPv2 (+1.9%) |
-| K=128 | 163.73 | 161.98 | **101.1%** | 31.99 | 31.74 | MIPPv2 (+1.1%) |
-| K=256 | 163.32 | 162.45 | **100.5%** | 31.99 | 31.87 | MIPPv2 (+0.5%) |
-| K=512 | 163.31 | 162.75 | **100.3%** | 31.99 | 31.93 | Equivalent |
-| K=1024 | 163.29 | 162.91 | **100.2%** | 31.99 | 31.96 | Equivalent |
-
-
----
-
-## 5. Reference Assembly Kernels Provenance & Acknowledgements
-
-The hand-tuned assembly microkernels used as baseline references in this benchmark originate from:
-
-- **RISC-V Vector 1.0 (SpacemiT X60):** Authored and tuned by **Stepan Nassyr** via genetic loop exploration (`asmgen-gemm`), available in the [`stepannassyr/blis`](https://github.com/stepannassyr/blis/tree/x60/kernels) repository (`x60` branch, commit [`6ffc1d3`](https://github.com/stepannassyr/blis/commit/6ffc1d35fcafe74788b2aeaf00d5792d2618e0b9)).
-- **x86-64 (AVX2, AVX-512) & AArch64 (NEON):** Sourced from the official upstream **FLAME BLIS** project ([`flame/blis`](https://github.com/flame/blis)), maintained by The University of Texas at Austin and contributors (commit [`a8037cf`](https://github.com/flame/blis/commit/a8037cfc4330030c726efaec1ffeb1f93d468aa3), based on BLIS 2.1).
+| Microarchitecture | Precision | Variant | Best Compiler by Ratio | Envelope Ratio Geomean | Envelope [Min, Max] |
+| :--- | :---: | :---: | :---: | :---: | :---: |
+| `a100_rvv` | `fp32` | `default` | `clang` | **359.6%** | [358.8%, 360.3%] |
+| `m1_neon` | `fp32` | `default` | `gcc` | **101.8%** | [101.0%, 103.0%] |
+| `meteorlake_avx2` | `fp32` | `default` | `clang` | **100.8%** | [100.5%, 101.2%] |
+| `rpi5_neon` | `fp32` | `default` | `gcc` | **102.1%** | [101.0%, 103.5%] |
+| `x100_rvv` | `fp32` | `default` | `clang` | **102.5%** | [100.9%, 103.5%] |
+| `x60_rvv` | `fp32` | `default` | `clang` | **74.0%** | [62.4%, 84.4%] |
+| `zen4_avx512` | `fp32` | `default` | `gcc` | **100.9%** | [100.4%, 101.5%] |
+| `zen5_avx512` | `fp32` | `default` | `clang` | **100.5%** | [100.3%, 100.8%] |

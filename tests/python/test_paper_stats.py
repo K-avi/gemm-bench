@@ -199,6 +199,19 @@ class TestPaperStats(unittest.TestCase):
         self.assertEqual(summary_leg["MIPP_Champion"].iloc[0], "mippv2_faster_explo_kernel")
         self.assertAlmostEqual(summary_leg["Ratio_geomean"].iloc[0], 1.55)
 
+        # Precision filter test: add fp32 rows and verify precision_filter isolates fp64 vs fp32
+        df_fp32 = df.copy()
+        df_fp32["Precision"] = "fp32"
+        df_mixed = pd.concat([df, df_fp32], ignore_index=True)
+        sum_all, _, _ = analyze_dataset(df_mixed, legacy_argmax=False, k_window=(128, 256))
+        self.assertEqual(len(sum_all), 2)
+        sum_fp64, _, _ = analyze_dataset(df_mixed, legacy_argmax=False, k_window=(128, 256), precision_filter="fp64")
+        self.assertEqual(len(sum_fp64), 1)
+        self.assertEqual(sum_fp64["Precision"].iloc[0], "fp64")
+        sum_fp32, _, _ = analyze_dataset(df_mixed, legacy_argmax=False, k_window=(128, 256), precision_filter="fp32")
+        self.assertEqual(len(sum_fp32), 1)
+        self.assertEqual(sum_fp32["Precision"].iloc[0], "fp32")
+
 
 if __name__ == "__main__":
     unittest.main()
