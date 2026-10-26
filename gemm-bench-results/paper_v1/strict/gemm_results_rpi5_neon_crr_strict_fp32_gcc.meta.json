@@ -1,0 +1,105 @@
+{
+  "schema_version": 1,
+  "date_utc_start": "2026-10-26T07:47:07Z",
+  "date_utc_end": "2026-10-26T07:52:23Z",
+  "git_commit": "5e2fd81675a8c114aaf51b9a343ad6a9bdeda0a1",
+  "git_dirty": 0,
+  "binary_build_info": {
+    "git_commit": "5e2fd81675a8c114aaf51b9a343ad6a9bdeda0a1",
+    "git_dirty": "0",
+    "cxx_compiler_id": "GNU",
+    "cxx_compiler_version": "15.2.0",
+    "cxx_flags": "-O3 -fno-fast-math -ffp-contract=fast -finline-functions -funroll-loops -fno-semantic-interposition -march=native -O3 -DNDEBUG",
+    "build_type": "Release",
+    "fastmath": "OFF",
+    "blis_target": "ARMV8A",
+    "explo": "OFF",
+    "compiler_macro_version": "15.2.0"
+  },
+  "binary_sha256": "ad7e3dafed34d6cda74397b0f6b141e5342a15c9f91c1027a2d41a7a58bff052",
+  "hostname": "mono-rpi-5b",
+  "slurm_job_id": "179397",
+  "slurm_nodelist": "mono-rpi-5b",
+  "uname_a": "Linux mono-rpi-5b 7.0.0-1017-raspi #17-Ubuntu SMP PREEMPT_DYNAMIC Fri Aug  7 16:13:24 UTC 2026 aarch64",
+  "cpu_model": "Cortex-A76",
+  "isa_flags_summary": "fp asimd evtstrm aes pmull sha1 sha2 crc32 atomics fphp asimdhp cpuid asimdrdm lrcpc dcpop asimddp",
+  "caches": [
+    {
+      "level": 1,
+      "type": "Data",
+      "size": "64K",
+      "ways_of_associativity": 4,
+      "coherency_line_size": 64
+    },
+    {
+      "level": 1,
+      "type": "Instruction",
+      "size": "64K",
+      "ways_of_associativity": 4,
+      "coherency_line_size": 64
+    },
+    {
+      "level": 2,
+      "type": "Unified",
+      "size": "512K",
+      "ways_of_associativity": 8,
+      "coherency_line_size": 64
+    },
+    {
+      "level": 3,
+      "type": "Unified",
+      "size": "2048K",
+      "ways_of_associativity": 16,
+      "coherency_line_size": 64
+    }
+  ],
+  "governor": "ondemand",
+  "freq_khz_start": 2200000,
+  "freq_khz_end": 1700000,
+  "pin_core": 2,
+  "taskset_used": true,
+  "platform": "neon",
+  "platform_tag": "rpi5",
+  "compiler_cmd": "g++",
+  "compiler_version_full": "g++ (Ubuntu 15.2.0-16ubuntu1) 15.2.0",
+  "cxx_flags_effective": " -O3 -fno-fast-math -ffp-contract=fast -finline-functions -funroll-loops -fno-semantic-interposition -march=native ",
+  "fastmath": false,
+  "precision": "fp32",
+  "crr_only": true,
+  "alpha": 1.0,
+  "beta": 0.0,
+  "fastpath": true,
+  "c_cold": false,
+  "num_runs": 3,
+  "repetitions": 15,
+  "sizes": [
+    [
+      128,
+      1250000,
+      125000
+    ],
+    [
+      256,
+      625000,
+      62500
+    ],
+    [
+      384,
+      416666,
+      41666
+    ]
+  ],
+  "kernels": [
+    "mippv2_a76_mr6_nr4_fmaddi_crr",
+    "blis_native"
+  ],
+  "cooldown_sec": 2.0,
+  "throttle_warnings": [
+    "CPU freq dropped 31.8% (2200 \u2192 1500 MHz) \u2014 possible thermal throttling",
+    "CPU freq dropped 27.3% (2200 \u2192 1600 MHz) \u2014 possible thermal throttling",
+    "CPU freq dropped 31.8% (2200 \u2192 1500 MHz) \u2014 possible thermal throttling",
+    "CPU freq dropped 31.8% (2200 \u2192 1500 MHz) \u2014 possible thermal throttling",
+    "CPU freq dropped 9.1% (2200 \u2192 2000 MHz) \u2014 possible thermal throttling",
+    "CPU freq dropped 22.7% (2200 \u2192 1700 MHz) \u2014 possible thermal throttling"
+  ]
+}
