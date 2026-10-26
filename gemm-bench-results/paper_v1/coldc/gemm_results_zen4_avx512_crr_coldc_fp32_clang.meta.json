@@ -1,0 +1,101 @@
+{
+  "schema_version": 1,
+  "date_utc_start": "2026-10-26T05:38:17Z",
+  "date_utc_end": "2026-10-26T05:41:42Z",
+  "git_commit": "f538c5d36754c48b0e4a92a03336683dec2903b2",
+  "git_dirty": 0,
+  "binary_build_info": {
+    "git_commit": "f538c5d36754c48b0e4a92a03336683dec2903b2",
+    "git_dirty": "0",
+    "cxx_compiler_id": "Clang",
+    "cxx_compiler_version": "18.1.3",
+    "cxx_flags": "-O3 -ffast-math -finline-functions -funroll-loops -fno-semantic-interposition -march=native -mavx512f -mavx512dq -mavx512vl -mavx512bw -O3 -DNDEBUG",
+    "build_type": "Release",
+    "fastmath": "ON",
+    "blis_target": "SKX",
+    "explo": "OFF",
+    "compiler_macro_version": "Ubuntu Clang 18.1.3 (1ubuntu1)"
+  },
+  "binary_sha256": "5fac73ae035b1c5899e0d278a6381cb8d3ddbd8f6c53fde8f357cac6d9b9042e",
+  "hostname": "az4-n4090-0",
+  "slurm_job_id": "179390",
+  "slurm_nodelist": "az4-n4090-0",
+  "uname_a": "Linux az4-n4090-0 6.17.0-35-generic #35~24.04.1-Ubuntu SMP PREEMPT_DYNAMIC Tue May 26 19:30:42 UTC 2 x86_64",
+  "cpu_model": "AMD Ryzen 9 7945HX with Radeon Graphics",
+  "isa_flags_summary": "fpu vme de pse tsc msr pae mce cx8 apic sep mtrr pge mca cmov pat pse36 clflush mmx fxsr sse sse2 ht syscall nx mmxext fxsr_opt pdpe1gb rdtscp lm constant_tsc rep_good amd_lbr_v2 nopl xtopology nonstop_tsc cpuid extd_apicid aperfmperf rapl pni pclmulqdq monitor ssse3 fma cx16 sse4_1 sse4_2 x2apic movbe popcnt aes xsave avx f16c rdrand lahf_lm cmp_legacy svm extapic cr8_legacy abm sse4a misalignsse 3dnowprefetch osvw ibs skinit wdt tce topoext perfctr_core perfctr_nb bpext perfctr_llc mwaitx cpuid_fault cpb ",
+  "caches": [
+    {
+      "level": 1,
+      "type": "Data",
+      "size": "32K",
+      "ways_of_associativity": 8,
+      "coherency_line_size": 64
+    },
+    {
+      "level": 1,
+      "type": "Instruction",
+      "size": "32K",
+      "ways_of_associativity": 8,
+      "coherency_line_size": 64
+    },
+    {
+      "level": 2,
+      "type": "Unified",
+      "size": "1024K",
+      "ways_of_associativity": 8,
+      "coherency_line_size": 64
+    },
+    {
+      "level": 3,
+      "type": "Unified",
+      "size": "32768K",
+      "ways_of_associativity": 16,
+      "coherency_line_size": 64
+    }
+  ],
+  "governor": "powersave",
+  "freq_khz_start": 3742875,
+  "freq_khz_end": 3740195,
+  "pin_core": 1,
+  "taskset_used": true,
+  "platform": "avx512",
+  "platform_tag": "zen4",
+  "compiler_cmd": "clang++",
+  "compiler_version_full": "Ubuntu clang version 18.1.3 (1ubuntu1)",
+  "cxx_flags_effective": " -O3 -ffast-math -finline-functions -funroll-loops -fno-semantic-interposition -march=native -mavx512f -mavx512dq -mavx512vl -mavx512bw ",
+  "fastmath": true,
+  "precision": "fp32",
+  "crr_only": true,
+  "alpha": 1.0,
+  "beta": 0.0,
+  "fastpath": true,
+  "c_cold": true,
+  "num_runs": 3,
+  "repetitions": 15,
+  "sizes": [
+    [
+      128,
+      1250000,
+      125000
+    ],
+    [
+      256,
+      625000,
+      62500
+    ],
+    [
+      384,
+      416666,
+      41666
+    ]
+  ],
+  "kernels": [
+    "mippv2_firestorm_mr4_nr4_fmaddi_crr",
+    "blis_native"
+  ],
+  "cooldown_sec": 2.0,
+  "throttle_warnings": [
+    "CPU freq dropped 7.8% (3742 \u2192 3451 MHz) \u2014 possible thermal throttling",
+    "CPU freq dropped 7.1% (3742 \u2192 3478 MHz) \u2014 possible thermal throttling"
+  ]
+}
